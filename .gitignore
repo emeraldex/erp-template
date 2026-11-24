@@ -41,3 +41,6 @@ Thumbs.db
 
 # Database dumps from the backup service
 backups/
+
+# Test coverage reports
+coverage/
