@@ -9,7 +9,9 @@
     "start": "nest start",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,test}/**/*.ts\"",
-    "test": "jest"
+    "test": "jest --selectProjects unit",
+    "test:e2e": "jest --selectProjects e2e --runInBand",
+    "test:cov": "jest --selectProjects unit --coverage"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -41,5 +43,35 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3"
+  },
+  "jest": {
+    "projects": [
+      {
+        "displayName": "unit",
+        "preset": "ts-jest",
+        "testEnvironment": "node",
+        "rootDir": ".",
+        "testMatch": [
+          "<rootDir>/test/unit/**/*.spec.ts"
+        ]
+      },
+      {
+        "displayName": "e2e",
+        "preset": "ts-jest",
+        "testEnvironment": "node",
+        "rootDir": ".",
+        "testMatch": [
+          "<rootDir>/test/e2e/**/*.e2e-spec.ts"
+        ]
+      }
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.ts",
+      "!src/main.ts",
+      "!src/seed-db.ts",
+      "!src/common/seed.ts",
+      "!src/**/*.module.ts"
+    ],
+    "coverageDirectory": "coverage"
   }
 }
