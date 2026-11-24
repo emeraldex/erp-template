@@ -10,7 +10,7 @@ export const STORAGE = Symbol('STORAGE');
 export const ENTITIES = ['JOB', 'DEMAND', 'OV', 'INVOICE', 'PARTNER', 'FOD'] as const;
 export type Entity = (typeof ENTITIES)[number];
 
-export const maxBytes = () => Number(process.env.ATTACHMENT_MAX_MB ?? 20) * 1024 * 1024;
+export const maxBytes = () => Number(process.env.ATTACHMENT_MAX_MB || 20) * 1024 * 1024;
 
 export interface AttachmentView {
   id: string; entity: Entity; entityId: string; formNo?: string; filename: string;

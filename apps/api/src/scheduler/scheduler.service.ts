@@ -20,12 +20,12 @@ export class SchedulerService implements OnApplicationBootstrap {
   ) {}
 
   onApplicationBootstrap(): void {
-    if (['false', '0', 'off'].includes((process.env.SCHEDULER_ENABLED ?? 'true').toLowerCase())) {
+    if (['false', '0', 'off'].includes((process.env.SCHEDULER_ENABLED || 'true').toLowerCase())) {
       this.log.log('Scheduler disabled');
       return;
     }
-    this.every('sla-alerts', Number(process.env.ALERT_INTERVAL_MINUTES ?? 15) * 60_000, () => this.notifications.runAlerts());
-    this.every('archive', Number(process.env.ARCHIVE_INTERVAL_HOURS ?? 24) * 3_600_000, () => this.retention.archiveClosedJobs());
+    this.every('sla-alerts', Number(process.env.ALERT_INTERVAL_MINUTES || 15) * 60_000, () => this.notifications.runAlerts());
+    this.every('archive', Number(process.env.ARCHIVE_INTERVAL_HOURS || 24) * 3_600_000, () => this.retention.archiveClosedJobs());
   }
 
   private every(name: string, ms: number, job: () => Promise<unknown>): void {

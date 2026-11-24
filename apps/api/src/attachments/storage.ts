@@ -75,21 +75,21 @@ export class S3Storage implements ObjectStorage {
 
 /** Pick the driver from STORAGE_DRIVER (local | s3). */
 export function storageFromEnv(env = process.env): ObjectStorage {
-  const driver = (env.STORAGE_DRIVER ?? 'local').toLowerCase();
+  const driver = (env.STORAGE_DRIVER || 'local').toLowerCase();
   const log = new Logger('Storage');
   if (driver === 's3') {
     if (!env.S3_BUCKET) throw new Error('S3_BUCKET is required when STORAGE_DRIVER=s3');
     const client = new S3Client({
-      region: env.S3_REGION ?? 'us-east-1',
+      region: env.S3_REGION || 'us-east-1',
       endpoint: env.S3_ENDPOINT || undefined,
       forcePathStyle: env.S3_FORCE_PATH_STYLE === 'true' || env.S3_FORCE_PATH_STYLE === '1',
       // Credentials come from the standard AWS chain (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY, IAM role…).
     });
     log.log(`Attachments stored in S3 bucket ${env.S3_BUCKET}${env.S3_ENDPOINT ? ` at ${env.S3_ENDPOINT}` : ''}`);
-    return new S3Storage(client, env.S3_BUCKET, env.S3_PREFIX ?? '');
+    return new S3Storage(client, env.S3_BUCKET, env.S3_PREFIX || '');
   }
   if (driver !== 'local') throw new Error(`Unknown STORAGE_DRIVER "${driver}" (use local or s3)`);
-  const dir = env.ATTACHMENTS_DIR ?? './data/attachments';
+  const dir = env.ATTACHMENTS_DIR || './data/attachments';
   log.log(`Attachments stored on disk in ${resolve(dir)}`);
   return new LocalStorage(dir);
 }

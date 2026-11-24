@@ -12,7 +12,7 @@ export interface Mail { to: string; subject: string; text: string }
 export class Mailer {
   private readonly log = new Logger(Mailer.name);
   private readonly transport: nodemailer.Transporter | null;
-  private readonly from = process.env.MAIL_FROM ?? 'Maintenance ERP <no-reply@localhost>';
+  private readonly from = process.env.MAIL_FROM || 'Maintenance ERP <no-reply@localhost>';
   readonly outbox: Mail[] = [];
   readonly mode: 'smtp' | 'memory' | 'off';
 

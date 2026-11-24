@@ -51,7 +51,7 @@ export class NotificationsService {
    * several API replicas at once: only the instance whose insert wins notifies.
    */
   async runAlerts(now = Date.now()): Promise<AlertRunResult> {
-    const warnDays = Number(process.env.SLA_WARN_DAYS ?? 1);
+    const warnDays = Number(process.env.SLA_WARN_DAYS || 1);
     const snap = await this.store.dashboardSnapshot();
     const alerts = computeAlerts(this.store.slaRules, snap as never, now, warnDays);
     const users = await this.prisma.user.findMany({ select: { id: true, email: true, name: true, role: true } });

@@ -3,8 +3,8 @@ import { PrismaService } from '../common/prisma.service';
 import { Report } from '../reports/tabular';
 
 const DAY = 86_400_000;
-export const archiveAfterDays = () => Number(process.env.ARCHIVE_AFTER_DAYS ?? 365);
-export const retentionYears = () => Number(process.env.RETENTION_YEARS ?? 5);
+export const archiveAfterDays = () => Number(process.env.ARCHIVE_AFTER_DAYS || 365);
+export const retentionYears = () => Number(process.env.RETENTION_YEARS || 5);
 
 /** Date a record closed on `closed` may first be considered for disposal. */
 export function retainUntil(closed: Date, years = retentionYears()): Date {

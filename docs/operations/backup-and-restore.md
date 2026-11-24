@@ -9,6 +9,25 @@ A backup that only exists on the same server is not a backup. **Copy
 `BACKUP_HOST_DIR` to separate storage** (another machine, S3-compatible object
 storage, or the customer's backup system) at least daily.
 
+## Attachments are not in the dump
+
+Uploaded files are stored outside PostgreSQL. The database dump holds their
+names and SHA-256 fingerprints, not their bytes.
+
+- **`STORAGE_DRIVER=local`** (default): files are on the `attachments` Docker
+  volume. Back it up alongside the dumps, for example nightly:
+
+  ```bash
+  docker run --rm -v maintenance-erp_attachments:/data:ro -v "$PWD/backups:/out" alpine tar czf /out/attachments-$(date -u +%Y%m%dT%H%M%SZ).tar.gz -C /data .
+  ```
+
+  Restore by extracting the archive back into the volume with the API stopped.
+- **`STORAGE_DRIVER=s3`**: rely on the bucket's own versioning and replication;
+  turn on versioning so an overwritten or deleted object can be recovered.
+
+After any restore, `GET /api/v1/attachments/file/<id>/verify` (QUALITY or MM)
+confirms a file matches the fingerprint recorded for it.
+
 ## What is in a dump
 
 A custom-format `pg_dump` (`erp-YYYYMMDDTHHMMSSZ.dump`) of the whole database:

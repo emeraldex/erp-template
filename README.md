@@ -6,7 +6,7 @@ servicing military and non-airborne electronic components for the Customer.
 
 Every module, status, form reference, role and timer below is traceable to the RFP:
 Section 4 (actors), Section 5 (workflows), Section 6 (forms register), Section 7
-(functional requirements FR-01…FR-12) and Section 8 (mandatory demonstration scenario).
+(functional requirements FR-01…FR-15) and Section 8 (mandatory demonstration scenario).
 
 ## Monorepo layout
 
@@ -104,10 +104,25 @@ dependency audit, on every push and pull request.
 - **FR-09** — QP.33 outside-vendor path with both customer-approval gates, cost & EDD
   capture, and above-indent quotation (F119) handling.
 - **FR-10** — configurable SLA timers (2/5/14/15-day, 6-month) with a breach board on the
-  command dashboard, each breach citing its QP source clause.
+  command dashboard, each breach citing its QP source clause. A scheduler sends alerts
+  shortly before (`SLA_WARN_DAYS`) and at each breach to the roles that own the next step
+  (breaches also to MM), in the app's alerts bell and, with SMTP configured, by email digest.
+  Each alert goes out once, even with several API replicas.
 - **FR-11** — FOD incident reporting to the Focal Point, tool/TPME shadow-board
   accountability (IN/OUT/Tool-Missing-Report), and training records with recurrent due dates.
-- **FR-12** — 5-year retention posture (closed jobs lock editing), status/ageing dashboards.
+- **FR-12** — closed jobs lock editing; after `ARCHIVE_AFTER_DAYS` they are archived out of
+  the active lists but stay readable with their full audit trail. The retention report shows
+  each record's retain-until date (`RETENTION_YEARS`, 5) and flags what is past it for a
+  human decision — nothing is deleted automatically. The audit trail exports to Excel/CSV.
+- **FR-13** — four invoicing streams with tax from settings (GST 6% by default, any label and
+  rate), certification + Certified True Copy, the correctness gate, and generated PDFs: tax
+  invoice (amount in words), covering letter listing the stream's document set, delivery note,
+  and a full pack with a checklist; CTC-stamped copies on request.
+- **FR-14** — Sales Performance Report (Excel/CSV, per-stream summary), the e-Payment file for
+  the ACD stream, outstanding payments by age, and payment recording.
+- **FR-15** — AOG / ROA / Critical priority overlay with expedite routes and closure.
+- **Attachments** — signed forms, certificates and photos on any record, with a SHA-256 checked
+  on every download; stored on a volume or any S3-compatible bucket; never deletable.
 - **§7.2 bilingual** — EN/BM toggle; status names and workflow action labels are bilingual
   in the config itself.
 
@@ -147,6 +162,13 @@ GET   /fod/{incidents,tools,training} · POST /fod/incidents · PATCH /fod/incid
 GET   /invoicing · /invoicing/streams · /invoicing/:id
 POST  /invoicing · PATCH /invoicing/:id/transition
                                        invoice + DN lifecycle (QP.51)
+GET   /invoicing/:id/documents/{tax-invoice|covering-letter|delivery-note|pack}[?ctc=1]
+                                       PDFs (FR-13)
+GET   /reports/{sales-performance|e-payment|outstanding|audit}?from&to&format=xlsx|csv
+GET   /retention/report · POST /retention/archive (ADMIN)
+GET|POST /attachments/:entity/:id · GET /attachments/file/:id[/verify]
+GET   /notifications · POST /notifications/:id/read · /notifications/read-all · POST /alerts/run (ADMIN)
+GET   /settings · PATCH /settings/company · /settings/tax (ADMIN)
 ```
 
 ## Design system

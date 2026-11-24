@@ -76,5 +76,8 @@ describe('S3Storage', () => {
     expect(storageFromEnv({ STORAGE_DRIVER: 's3', S3_BUCKET: 'b' }).name).toBe('s3');
     expect(storageFromEnv({ ATTACHMENTS_DIR: tmpdir() }).name).toBe('local');
     expect(() => storageFromEnv({ STORAGE_DRIVER: 'ftp' })).toThrow('Unknown STORAGE_DRIVER');
+    // Compose passes unset settings as empty strings; they must mean "default".
+    expect(storageFromEnv({ STORAGE_DRIVER: 's3', S3_BUCKET: 'b', S3_REGION: '', S3_ENDPOINT: '', S3_PREFIX: '' }).name).toBe('s3');
+    expect(storageFromEnv({ STORAGE_DRIVER: '', ATTACHMENTS_DIR: '' }).name).toBe('local');
   });
 });
