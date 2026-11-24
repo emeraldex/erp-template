@@ -1,8 +1,9 @@
 "use client";
 
+import { useSession } from "@/lib/use-session";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, getSession, getWithFallback } from "@/lib/api";
+import { api, getWithFallback } from "@/lib/api";
 import { OvRepair, OvStatus } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
 import { useLang } from "@/lib/i18n";
@@ -24,7 +25,7 @@ export default function OvPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const user = getSession()?.user;
+  const user = useSession()?.user;
 
   useEffect(() => {
     getWithFallback<OvRepair[]>("/ov", "ov")

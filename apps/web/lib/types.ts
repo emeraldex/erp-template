@@ -38,6 +38,7 @@ export interface FormRecord {
 }
 
 export interface Job {
+  archivedAt?: string;
   id: string;
   psDate: string;
   component: string;
@@ -204,6 +205,7 @@ export type InvoiceStatus =
 
 export interface Invoice {
   id: string;
+  taxLabel?: string;
   stream: InvoiceStream;
   jobId?: string;
   customer: string;
@@ -323,4 +325,44 @@ export interface Kpis {
   byStatus: { status: JobStatus; count: number }[];
   avgJobAgeDays: number;
   weeklyClosures: number[];
+}
+
+export interface Attachment {
+  id: string;
+  entity: "JOB" | "DEMAND" | "OV" | "INVOICE" | "PARTNER" | "FOD";
+  entityId: string;
+  formNo?: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  sha256: string;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export interface AppNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  ref?: string;
+  link?: string;
+  createdAt: string;
+  read: boolean;
+}
+
+export interface CompanyProfile {
+  name: string;
+  registrationNo: string;
+  taxRegistrationNo: string;
+  address: string[];
+  phone: string;
+  email: string;
+  signatoryName: string;
+  signatoryTitle: string;
+}
+
+export interface Settings {
+  company: CompanyProfile;
+  tax: { label: string; ratePct: number };
 }

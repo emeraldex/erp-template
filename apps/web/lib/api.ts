@@ -67,14 +67,16 @@ function redirect(path: string) {
   if (typeof window !== "undefined" && window.location.pathname !== path) window.location.assign(path);
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function send(path: string, init?: RequestInit): Promise<Response> {
   let res: Response;
+  const isForm = typeof FormData !== "undefined" && init?.body instanceof FormData;
   try {
     res = await fetch(`${BASE}${path}`, {
       ...init,
       credentials: "include",
       headers: {
-        "Content-Type": "application/json",
+        // Let the browser set the multipart boundary for uploads.
+        ...(isForm ? {} : { "Content-Type": "application/json" }),
         // The API requires this on state changes made with the session cookie,
         // which a cross-site form or image tag cannot send (CSRF protection).
         "X-Requested-With": "erp-web",
@@ -99,7 +101,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw err;
   }
-  return res.json() as Promise<T>;
+  return res;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  return (await send(path, init)).json() as Promise<T>;
+}
+
+/** File name from a Content-Disposition header, preferring the UTF-8 form. */
+function filenameFrom(header: string | null, fallback: string): string {
+  const star = header?.match(/filename\*=UTF-8''([^;]+)/i);
+  if (star) return decodeURIComponent(star[1]);
+  return header?.match(/filename="([^"]+)"/i)?.[1] ?? fallback;
+}
+
+/** GET a file from the API and hand it to the browser as a download. */
+export async function download(path: string, fallbackName = "download"): Promise<void> {
+  const res = await send(path);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filenameFrom(res.headers.get("Content-Disposition"), fallbackName);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 /**
@@ -131,4 +158,5 @@ export const api = {
     request<T>(path, { method: "POST", body: JSON.stringify(body) }),
   patch: <T,>(path: string, body: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
+  upload: <T,>(path: string, form: FormData) => request<T>(path, { method: "POST", body: form }),
 };

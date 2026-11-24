@@ -1,7 +1,8 @@
 "use client";
 
+import { useSession } from "@/lib/use-session";
 import { useEffect, useMemo, useState } from "react";
-import { api, getSession, getWithFallback } from "@/lib/api";
+import { api, getWithFallback } from "@/lib/api";
 import { Partner, PartnerType, Rating } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
 import { Button, FormChip, OfflineNotice, PageHeader, Panel, StatusPill, Table, Td, Tr } from "@/components/ui";
@@ -28,7 +29,7 @@ export default function RegistersPage() {
   const [car, setCar] = useState({ ref: "", reason: "" });
   const [reassess, setReassess] = useState({ rating: "3", nonConformances: "0", factorsEvaluated: "20", monitoringRef: "" });
 
-  const user = getSession()?.user;
+  const user = useSession()?.user;
   const canQuality = user?.role === "QUALITY" || user?.role === "ADMIN";
   const canPurchasing = user?.role === "PURCHASING" || user?.role === "PCE" || user?.role === "ADMIN";
 

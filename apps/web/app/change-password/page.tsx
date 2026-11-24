@@ -1,8 +1,9 @@
 "use client";
 
+import { useSession } from "@/lib/use-session";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, getSession, setSession } from "@/lib/api";
+import { api, setSession } from "@/lib/api";
 import { Button } from "@/components/ui";
 
 const MIN_LENGTH = 12;
@@ -11,7 +12,7 @@ const inputClass =
 
 export default function ChangePasswordPage() {
   const router = useRouter();
-  const required = getSession()?.user.mustChangePassword ?? false;
+  const required = useSession()?.user.mustChangePassword ?? false;
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");

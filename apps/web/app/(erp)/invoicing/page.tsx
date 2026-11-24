@@ -1,8 +1,10 @@
 "use client";
 
+import { useSession } from "@/lib/use-session";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { api, getSession, getWithFallback } from "@/lib/api";
+import { api, download, getWithFallback } from "@/lib/api";
+import { AttachmentsPanel } from "@/components/attachments";
 import { Invoice, InvoiceStatus, InvoiceStream, Job } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
 import { useLang } from "@/lib/i18n";
@@ -30,7 +32,7 @@ export default function InvoicingPage() {
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ stream: "BRANCH_REPAIR" as InvoiceStream, jobId: "", period: "", amountMYR: "" });
 
-  const user = getSession()?.user;
+  const user = useSession()?.user;
   const canRaise = ["BILLING", "PCE", "FINANCE", "ADMIN"].includes(user?.role ?? "");
 
   useEffect(() => {
@@ -77,7 +79,7 @@ export default function InvoicingPage() {
     <div>
       <OfflineNotice show={offline} />
       <PageHeader
-        eyebrow="QP.51 · Multi-stream billing · +6% GST · correctness gate → CPU (Finance) · FR-13 / FR-14"
+        eyebrow="QP.51 · Multi-stream billing · tax per settings · correctness gate → CPU (Finance) · FR-13 / FR-14"
         title={t("invoicing")}
         actions={canRaise ? (
           <Button onClick={() => setShowNew(!showNew)} variant={showNew ? "ghost" : "primary"}>
@@ -123,7 +125,7 @@ export default function InvoicingPage() {
               </label>
             )}
             <label className="block">
-              <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Amount before GST (MYR)</span>
+              <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Amount before tax (MYR)</span>
               <input value={form.amountMYR} onChange={(e) => setForm({ ...form, amountMYR: e.target.value })}
                 className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
             </label>
@@ -180,7 +182,7 @@ export default function InvoicingPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="mono text-[10.5px] tracking-widest text-steel">
-                    {fmtMYR(inv.amountMYR)} <span className="text-dim">+ GST {fmtMYR(inv.gstMYR)}</span> = <span className="text-fg">{fmtMYR(inv.totalMYR)}</span>
+                    {fmtMYR(inv.amountMYR)} <span className="text-dim">+ {inv.taxLabel ?? "GST"} {fmtMYR(inv.gstMYR)}</span> = <span className="text-fg">{fmtMYR(inv.totalMYR)}</span>
                     {inv.outstanding && inv.status !== "PAID" && <span className="ml-2 text-amber">· OUTSTANDING</span>}
                   </span>
                   <MetaPill status={inv.status} meta={cfg?.invoiceStatusMeta?.[inv.status]} lang={lang} />
@@ -199,11 +201,11 @@ export default function InvoicingPage() {
                   {/* GST + correctness gate summary */}
                   <div className="mb-4 grid gap-2 sm:grid-cols-4">
                     <div className="rounded-md border hairline bg-ink-deep/40 px-3 py-2">
-                      <p className="eyebrow">Before GST</p>
+                      <p className="eyebrow">Before {inv.taxLabel ?? "GST"}</p>
                       <p className="mono text-sm text-fg">{fmtMYR(inv.amountMYR)}</p>
                     </div>
                     <div className="rounded-md border hairline bg-ink-deep/40 px-3 py-2">
-                      <p className="eyebrow">GST @ {inv.gstRate}%</p>
+                      <p className="eyebrow">{inv.taxLabel ?? "GST"} @ {inv.gstRate}%</p>
                       <p className="mono text-sm text-trace">{fmtMYR(inv.gstMYR)}</p>
                     </div>
                     <div className="rounded-md border hairline bg-ink-deep/40 px-3 py-2">
@@ -246,6 +248,14 @@ export default function InvoicingPage() {
                     />
                   )}
 
+                  {user && DOC_ROLES.includes(user.role) && (
+                    <InvoiceDocuments inv={inv} onError={setError} />
+                  )}
+
+                  <div className="mt-5">
+                    <AttachmentsPanel entity="INVOICE" entityId={inv.id} formNos={def?.docSet.map((d) => d.match(/\((F\d+)/)?.[1]).filter((f): f is string => !!f) ?? []} />
+                  </div>
+
                   <div className="mt-5 grid gap-5 lg:grid-cols-2">
                     <RecordsList records={inv.records} />
                     <AuditTrail audit={inv.audit} />
@@ -255,6 +265,48 @@ export default function InvoicingPage() {
             </Panel>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+const DOC_ROLES = ["BILLING", "FINANCE", "PCE", "MM", "ADMIN"];
+
+/** FR-13 — generated billing documents; CTC stamping once a CTC reference exists. */
+function InvoiceDocuments({ inv, onError }: { inv: Invoice; onError: (m: string) => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const docs: [string, string][] = [
+    ["tax-invoice", "Tax invoice"],
+    ["covering-letter", "Covering letter"],
+    ...(inv.jobId ? ([["delivery-note", "Delivery note"]] as [string, string][]) : []),
+    ["pack", "Full document pack"],
+  ];
+  const get = async (kind: string, ctc: boolean) => {
+    const key = `${kind}${ctc ? "-ctc" : ""}`;
+    setBusy(key);
+    try {
+      await download(`/invoicing/${inv.id}/documents/${kind}${ctc ? "?ctc=1" : ""}`, `${inv.id}-${key}.pdf`);
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const draft = inv.status === "DRAFTED" || inv.status === "CERTIFIED";
+  return (
+    <div className="mt-5">
+      <p className="eyebrow mb-2">Documents (PDF){draft && <span className="ml-2 text-amber">· watermarked DRAFT until the tax invoice is raised</span>}</p>
+      <div className="flex flex-wrap gap-2">
+        {docs.map(([kind, label]) => (
+          <Button key={kind} variant="ghost" disabled={!!busy} onClick={() => get(kind, false)}>
+            {busy === kind ? "…" : label}
+          </Button>
+        ))}
+        {inv.ctcRef && (
+          <Button variant="ghost" disabled={!!busy} onClick={() => get("pack", true)}>
+            {busy === "pack-ctc" ? "…" : "Pack · Certified True Copy"}
+          </Button>
+        )}
       </div>
     </div>
   );
