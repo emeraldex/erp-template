@@ -1,0 +1,17 @@
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam DefaultFontName Helvetica
+skinparam DefaultFontSize 13
+skinparam ArrowColor #2E5496
+skinparam ActivityBackgroundColor #EAF0FA
+skinparam ActivityBorderColor #2E5496
+skinparam ActivityFontColor #1F3864
+skinparam ActivityDiamondBackgroundColor #FFF2CC
+skinparam ActivityDiamondBorderColor #D6B656
+skinparam ActivityDiamondFontColor #1F3864
+skinparam ActivityStartColor #1F3864
+skinparam ActivityEndColor #C00000
+skinparam SwimlaneTitleFontColor #FFFFFF
+skinparam SwimlaneTitleBackgroundColor #1F3864
+skinparam SwimlaneBorderColor #9DB2D6
+skinparam PartitionBorderColor #9DB2D6

@@ -1,0 +1,39 @@
+@startuml
+!include _ucstyle.iuml
+left to right direction
+title 5.1  Master Job / Component Lifecycle (JTS) — Use Cases
+actor "Logistic\n(Stores)" as LOG
+actor "Workshop" as WS
+actor "Purchasing\n/ OV Dept" as PUR
+actor "Finance\n& Billing" as FIN
+rectangle "Job Tracking System (JTS)" {
+  usecase "Register job" as U1
+  usecase "Dispatch to workshop" as U2
+  usecase "Update status & location" as U3
+  usecase "Record tear-down inspection" as U4
+  usecase "Demand spares" as U5
+  usecase "Route to Outside Vendor" as U6
+  usecase "Complete service record" as U7
+  usecase "Record payment & invoice" as U8
+  usecase "Close job" as U9
+  usecase "View status & audit trail" as U10
+}
+LOG --> U1
+LOG --> U2
+WS --> U4
+WS --> U5
+WS --> U6
+WS --> U7
+PUR --> U5
+PUR --> U6
+FIN --> U8
+FIN --> U9
+LOG --> U10
+WS --> U10
+PUR --> U10
+FIN --> U10
+U1 ..> U3 : <<include>>
+U2 ..> U3 : <<include>>
+U4 ..> U3 : <<include>>
+U7 ..> U3 : <<include>>
+@enduml

@@ -1,0 +1,34 @@
+@startuml
+!include _ucstyle.iuml
+left to right direction
+title 5.7  Foreign Object Control (FOD) & Quality Compliance (QP.46) — Use Cases
+actor "Personnel\n(ATP/NTP)" as PER
+actor "Supervisor\n(SMM/MM/HOD/HOB)" as SUP
+actor "FOD Focal Point" as FOD
+actor "QAD" as QAD
+rectangle "FOD Control & Prevention" {
+  usecase "Perform daily FOD inspection" as U1
+  usecase "Practice clean-as-you-go" as U2
+  usecase "Maintain tool accountability" as U3
+  usecase "Report FOD incident" as U4
+  usecase "Investigate incident" as U5
+  usecase "Track & trend analysis" as U6
+  usecase "Provide feedback" as U7
+  usecase "Conduct FOD training" as U8
+  usecase "Conduct IQA audit" as U9
+  usecase "Performance review" as U10
+}
+PER --> U1
+PER --> U2
+PER --> U3
+PER --> U4
+PER --> U8
+SUP --> U5
+SUP --> U7
+FOD --> U6
+FOD --> U7
+QAD --> U9
+QAD --> U10
+U4 ..> U5 : <<include>>
+U5 ..> U6 : <<include>>
+@enduml

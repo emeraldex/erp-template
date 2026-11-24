@@ -1,0 +1,41 @@
+@startuml
+!include _cstyle.iuml
+title 5.3  Parts Procurement and Verification — Class Model
+class DemandVoucher {
+  +internalNo = "F212"
+  +externalNo = "F213"
+  +approvedBy : String
+}
+class StockCheck {
+  +formNo = "F244"
+  +result : String
+}
+class RFQ {
+  +formNo = "F220"
+  +issuedDate : Date
+}
+class QuotationEvaluation {
+  +formNo = "F221"
+  +minQuotes = 3
+  +selected : Supplier
+}
+class PurchaseOrder {
+  +formNo = "F312"
+  +authorisedBy : String
+}
+class Supplier {
+  +name : String
+  +approved : Boolean
+}
+class DiscrepancyReport {
+  +formNo = "F217"
+  +issue : String
+}
+DemandVoucher "1" -- "1" StockCheck
+DemandVoucher "1" --> "0..1" RFQ : if NIL stock >
+RFQ "1" -- "1" QuotationEvaluation
+QuotationEvaluation "*" --> "1" Supplier : selects >
+QuotationEvaluation "1" --> "1" PurchaseOrder
+PurchaseOrder "*" --> "1" Supplier : issued to >
+PurchaseOrder "1" -- "0..1" DiscrepancyReport : receipt >
+@enduml

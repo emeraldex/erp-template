@@ -1,0 +1,45 @@
+@startuml
+!include _cstyle.iuml
+title 5.7  Foreign Object Control (FOD) & Quality Compliance — Class Model
+class FODIncident {
+  +date : Date
+  +partName : String
+  +serialNo : String
+  +location : String
+  +rootCause : String
+  +correctiveAction : String
+  +reporter : String
+  +investigate()
+}
+class Tool {
+  +toolId : String
+  +status : String
+}
+class ToolMissingReport {
+  +toolId : String
+  +searchAction : String
+}
+class TrainingRecord {
+  +person : String
+  +type : String
+  +date : Date
+}
+class FODArea {
+  +name : String
+  +type : AreaType
+}
+class PerformanceReview {
+  +period : String
+  +trendAnalysis : String
+}
+enum AreaType {
+  AWARENESS
+  CONTROL
+  CRITICAL
+}
+FODArea "1" -- "*" FODIncident : occurs in >
+Tool "1" -- "0..1" ToolMissingReport : may raise >
+ToolMissingReport ..> FODIncident : escalates >
+PerformanceReview "1" o-- "*" FODIncident : analyses >
+FODArea ..> AreaType
+@enduml

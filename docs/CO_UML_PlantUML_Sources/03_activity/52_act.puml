@@ -1,0 +1,45 @@
+@startuml
+!include _astyle.iuml
+title 5.2  Component Maintenance and Service (QP.17 / QP.17A) — Activity
+|Stores|
+start
+:Receive item; receiving inspection (QP.20);
+:Deliver to workshop (F219, <=5 days);
+|MIS|
+:Register job (F125); assign ATP;
+|ATP|
+:Retrieve manual / WI (F175);
+:Tear-down inspection (F116, <=5 days);
+if (Disposition?) then (BER)
+  |MM / SMM|
+  :Prepare Quotation (F119) + Defect (F135);
+  :Obtain customer indent; procure replacement;
+  :Issue F231 / F232;
+elseif (SOR) then (yes)
+  |MM / SMM|
+  :Complete & forward SOR form;
+elseif (beyond capability) then (yes)
+  |MM / SMM|
+  :Route to Outside Vendor (see 5.4);
+else (normal repair)
+  |MM / SMM|
+  :Raise RFQ for spares;
+  |ATP|
+  :Raise Internal Demand (F212);
+  |MM / SMM|
+  :Submit TDI / Quotation (F116/F119);
+  |ATP|
+  :Carry out maintenance (under MIS);
+endif
+|MIS|
+:Final inspection & testing;
+|ATP|
+:Complete documentation
+(F114/F114A/F117/F111/F174);
+|MM / SMM|
+:Approve documentation;
+|Stores|
+:Deliver item; Invoice (F311), DN (F218);
+:Return serviceable item to customer;
+stop
+@enduml

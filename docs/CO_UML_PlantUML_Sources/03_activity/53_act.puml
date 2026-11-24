@@ -1,0 +1,35 @@
+@startuml
+!include _astyle.iuml
+title 5.3  Parts Procurement and Verification (QP.14) — Activity
+|Technologist|
+start
+:Raise Internal Demand (F212);
+|WoS / HOD|
+:Verify & approve; forward to Stores;
+|Stores|
+:Perform stock check (F244);
+if (Stock available?) then (yes)
+  :Issue via F213 to holding unit;
+else (NIL stock)
+  :Forward F213 to Purchasing;
+  |Purchasing|
+  :Request for Quotation (F220, <=2 days);
+  :Evaluate (F221); select supplier (min 3);
+  :Issue Purchase Order (F312);
+  |Supplier|
+  :Submit proforma invoice;
+  |Finance|
+  :Arrange payment;
+  |Supplier|
+  :Deliver part;
+  |Stores|
+  :Receipt inspection (QP.15);
+  if (Discrepancy?) then (yes)
+    :Raise Stores Discrepancy Report (F217);
+  else (no)
+  endif
+endif
+|Stores|
+:Issue part to originator (F212);
+stop
+@enduml

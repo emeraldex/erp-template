@@ -1,0 +1,43 @@
+@startuml
+!include _cstyle.iuml
+title 5.5  Supplier / Vendor Selection & Reassessment — Class Model
+class Supplier {
+  +name : String
+  +certifications : String
+  +category : Rating
+  +active : Boolean
+}
+class SupplierEvaluation {
+  +formNo = "F225 / F225A"
+  +cost : Score
+  +capability : Score
+  +quality : Score
+  +tat : Score
+  +evaluate()
+}
+class ApprovedSupplierList {
+  +formNo = "F224"
+  +register()
+  +deregister()
+}
+class MonitoringRecord {
+  +formNo = "F226"
+  +nonConformances : Integer
+  +factorsEvaluated : Integer
+  +performancePct() : Percent
+}
+class CAR {
+  +formNo = "F516"
+  +count : Integer
+}
+enum Rating {
+  GOOD
+  SUITABLE_CAPABLE
+  NOT_SUITABLE
+}
+Supplier "1" -- "*" SupplierEvaluation
+Supplier "*" --o "1" ApprovedSupplierList
+Supplier "1" -- "*" MonitoringRecord
+MonitoringRecord "1" -- "0..*" CAR : triggers >
+Supplier ..> Rating
+@enduml

@@ -1,0 +1,30 @@
+@startuml
+!include _style.iuml
+title 5.5  Supplier / Vendor Selection & Reassessment (QP.13)
+actor Applicant
+participant "Purchasing\n(PcMgr/PcE)" as PUR
+participant "QAD" as QAD
+participant "JTP\nCommittee" as JTP
+participant "MD" as MD
+
+Applicant -> PUR : Application / recommendation
+PUR -> PUR : Verify identity & capability (F225)
+opt Advice / site audit
+  PUR -> QAD : Request advice / site audit (F225A)
+  QAD --> PUR : QMS evaluation result
+end
+PUR -> JTP : Table evaluation
+JTP -> JTP : Compare min 3 (cost, capability, capacity, quality, TAT)
+JTP -> MD : Rate & recommend
+MD --> PUR : Approval
+PUR -> PUR : Register in Approved Supplier List (F224)
+== Reassessment (every 3 years) ==
+loop every 3 years / on issue
+  PUR -> PUR : Score performance (F226); rate Good/Suitable/Not
+  alt Not Suitable & 2nd CAR (F516)
+    PUR -> PUR : Drop from Approved List
+  else Suitable & above
+    PUR -> PUR : Retain on Approved List
+  end
+end
+@enduml

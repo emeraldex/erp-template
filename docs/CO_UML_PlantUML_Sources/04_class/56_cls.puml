@@ -1,0 +1,44 @@
+@startuml
+!include _cstyle.iuml
+title 5.6  Sub-Contractor / Vendor Selection & Reassessment — Class Model
+class SubContractor {
+  +name : String
+  +serviceType : String
+  +category : Rating
+  +active : Boolean
+}
+class SubContractorEvaluation {
+  +formNo = "F228"
+  +cost : Score
+  +quality : Score
+  +capability : Score
+  +tat : Score
+}
+class ApprovedList {
+  +avl = "CO-AVL"
+  +msn = "CO-MSN"
+  +subList = "F229"
+}
+class MonitoringRecord {
+  +formNo = "F230"
+  +performancePct() : Percent
+}
+class PurchaseOrder {
+  +formNo = "F312"
+  +scope : String
+}
+class CAR {
+  +count : Integer
+}
+enum Rating {
+  GOOD
+  SUITABLE_CAPABLE
+  NOT_SUITABLE
+}
+SubContractor "1" -- "*" SubContractorEvaluation
+SubContractor "*" --o "1" ApprovedList
+SubContractor "1" -- "*" MonitoringRecord
+SubContractor "1" -- "*" PurchaseOrder
+MonitoringRecord "1" -- "0..*" CAR : triggers >
+SubContractor ..> Rating
+@enduml

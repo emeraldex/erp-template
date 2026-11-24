@@ -1,0 +1,38 @@
+@startuml
+!include _ucstyle.iuml
+left to right direction
+title 5.3  Parts Procurement and Verification (QP.14) — Use Cases
+actor "Technologist" as TST
+actor "WoS / HOD" as WOS
+actor "Stores" as ST
+actor "Purchasing" as PUR
+actor "Supplier" as SUP
+actor "Finance" as FIN
+rectangle "Parts Procurement" {
+  usecase "Raise internal demand" as U1
+  usecase "Approve demand" as U2
+  usecase "Perform stock check" as U3
+  usecase "Issue from stock" as U4
+  usecase "Raise RFQ" as U5
+  usecase "Evaluate & select supplier" as U6
+  usecase "Issue purchase order" as U7
+  usecase "Arrange payment" as U8
+  usecase "Receipt inspection" as U9
+  usecase "Raise discrepancy report" as U10
+  usecase "Issue part to originator" as U11
+}
+TST --> U1
+TST --> U11
+WOS --> U2
+ST --> U3
+ST --> U9
+ST --> U11
+PUR --> U5
+PUR --> U6
+PUR --> U7
+SUP --> U6
+SUP --> U8
+FIN --> U8
+U3 ..> U4 : <<extend>>
+U9 ..> U10 : <<extend>>
+@enduml

@@ -1,0 +1,35 @@
+@startuml
+!include _astyle.iuml
+title 5.8  Invoicing & Revenue Billing (QP.51) — Activity
+|Originating Dept / Billing|
+start
+:Job completed / PBC period due;
+if (Invoicing stream?) then (PBC)
+  :Raise monthly PBC documents by 28th;
+  :Attach Sijil Pengesahan + Penalty Weightage
+  (35% Availability / 60% Serviceability);
+  :Submit to Customer for signature (by month end);
+  :Obtain signed set by 2nd; make CTC; submit to HQ by 5th;
+elseif (Branch-repaired?) then (yes)
+  :Notify Billing on completion (<=3 days) + supporting docs;
+  :Raise Tax Invoice + 6% GST (<=3 working days);
+  :Submit to Customer; obtain original (<=3 weeks); CTC;
+  :Submit 3 sets to HQ (<=7 days);
+else (CoE / ACD)
+  :Forward docs (AM 75, Analysis, COC/ARC/CRS, label);
+  :Raise Tax Invoice + 6% GST, DN, covering letter;
+  :7 sets to MRA / key Sales Performance (e-Payment);
+endif
+|CoE Invoicing|
+:Check correctness & completeness;
+if (Complete & correct?) then (no)
+  :Correct promptly;
+  stop
+else (yes)
+  :Raise / forward Tax Invoice to CPU (Finance);
+endif
+|Finance & Account|
+:Receive & record payment;
+:Monitor outstanding payment;
+stop
+@enduml

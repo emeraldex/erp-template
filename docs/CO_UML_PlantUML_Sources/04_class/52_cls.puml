@@ -1,0 +1,43 @@
+@startuml
+!include _cstyle.iuml
+title 5.2  Component Maintenance and Service — Class Model
+class Job {
+  +jobNo : String
+  +status : String
+}
+class TearDownInspection {
+  +formNo = "F116"
+  +findings : String
+  +sparesRequired : Boolean
+  +measuredValue : String
+}
+class MaintenanceRecord {
+  +formNo = "F114 / F114A"
+  +activity : String
+  +testResult : String
+  +approvedBy : String
+}
+class SparePart {
+  +partNo : String
+  +qty : Integer
+}
+class DemandVoucher {
+  +formNo = "F212"
+  +demandDate : Date
+}
+class Certificate {
+  +formNo : String
+  +type : String
+  +releaseAuthority : String
+}
+class DefectReport {
+  +formNo = "F135"
+  +reason : String
+}
+Job "1" *-- "1" TearDownInspection
+Job "1" *-- "0..1" MaintenanceRecord
+Job "1" o-- "*" SparePart
+SparePart "*" -- "1" DemandVoucher : demanded via >
+Job "1" -- "*" Certificate : releases >
+Job "1" -- "0..1" DefectReport : BER / SOR >
+@enduml

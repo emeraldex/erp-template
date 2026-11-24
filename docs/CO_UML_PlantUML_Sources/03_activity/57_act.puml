@@ -1,0 +1,26 @@
+@startuml
+!include _astyle.iuml
+title 5.7  Foreign Object Control (FOD) & Quality Compliance (QP.46) — Activity
+|Personnel|
+start
+:Perform daily FOD inspection;
+:Practice clean-as-you-go;
+:Maintain tool / TPME accountability (QP.38);
+if (FOD incident or lost tool?) then (yes)
+  :Report incident / missing item;
+  |Supervisor|
+  :Cease operations; investigate cause;
+  :Raise incident report
+  (part, serial, root cause, action);
+  |FOD Focal Point|
+  :Track & trend analysis;
+  :Provide feedback & corrective action;
+else (no)
+endif
+|Personnel|
+:Attend FOD training (initial + annual, QP.10);
+|QAD|
+:Conduct IQA audit;
+:Yearly performance review;
+stop
+@enduml

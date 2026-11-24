@@ -1,0 +1,36 @@
+@startuml
+!include _astyle.iuml
+title 5.9  AOG / ROA / Critical Priority Handling (QP.56) — Activity
+|Customer / CPU|
+start
+:Upgrade component status to AOG / ROA / Critical;
+|Mgr PC / CsE|
+:Identify item (P/N, description, serial) in COL;
+:Insert AOG/ROA column — status, quantity, date;
+|CoE / Unit PCD|
+if (Critical, suffix 'K'?) then (yes)
+  :HOB identify repair location; upgrade repair priority;
+else (no)
+endif
+if (Spares required?) then (yes)
+  :Route to CoE/Unit repair, OV, POOLEX or AW spares;
+  :Hasten repair / supplier; monitor progress & EDD;
+else (no)
+  :Unit proceed repair; expedite if serviceable;
+endif
+|Mgr PC / CsE|
+:Advise CAO / CPU on EDD & delivery;
+if (Serviceable?) then (yes)
+  |CoE / Unit PCD|
+  :Stamp AOG/ROA on Serviceable Tag (F111);
+  |Central / Unit Logistic|
+  :Expedite delivery (temporary F218) per QP.51;
+  :Relay Delivery Note ref & actual date;
+  |Mgr PC / CsE|
+  :On confirmation — set COL AOG/ROA column 'closed' + date;
+  stop
+else (no)
+  :Continue hastening repair;
+  stop
+endif
+@enduml

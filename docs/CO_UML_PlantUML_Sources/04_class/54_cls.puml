@@ -1,0 +1,43 @@
+@startuml
+!include _cstyle.iuml
+title 5.4  Outside Vendor (OV) Repair — Class Model
+class Job {
+  +jobNo : String
+}
+class DefectReport {
+  +formNo = "F135"
+  +reason : String
+}
+class OVApprovalRequest {
+  +formNo = "F134"
+  +customerApproved : Boolean
+}
+class OutsideVendor {
+  +name : String
+  +approved : Boolean
+}
+class PurchaseOrder {
+  +formNo = "F312"
+  +repairScope : String
+}
+class Quotation {
+  +formNo = "F119"
+  +cost : Money
+  +edd : Date
+}
+class ReleaseCertificate {
+  +type : String
+  +authority : String
+}
+class Invoice {
+  +formNo = "F311"
+  +amount : Money
+}
+Job "1" -- "1" DefectReport
+Job "1" -- "1" OVApprovalRequest
+OVApprovalRequest "*" --> "1" OutsideVendor
+OutsideVendor "1" -- "*" PurchaseOrder
+PurchaseOrder "1" -- "1" Quotation
+Job "1" -- "*" ReleaseCertificate : returned with >
+Job "1" -- "1" Invoice
+@enduml

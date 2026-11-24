@@ -1,0 +1,29 @@
+@startuml
+!include _style.iuml
+title 5.1  Master Job / Component Lifecycle (JTS)
+actor Customer
+participant "Logistic\n(Stores)" as LOG
+participant "Workshop\n(Bay)" as WS
+participant "Purchasing\n/ OV Dept" as PUR
+participant "Finance\n& Billing" as FIN
+database "JTS\n(System of Record)" as JTS
+
+Customer -> LOG : Deliver component for service
+LOG -> JTS : Register job (PS/Job no, part, serial, location)
+activate JTS
+LOG -> WS : Dispatch to workshop (F219)
+WS -> JTS : Set status Awaiting-TDI -> TDI; location Log -> Bay
+WS -> JTS : Record tear-down inspection (F116)
+alt Spare part required
+  WS -> PUR : Demand spares (F212 / RFQ)
+  PUR -> JTS : Update Awaiting-Spare -> WIP
+else Beyond capability / BER
+  WS -> PUR : Route for OV / replacement (F135)
+  PUR -> JTS : Update status REC-OV / REC-EXC
+end
+WS -> JTS : Complete service (F114, F111); WIP -> Serviceable
+FIN -> JTS : Record payment, invoice, delivery note
+FIN -> JTS : Set job Completed
+deactivate JTS
+LOG -> Customer : Return serviceable item
+@enduml

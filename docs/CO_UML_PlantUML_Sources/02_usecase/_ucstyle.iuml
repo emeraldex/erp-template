@@ -1,0 +1,17 @@
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam DefaultFontName Helvetica
+skinparam DefaultFontSize 13
+skinparam ArrowColor #2E5496
+skinparam ActorBackgroundColor #D9E2F3
+skinparam ActorBorderColor #2E5496
+skinparam ActorFontColor #1F3864
+skinparam ActorFontStyle bold
+skinparam UsecaseBackgroundColor #EAF0FA
+skinparam UsecaseBorderColor #2E5496
+skinparam UsecaseFontColor #1F3864
+skinparam RectangleBackgroundColor #F7FAFE
+skinparam RectangleBorderColor #1F3864
+skinparam RectangleFontColor #1F3864
+skinparam RectangleFontStyle bold
+skinparam RectangleBorderThickness 2

@@ -1,0 +1,39 @@
+@startuml
+!include _ucstyle.iuml
+left to right direction
+title 5.9  AOG / ROA / Critical Priority Handling (QP.56) — Use Cases
+actor "Customer / CPU" as Customer
+actor "Mgr PC / CsE" as MPC
+actor "CoE / Unit PCD" as PCD
+actor "Repair / OV / POOLEX\n/ Purchasing" as REP
+actor "Logistic" as LOG
+rectangle "AOG / ROA / Critical Handling" {
+  usecase "Upgrade component\nstatus" as U1
+  usecase "Identify item\n(P/N, serial)" as U2
+  usecase "Flag AOG/ROA in COL\n(status, qty, date)" as U3
+  usecase "Hasten repair route\n(shortest process)" as U4
+  usecase "Upgrade repair priority\n(suffix 'K')" as U5
+  usecase "Monitor progress\n& EDD" as U6
+  usecase "Advise CAO / CPU" as U7
+  usecase "Stamp AOG/ROA on\nServiceable Tag (F111)" as U8
+  usecase "Expedite delivery\n(per QP.51)" as U9
+  usecase "Close / downgrade\nstatus in COL" as U10
+}
+Customer --> U1
+Customer --> U7
+MPC --> U2
+MPC --> U3
+MPC --> U6
+MPC --> U7
+MPC --> U10
+PCD --> U4
+PCD --> U5
+PCD --> U8
+REP --> U4
+REP --> U6
+LOG --> U9
+U1 ..> U2 : <<include>>
+U2 ..> U3 : <<include>>
+U4 ..> U5 : <<extend>>
+U8 ..> U9 : <<include>>
+@enduml

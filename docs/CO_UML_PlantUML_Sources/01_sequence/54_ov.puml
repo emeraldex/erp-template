@@ -1,0 +1,30 @@
+@startuml
+!include _style.iuml
+title 5.4  Outside Vendor (OV) Repair (QP.33)
+actor Customer
+participant "Stores (StS)" as ST
+participant "Workshop\n(WoS)" as WS
+participant "PCE" as PCE
+participant "Contractor" as CON
+participant "Finance" as FIN
+
+Customer -> ST : Deliver item
+ST -> WS : Deliver to workshop
+WS -> ST : Beyond capability; annotate Defect Report (F135)
+ST -> PCE : Dispatch (F218, F135, AM 75)
+PCE -> PCE : Register (F125); identify vendor (<=15 days)
+PCE -> Customer : Request OV Approval (F134)
+alt Not approved
+  PCE -> Customer : Return item
+else Approved
+  PCE -> CON : Purchase/Repair Order (F312) + dispatch (F218)
+  CON --> PCE : Repair cost & EDD
+  PCE -> Customer : Price Quotation (F119)
+  Customer --> PCE : Approval (MSU)
+  CON -> FIN : Proforma invoice
+  FIN -> CON : Payment
+  CON -> ST : Return repaired item + certs
+  ST -> ST : Receiving inspection & test (QP.15)
+  ST -> Customer : Return item (F311, F117, F218)
+end
+@enduml

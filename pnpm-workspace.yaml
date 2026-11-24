@@ -1,0 +1,15 @@
+packages:
+  - 'apps/*'
+
+allowBuilds:
+  '@prisma/engines': true
+  prisma: true
+  sharp: true
+  unrs-resolver: true
+
+# Native build scripts we trust to run on install
+onlyBuiltDependencies:
+  - sharp
+  - unrs-resolver
+  - prisma
+  - '@prisma/engines'

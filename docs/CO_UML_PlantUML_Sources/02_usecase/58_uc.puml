@@ -1,0 +1,41 @@
+@startuml
+!include _ucstyle.iuml
+left to right direction
+title 5.8  Invoicing & Revenue Billing (QP.51) — Use Cases
+actor "Branch/Dept PCD" as PCD
+actor "Billing / Invoicing (ID)" as ID
+actor "CoE Invoicing" as COE
+actor "Customer / MRA" as CUST
+actor "CPU (Finance)" as CPU
+actor "Finance & Account" as FIN
+rectangle "Invoicing & Revenue Billing" {
+  usecase "Raise PBC documents\n(monthly)" as U1
+  usecase "Compile supporting\ndocuments" as U2
+  usecase "Obtain customer\nsignature & CTC" as U3
+  usecase "Raise Tax Invoice\n(+6% GST)" as U4
+  usecase "Submit to HQ\n/ CoE" as U5
+  usecase "Check correctness\n& completeness" as U6
+  usecase "Forward to\nCPU (Finance)" as U7
+  usecase "Key Sales Performance\n/ e-Payment record" as U8
+  usecase "Receive & record\npayment" as U9
+  usecase "Monitor outstanding\npayment" as U10
+}
+PCD --> U1
+PCD --> U2
+PCD --> U3
+PCD --> U5
+ID --> U2
+ID --> U4
+ID --> U3
+COE --> U4
+COE --> U6
+COE --> U7
+COE --> U8
+CUST --> U3
+CPU --> U7
+FIN --> U9
+FIN --> U10
+U1 ..> U2 : <<include>>
+U4 ..> U3 : <<include>>
+U6 ..> U7 : <<include>>
+@enduml

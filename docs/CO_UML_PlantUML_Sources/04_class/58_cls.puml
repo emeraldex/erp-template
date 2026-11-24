@@ -1,0 +1,48 @@
+@startuml
+!include _cstyle.iuml
+title 5.8  Invoicing & Revenue Billing — Class Model
+class Job {
+  +jobNo : String
+  +completionDate : Date
+}
+class InvoiceStream {
+  +type : Enum (PBC, BranchRepair, CoE_MRA, ACD)
+}
+class TaxInvoice {
+  +formNo = "F311"
+  +amount : Money
+  +gstRate = 6
+  +issueDate : Date
+}
+class SupportingDocSet {
+  +analysisReport = "F117"
+  +indent = "AM 75"
+  +deliveryNote = "F218"
+  +crs = "F174"
+  +overAndAboveForm : Boolean
+}
+class PBCCertificate {
+  +sijilPengesahan : String
+  +availabilityWeightage = 35
+  +serviceabilityWeightage = 60
+}
+class CertifiedTrueCopy {
+  +ctcRef : String
+  +signedBy : String
+}
+class SalesPerformanceRecord {
+  +localOrder : String
+  +ePaymentRef : String
+}
+class Payment {
+  +receivedDate : Date
+  +outstanding : Boolean
+}
+Job "1" -- "1" InvoiceStream
+InvoiceStream "1" -- "1" TaxInvoice
+TaxInvoice "1" o-- "*" SupportingDocSet
+TaxInvoice "1" ..> "0..1" PBCCertificate
+TaxInvoice "1" -- "1" CertifiedTrueCopy
+TaxInvoice "1" --> "0..1" SalesPerformanceRecord
+TaxInvoice "1" -- "1" Payment
+@enduml

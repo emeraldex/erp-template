@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    // Keep the incremental cache inside outDir. Left at its default it sits
+    // beside the tsconfig, survives nest's deleteOutDir, and the next build
+    // then decides everything is up to date and emits nothing.
+    "tsBuildInfoFile": "./dist/tsconfig.build.tsbuildinfo"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "test", "dist", "**/*spec.ts", "prisma.config.ts"]
+}

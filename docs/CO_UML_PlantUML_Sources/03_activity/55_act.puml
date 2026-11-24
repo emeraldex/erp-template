@@ -1,0 +1,31 @@
+@startuml
+!include _astyle.iuml
+title 5.5  Supplier / Vendor Selection & Reassessment (QP.13) — Activity
+|Applicant|
+start
+:Submit application / recommendation;
+|Purchasing|
+:Verify identity & capability (F225);
+|QAD|
+:(Optional) site audit (F225A); evaluate QMS;
+|Purchasing|
+:Table evaluation to JTP;
+|JTP / MD|
+:Compare min 3 (cost, capability, capacity,
+quality, TAT); rate & select;
+if (Approved?) then (no)
+  |Purchasing|
+  :No further action;
+  stop
+else (yes)
+  |Purchasing|
+  :Register in Approved Supplier List (F224);
+  :Reassess performance every 3 years (F226);
+  if (Not Suitable & 2nd CAR (F516)?) then (yes)
+    :Drop from Approved List;
+  else (no)
+    :Retain on Approved List;
+  endif
+  stop
+endif
+@enduml

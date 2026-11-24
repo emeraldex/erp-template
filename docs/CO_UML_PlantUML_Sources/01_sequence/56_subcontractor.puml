@@ -1,0 +1,33 @@
+@startuml
+!include _style.iuml
+title 5.6  Sub-Contractor / Vendor Selection & Reassessment (QP.34)
+actor Applicant
+participant "Purchasing /\nProduction\n(PcMgr/PdMgr)" as MGR
+participant "QAD" as QAD
+participant "JTP\nCommittee" as JTP
+participant "MD" as MD
+participant "Sub-Contractor" as SUB
+
+Applicant -> MGR : Application / recommendation
+MGR -> MGR : Verify & assess capability (F228)
+opt Site audit
+  MGR -> QAD : Request site audit / QMS eval
+  QAD --> MGR : Result
+end
+MGR -> JTP : Table evaluation (min 3)
+JTP -> MD : Select, rate & recommend
+MD --> MGR : Approval
+MGR -> MGR : Register in AVL / MSN / F229
+MGR -> SUB : Purchase Order (F312) for services / OV
+SUB -> MGR : Return repaired items to Central Stores
+MGR -> MGR : Receiving inspection (QP.15 / QP.52)
+== Reassessment (every 3 years) ==
+loop every 3 years / on issue
+  MGR -> MGR : Score performance (F230); rate Good/Suitable/Not
+  alt Not Suitable & 2nd CAR
+    MGR -> MGR : Deregister from AVL / MSN / F229
+  else Suitable & above
+    MGR -> MGR : Retain on lists
+  end
+end
+@enduml

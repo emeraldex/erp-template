@@ -1,0 +1,38 @@
+@startuml
+!include _style.iuml
+title 5.8  Invoicing & Revenue Billing (QP.51)
+actor "Customer\n(Customer)" as CUST
+participant "Branch / Dept\nPCD" as PCD
+participant "Billing /\nInvoicing (ID)" as ID
+participant "CoE Invoicing\n(HQ)" as COE
+participant "CPU (Finance)\n/ MRA" as CPU
+participant "Finance &\nAccount" as FIN
+
+alt PBC (Performance Based Contract) — monthly
+  PCD -> PCD : Raise PBC docs by 28th (Sijil Pengesahan,\nPenalty Weightage 35% Avail / 60% Serviceability)
+  PCD -> CUST : Submit for Customer signature (by month end)
+  CUST --> PCD : Signed set (by 2nd), make CTC
+  PCD -> COE : Submit PBC docs by 5th
+  COE -> COE : Raise Tax Invoice PBC + 6% GST; CAO signs
+else Branch-repaired component
+  PCD -> ID : Notify on job completion (<=3 days) + supporting docs
+  ID -> ID : Raise Tax Invoice + 6% GST (<=3 working days)\n(Analysis Report, AM 75, DN, O&A, CRS)
+  ID -> CUST : Submit with covering letter for Customer signature
+  CUST --> ID : Signed original (<=3 weeks); CTC
+  ID -> COE : Submit 3 sets to HQ (<=7 days)
+else CoE / MRA (Production Control)
+  PCD -> COE : Forward docs (AM 75, Analysis, COC/ARC/CRS, label)
+  COE -> COE : Raise Tax Invoice + 6% GST, DN, covering letter
+  COE -> CPU : 7 sets via Central Store to MRA
+  CPU --> COE : Signed Tax Invoice (4 sets)
+else ACD (Accounts Dept)
+  PCD -> COE : Forward completed invoices (<=2 days)
+  COE -> COE : Key into Company Sales Performance Report;\nforward to the Accounts Dept (e-Payment)
+end
+COE -> CPU : Forward complete & correct Tax Invoice
+alt Incomplete / rejected
+  CPU --> COE : Reject; correct promptly
+end
+CPU -> FIN : Payment
+FIN -> FIN : Receive & record payment; monitor outstanding
+@enduml

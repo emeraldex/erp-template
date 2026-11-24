@@ -1,0 +1,44 @@
+@startuml
+!include _ucstyle.iuml
+left to right direction
+title 5.2  Component Maintenance and Service (QP.17 / QP.17A) — Use Cases
+actor Customer
+actor "Stores\n(StS/StP)" as ST
+actor "MIS" as MIS
+actor "ATP /\nTechnologist" as ATP
+actor "MM / SMM" as MM
+actor "Purchasing" as PUR
+rectangle "Maintenance & Service" {
+  usecase "Receive item" as U1
+  usecase "Register job & assign ATP" as U2
+  usecase "Perform tear-down inspection" as U3
+  usecase "Handle BER item" as U4
+  usecase "Raise SOR" as U5
+  usecase "Route to Outside Vendor" as U6
+  usecase "Demand spares" as U7
+  usecase "Carry out maintenance" as U8
+  usecase "Final inspection & test" as U9
+  usecase "Complete documentation" as U10
+  usecase "Approve documentation" as U11
+  usecase "Deliver / return item" as U12
+}
+Customer --> U1
+Customer --> U12
+ST --> U1
+ST --> U12
+MIS --> U2
+MIS --> U9
+ATP --> U3
+ATP --> U8
+ATP --> U10
+MM --> U4
+MM --> U5
+MM --> U6
+MM --> U11
+MM --> U7
+PUR --> U7
+U3 ..> U4 : <<extend>>
+U3 ..> U5 : <<extend>>
+U3 ..> U6 : <<extend>>
+U8 ..> U9 : <<include>>
+@enduml

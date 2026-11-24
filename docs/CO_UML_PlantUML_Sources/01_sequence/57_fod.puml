@@ -1,0 +1,23 @@
+@startuml
+!include _style.iuml
+title 5.7  Foreign Object Control (FOD) & Quality Compliance (QP.46)
+actor "Personnel\n(ATP/NTP)" as PER
+participant "Supervisor\n(SMM/MM/HOD/HOB)" as SUP
+participant "FOD Focal\nPoint" as FOD
+participant "QAD" as QAD
+
+PER -> PER : Daily FOD inspection; clean-as-you-go
+PER -> PER : Tool / TPME accountability (shadow board, QP.38)
+alt FOD incident or lost tool
+  PER -> SUP : Report incident / missing item
+  SUP -> SUP : Cease operations; investigate cause
+  SUP -> FOD : Incident report (part, serial, root cause, action)
+  FOD -> FOD : Tracking & trend analysis
+  FOD -> PER : Feedback & corrective action
+end
+loop annual
+  PER -> QAD : Training records (initial + recurrent, QP.10)
+  QAD -> QAD : IQA audit; yearly performance review
+  QAD -> SUP : Findings & corrective actions
+end
+@enduml

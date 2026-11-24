@@ -1,0 +1,40 @@
+@startuml
+!include _astyle.iuml
+title 5.4  Outside Vendor (OV) Repair (QP.33) — Activity
+|Customer|
+start
+:Deliver item;
+|Stores|
+:Deliver to workshop;
+|Workshop|
+:Beyond capability; annotate Defect Report (F135);
+|Stores|
+:Dispatch to Central Stores (F218, F135, AM 75);
+|PCE|
+:Register (F125); identify vendor (<=15 days);
+:Request OV Approval (F134);
+if (Customer approved?) then (no)
+  |Stores|
+  :Return item to customer;
+  stop
+else (yes)
+  |PCE|
+  :Prepare PO (F312); dispatch to contractor (F218);
+  |Contractor|
+  :Advise repair cost & EDD;
+  |PCE|
+  :Submit Price Quotation (F119);
+  |Customer|
+  :Approve (MSU);
+  |Contractor|
+  :Submit proforma invoice;
+  |Finance|
+  :Arrange payment;
+  |Contractor|
+  :Return repaired item + certificates;
+  |Stores|
+  :Receiving inspection & test (QP.15);
+  :Return item to customer (F311, F117, F218);
+  stop
+endif
+@enduml

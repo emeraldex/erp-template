@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+out/
+build/
+
+# Turbo
+.turbo/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Generated Prisma client — recreated by `prisma generate`
+apps/api/src/generated/
+
+# Python bytecode from scripts/
+__pycache__/
+*.pyc
+
+# Environment
+.env
+.env.*
+!.env.example
+!.env.prod.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

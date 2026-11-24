@@ -1,0 +1,79 @@
+# ─── Maintenance ERP — production stack ────────────────────────────────────────────
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Requires a .env.prod alongside this file (see .env.prod.example). Postgres is
+# NOT published to the host: only the api service reaches it, over the internal
+# network. Publish 5432 only if you need external DBA access, and firewall it.
+
+name: maintenance-erp
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env.prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:-erp}
+      # Fail fast on a weak/blank password rather than trusting the network.
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [backend]
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-erp}?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env.prod}
+      AUTH_TTL_HOURS: ${AUTH_TTL_HOURS:-8}
+      WEB_ORIGIN: ${WEB_ORIGIN:?set WEB_ORIGIN in .env.prod}
+      PG_POOL_MAX: ${PG_POOL_MAX:-10}
+      RUN_MIGRATIONS: "1"
+      # Seeds the reference dataset on an empty database; the script no-ops if
+      # users already exist. Set to 0 once you load real data.
+      RUN_SEED: ${RUN_SEED:-1}
+      SEED_PASSWORD: ${SEED_PASSWORD:-}
+    ports:
+      - "${API_BIND:-127.0.0.1}:4000:4000"
+    networks: [backend, frontend]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Baked into the browser bundle at build time — must be the URL the
+        # user's browser can reach, not the internal service name.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL in .env.prod}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:3000:3000"
+    networks: [frontend]
+
+volumes:
+  pgdata:
+
+networks:
+  # db is reachable only from api; web never touches it.
+  backend:
+    internal: true
+  frontend:

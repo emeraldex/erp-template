@@ -1,0 +1,33 @@
+@startuml
+!include _astyle.iuml
+title 5.1  Master Job / Component Lifecycle (JTS) — Activity
+|Logistic|
+start
+:Register job in JTS
+(PS/Job no, part, serial, location);
+:Dispatch to workshop (F219);
+|Workshop|
+:Update status Awaiting-TDI -> TDI
+(location Log -> Bay);
+:Record tear-down inspection (F116);
+if (Outcome?) then (spares needed)
+  |Purchasing / OV|
+  :Demand spares (F212 / RFQ);
+  :Update Awaiting-Spare -> WIP;
+elseif (beyond capability) then (yes)
+  |Purchasing / OV|
+  :Route to Outside Vendor (F135)
+  status REC-OV;
+else (normal)
+  |Workshop|
+endif
+|Workshop|
+:Complete service (F114, F111)
+WIP -> Serviceable;
+|Finance & Billing|
+:Record payment & invoice;
+:Set job Completed;
+|Logistic|
+:Return serviceable item to customer;
+stop
+@enduml

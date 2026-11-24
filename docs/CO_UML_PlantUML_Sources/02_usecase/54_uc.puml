@@ -1,0 +1,42 @@
+@startuml
+!include _ucstyle.iuml
+left to right direction
+title 5.4  Outside Vendor (OV) Repair (QP.33) — Use Cases
+actor Customer
+actor "Stores" as ST
+actor "Workshop" as WS
+actor "PCE" as PCE
+actor "Contractor" as CON
+actor "Finance" as FIN
+rectangle "Outside Vendor Repair" {
+  usecase "Receive & assess item" as U1
+  usecase "Identify outside vendor" as U2
+  usecase "Request OV approval" as U3
+  usecase "Prepare purchase order" as U4
+  usecase "Dispatch to contractor" as U5
+  usecase "Obtain repair quotation" as U6
+  usecase "Submit price quotation" as U7
+  usecase "Receive repaired item" as U8
+  usecase "Receipt inspection & test" as U9
+  usecase "Prepare return documents" as U10
+  usecase "Return item to customer" as U11
+}
+Customer --> U3
+Customer --> U7
+Customer --> U11
+ST --> U1
+ST --> U8
+ST --> U9
+ST --> U11
+WS --> U1
+PCE --> U2
+PCE --> U3
+PCE --> U4
+PCE --> U7
+CON --> U5
+CON --> U6
+CON --> U8
+FIN --> U6
+U4 ..> U5 : <<include>>
+U8 ..> U9 : <<include>>
+@enduml

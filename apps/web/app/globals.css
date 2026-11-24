@@ -1,0 +1,198 @@
+@import "tailwindcss";
+
+/* ============================================================
+   COMPANY ERP — design tokens
+   Aesthetic direction: radar-console operations room.
+   Deep navy surfaces, Company action red, radar-phosphor green
+   reserved strictly for "live / healthy" telemetry, caution
+   amber, steel-blue secondary text. Swap the brand hexes here
+   if the official Company brand guide differs.
+   ============================================================ */
+:root {
+  --z-ink: #0a1526;        /* base background — console navy */
+  --z-ink-deep: #060d1a;
+  --z-panel: #0f1e33;      /* card surface */
+  --z-panel-2: #142840;    /* raised surface / hover */
+  --z-line: rgba(147, 168, 196, 0.14);
+  --z-line-strong: rgba(147, 168, 196, 0.28);
+
+  --z-red: #c8102e;        /* Company action red */
+  --z-red-bright: #ff3b4e;
+  --z-phosphor: #34e8a0;   /* radar phosphor — live/OK only */
+  --z-amber: #f5b841;      /* caution */
+  --z-cyan: #4fc3f7;       /* informational trace */
+
+  --z-text: #e8eff9;
+  --z-steel: #93a8c4;      /* secondary text */
+  --z-dim: #5c7395;        /* tertiary text */
+}
+
+@theme inline {
+  --color-ink: var(--z-ink);
+  --color-ink-deep: var(--z-ink-deep);
+  --color-panel: var(--z-panel);
+  --color-panel-2: var(--z-panel-2);
+  --color-brand: var(--z-red);
+  --color-brand-bright: var(--z-red-bright);
+  --color-phosphor: var(--z-phosphor);
+  --color-amber: var(--z-amber);
+  --color-trace: var(--z-cyan);
+  --color-fg: var(--z-text);
+  --color-steel: var(--z-steel);
+  --color-dim: var(--z-dim);
+  --font-display: var(--font-rajdhani);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+}
+
+html,
+body {
+  background: var(--z-ink);
+  color: var(--z-text);
+  font-family: var(--font-plex-sans), system-ui, sans-serif;
+}
+
+/* faint engineering grid over the base background */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(147, 168, 196, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(147, 168, 196, 0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 100%);
+}
+
+::selection {
+  background: var(--z-red);
+  color: #fff;
+}
+
+/* ---------- utility classes used across the app ---------- */
+.panel {
+  background: linear-gradient(180deg, var(--z-panel) 0%, color-mix(in srgb, var(--z-panel) 92%, black) 100%);
+  border: 1px solid var(--z-line);
+  border-radius: 10px;
+}
+.panel:hover {
+  border-color: var(--z-line-strong);
+}
+
+.hairline {
+  border-color: var(--z-line);
+}
+
+.display {
+  font-family: var(--font-rajdhani), sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mono {
+  font-family: var(--font-plex-mono), monospace;
+}
+
+.eyebrow {
+  font-family: var(--font-plex-mono), monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--z-dim);
+}
+
+/* corner ticks on panels — drafting-table framing, applied sparingly */
+.ticked {
+  position: relative;
+}
+.ticked::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 14px;
+  height: 14px;
+  border-top: 2px solid var(--z-red);
+  border-left: 2px solid var(--z-red);
+  border-radius: 2px 0 0 0;
+}
+
+/* ---------- motion ---------- */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-up {
+  opacity: 0;
+  animation: fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.d1 { animation-delay: 0.05s; }
+.d2 { animation-delay: 0.12s; }
+.d3 { animation-delay: 0.19s; }
+.d4 { animation-delay: 0.26s; }
+.d5 { animation-delay: 0.33s; }
+
+@keyframes sweep {
+  to { transform: rotate(360deg); }
+}
+.radar-sweep {
+  animation: sweep 6s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes blip {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+.blip {
+  animation: blip 2.4s ease-in-out infinite;
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(255, 59, 78, 0.5); }
+  70% { box-shadow: 0 0 0 8px rgba(255, 59, 78, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 59, 78, 0); }
+}
+.pulse-aog {
+  animation: pulse-ring 1.8s ease-out infinite;
+}
+
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.ticker {
+  animation: ticker 36s linear infinite;
+}
+.ticker:hover {
+  animation-play-state: paused;
+}
+
+@keyframes draw-bar {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+.draw-bar {
+  transform-origin: bottom;
+  animation: draw-bar 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up { animation: none; opacity: 1; }
+  .radar-sweep, .blip, .pulse-aog, .ticker, .draw-bar { animation: none; }
+}
+
+/* keyboard focus */
+:focus-visible {
+  outline: 2px solid var(--z-cyan);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* thin scrollbars for data tables */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--z-line-strong) transparent;
+}

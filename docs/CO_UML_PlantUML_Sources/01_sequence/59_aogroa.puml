@@ -1,0 +1,28 @@
+@startuml
+!include _style.iuml
+title 5.9  AOG / ROA / Critical Priority Handling (QP.56)
+actor "Customer / CPU\n(CAO)" as Customer
+participant "Mgr PC /\nCsE" as MPC
+participant "CoE PCD /\nUnit PCD" as PCD
+database "COL\n(Company Online)" as COL
+participant "Repair route\n(CoE/OV/POOLEX/AW)" as REP
+participant "Central /\nUnit Logistic" as LOG
+
+Customer -> MPC : Upgrade component status to AOG / ROA / Critical
+note right of MPC : via correspondence, meeting,\ntelephone, CAO
+MPC -> COL : Identify item (P/N, desc, serial);\ninsert AOG/ROA column — status, qty, date
+MPC -> PCD : Hasten recovery/repair by shortest process
+alt Critical — suffix 'K'
+  PCD -> PCD : HOB identify repair location; upgrade repair priority
+end
+PCD -> REP : Route: CoE/Unit repair, OV, POOLEX, or AW spares
+REP --> PCD : Hasten repair; report progress & EDD
+PCD -> MPC : Inform progress & estimation
+MPC -> Customer : Advise CAO/CPU on EDD & delivery
+alt Serviceable
+  PCD -> COL : Stamp AOG/ROA on F111; update status
+  PCD -> LOG : Proceed immediate delivery (temporary F218) per QP.51
+  LOG -> Customer : Deliver component; relay DN ref & actual date
+  MPC -> COL : On confirmation — AOG/ROA column = 'closed' + date
+end
+@enduml

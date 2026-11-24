@@ -1,0 +1,258 @@
+"use client";
+
+import { use, useEffect, useState } from "react";
+import Link from "next/link";
+import { api, getSession, getWithFallback } from "@/lib/api";
+import { Job, JobStatus, PriorityType, RepairRoute } from "@/lib/types";
+import { useConfig } from "@/lib/use-config";
+import { useLang } from "@/lib/i18n";
+import { Button, MetaPill, OfflineNotice, Panel } from "@/components/ui";
+import { AuditTrail, RecordsList, StageRail, TransitionActions } from "@/components/workflow";
+
+const ROUTES: RepairRoute[] = ["COE_UNIT", "OV", "POOLEX", "AW_SPARE", "UNIT_PROCEED"];
+const PRIORITY_TYPES: PriorityType[] = ["AOG", "ROA", "CRITICAL"];
+
+// QP.44 main-line stages; BER / SOR / REC_OV render as branches off the rail
+const RAIL: JobStatus[] = [
+  "REGISTERED", "AWAITING_TDI", "TDI", "AWAITING_SPARE", "AWAITING_INDENT",
+  "WIP", "SERVICEABLE", "DELIVERED", "CLOSED",
+];
+
+export default function JobDetail({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const cfg = useConfig();
+  const { lang, t } = useLang();
+  const [job, setJob] = useState<Job | null | undefined>(undefined);
+  const [offline, setOffline] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const [showPriority, setShowPriority] = useState(false);
+  const [pForm, setPForm] = useState({ type: "AOG" as PriorityType, route: "COE_UNIT" as RepairRoute, quantity: "1", suffixK: false, colRef: "" });
+
+  const user = getSession()?.user;
+  const canManagePriority = ["PCE", "MM", "STORES", "ADMIN"].includes(user?.role ?? "");
+  const canClosePriority = ["PCE", "MM", "ADMIN"].includes(user?.role ?? "");
+
+  useEffect(() => {
+    getWithFallback<Job[]>("/jobs", "jobs")
+      .then((r) => {
+        setOffline(r.offline);
+        setJob(r.data.find((j) => j.id === id) ?? null);
+      })
+      .catch(console.error);
+  }, [id]);
+
+  async function transition(to: JobStatus, fields: Record<string, string>) {
+    if (!job) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await api.patch<Job>(`/jobs/${job.id}/transition`, { to, fields });
+      setJob(updated);
+    } catch (e) {
+      setError(offline ? "Transitions need the live API — start apps/api." : (e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function priorityAction(method: "post" | "patch", path: string, body: object) {
+    if (!job) return;
+    setBusy(true); setError(null);
+    try {
+      setJob(await api[method]<Job>(path, body));
+      setShowPriority(false);
+    } catch (e) {
+      setError(offline ? "Actions need the live API — start apps/api." : (e as Error).message);
+    } finally { setBusy(false); }
+  }
+
+  if (job === undefined) return <p className="eyebrow py-20 text-center">LOADING…</p>;
+  if (job === null)
+    return (
+      <p className="eyebrow py-20 text-center">
+        JOB NOT FOUND — <Link href="/jobs" className="text-trace">back to register</Link>
+      </p>
+    );
+
+  const daysIn = Math.floor((Date.now() - new Date(job.statusSince).getTime()) / 86_400_000);
+  const sla = cfg?.slaRules.find((r) => r.entity === "JOB" && r.status === job.status);
+  const overdue = sla && daysIn > sla.days;
+
+  return (
+    <div>
+      <OfflineNotice show={offline} />
+
+      <div className="fade-up mb-5 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="eyebrow mb-1">
+            <Link href="/jobs" className="hover:text-trace">{t("jobs")}</Link> · {job.category} · {job.originUnit} → {job.repairUnit}
+          </p>
+          <h1 className="display text-2xl font-bold">
+            <span className="mono mr-3 text-lg text-trace">{job.id}</span>
+            {job.component}
+          </h1>
+          <p className="mono mt-1 text-xs text-steel">
+            P/N {job.partNo} · S/N {job.serialNo} · received {job.psDate}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="mono rounded border hairline px-2.5 py-1 text-[10.5px] tracking-widest text-steel">
+            {t("location")}: {job.location}
+          </span>
+          <MetaPill status={job.status} meta={cfg?.jobStatusMeta?.[job.status]} lang={lang} />
+        </div>
+      </div>
+
+      {/* lifecycle rail */}
+      {cfg && (
+        <div className="panel fade-up d1 mb-4 px-4 py-3.5">
+          <StageRail order={RAIL} current={job.status} meta={cfg.jobStatusMeta} branches={["BER", "SOR", "REC_OV"]} />
+        </div>
+      )}
+
+      {/* QP.56 AOG / ROA / Critical priority overlay (5.9) — FR-15 */}
+      {job.priority?.state === "OPEN" && (
+        <div className="fade-up mb-4 rounded-md border border-brand-bright/50 bg-brand-bright/10 px-4 py-3 pulse-aog">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <MetaPill status={job.priority.type} meta={cfg?.priorityMeta?.[job.priority.type]} lang={lang} />
+              <span className="mono text-[10.5px] tracking-widest text-brand-bright">
+                COL {job.priority.colRef} · QTY {job.priority.quantity} · ROUTE {cfg?.repairRouteMeta?.[job.priority.route]?.[lang] ?? job.priority.route}
+                {job.priority.suffixK && " · SUFFIX K"}{job.priority.edd && ` · EDD ${job.priority.edd}`}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link href="/aog" className="mono text-[10.5px] tracking-widest text-steel hover:text-trace">MANAGE ON COL →</Link>
+              {canClosePriority && (
+                <>
+                  <Button disabled={busy} onClick={() => priorityAction("post", `/jobs/${job.id}/priority/close`, { reason: "DELIVERED" })}>Close — delivered</Button>
+                  <Button variant="ghost" disabled={busy} onClick={() => priorityAction("post", `/jobs/${job.id}/priority/close`, { reason: "DOWNGRADED" })}>Downgrade</Button>
+                </>
+              )}
+            </div>
+          </div>
+          {job.priority.remark && <p className="mono mt-1.5 text-[10.5px] text-steel/90">COL REMARK · {job.priority.remark}</p>}
+        </div>
+      )}
+      {job.priority?.state === "CLOSED" && (
+        <p className="fade-up mb-4 mono inline-block rounded border border-phosphor/40 bg-phosphor/5 px-3 py-1.5 text-[10.5px] tracking-widest text-phosphor">
+          {job.priority.type} PRIORITY CLOSED · {job.priority.closedAt?.slice(0, 10)} · {job.priority.closeReason === "DELIVERED" ? "DELIVERED" : "DOWNGRADED TO NORMAL"}
+        </p>
+      )}
+      {!job.priority?.state && canManagePriority && job.status !== "CLOSED" && (
+        <div className="fade-up mb-4">
+          {!showPriority ? (
+            <button onClick={() => setShowPriority(true)} className="mono rounded border border-brand-bright/40 px-3 py-1.5 text-[10.5px] tracking-widest text-brand-bright transition-colors hover:bg-brand-bright/10">
+              ⚠ RAISE AOG / ROA / CRITICAL PRIORITY (QP.56)
+            </button>
+          ) : (
+            <div className="panel ticked p-4">
+              <p className="eyebrow mb-3">Upgrade to priority — insert into the COL AOG/ROA column</p>
+              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                <label className="block">
+                  <span className="mono mb-1 block text-[10px] tracking-widest text-steel">Status</span>
+                  <select value={pForm.type} onChange={(e) => setPForm({ ...pForm, type: e.target.value as PriorityType })} className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace">
+                    {PRIORITY_TYPES.map((tp) => <option key={tp} value={tp}>{tp}</option>)}
+                  </select>
+                </label>
+                <label className="block lg:col-span-2">
+                  <span className="mono mb-1 block text-[10px] tracking-widest text-steel">Repair route</span>
+                  <select value={pForm.route} onChange={(e) => setPForm({ ...pForm, route: e.target.value as RepairRoute })} className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace">
+                    {ROUTES.map((r) => <option key={r} value={r}>{cfg?.repairRouteMeta?.[r]?.en ?? r}</option>)}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mono mb-1 block text-[10px] tracking-widest text-steel">Qty</span>
+                  <input value={pForm.quantity} onChange={(e) => setPForm({ ...pForm, quantity: e.target.value })} className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
+                </label>
+                <label className="block">
+                  <span className="mono mb-1 block text-[10px] tracking-widest text-steel">COL ref *</span>
+                  <input value={pForm.colRef} onChange={(e) => setPForm({ ...pForm, colRef: e.target.value })} placeholder="COL-AOG-2026-0xx" className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
+                </label>
+              </div>
+              <div className="mt-3 flex items-center gap-3">
+                <label className="mono flex items-center gap-2 text-[10.5px] tracking-widest text-steel">
+                  <input type="checkbox" checked={pForm.suffixK} onChange={(e) => setPForm({ ...pForm, suffixK: e.target.checked })} /> SUFFIX K
+                </label>
+                <Button variant="danger" disabled={busy || !pForm.colRef} onClick={() => priorityAction("post", `/jobs/${job.id}/priority`, { type: pForm.type, route: pForm.route, quantity: Number(pForm.quantity), suffixK: pForm.suffixK, colRef: pForm.colRef })}>
+                  Raise priority
+                </Button>
+                <button onClick={() => setShowPriority(false)} className="mono text-[10.5px] tracking-widest text-dim hover:text-steel">CANCEL</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {error && <p className="mb-4 rounded border border-brand-bright/40 bg-brand-bright/10 px-3 py-2 text-sm text-brand-bright">{error}</p>}
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel ticked className="fade-up d2 p-5 lg:col-span-2">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <p className="eyebrow">Stage control · process-owner gated (FR-03)</p>
+            <span className={`mono text-[10.5px] tracking-widest ${overdue ? "text-brand-bright" : "text-steel"}`}>
+              {daysIn} {t("daysInStatus")}
+              {sla && ` · SLA ${sla.days}D (${sla.source})`}
+              {overdue && " · OVERDUE"}
+            </span>
+          </div>
+
+          {cfg && user && (
+            <TransitionActions
+              status={job.status}
+              rules={cfg.jobTransitions}
+              meta={cfg.jobStatusMeta}
+              userRole={user.role}
+              busy={busy}
+              onTransition={transition}
+            />
+          )}
+
+          {job.status === "CLOSED" && (
+            <p className="mt-4 rounded border hairline bg-ink-deep/40 px-3 py-2 text-sm text-dim">
+              Job closed — editing locked (QP.44 stage 10). Records retained 5 years.
+            </p>
+          )}
+
+          <div className="mt-6">
+            <RecordsList records={job.records} />
+          </div>
+
+          {(job.demandIds.length > 0 || job.ovId || (job.invoiceIds?.length ?? 0) > 0 || job.indentRef) && (
+            <div className="mt-6 border-t hairline pt-4">
+              <p className="eyebrow mb-2">Linked processes</p>
+              <div className="flex flex-wrap gap-2">
+                {job.demandIds.map((d) => (
+                  <Link key={d} href="/demands" className="mono rounded border border-trace/40 px-2.5 py-1 text-[10.5px] tracking-widest text-trace hover:bg-trace/10">
+                    DEMAND {d} · QP.14
+                  </Link>
+                ))}
+                {job.ovId && (
+                  <Link href="/ov" className="mono rounded border border-amber/40 px-2.5 py-1 text-[10.5px] tracking-widest text-amber hover:bg-amber/10">
+                    OV {job.ovId} · QP.33
+                  </Link>
+                )}
+                {(job.invoiceIds ?? []).map((inv) => (
+                  <Link key={inv} href="/invoicing" className="mono rounded border border-phosphor/40 px-2.5 py-1 text-[10.5px] tracking-widest text-phosphor hover:bg-phosphor/10">
+                    INVOICE {inv} · QP.51
+                  </Link>
+                ))}
+                {job.indentRef && (
+                  <span className="mono rounded border hairline px-2.5 py-1 text-[10.5px] tracking-widest text-steel">
+                    CUSTOMER INDENT {job.indentRef}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </Panel>
+
+        <Panel className="fade-up d3 max-h-[560px] overflow-y-auto p-5">
+          <AuditTrail audit={job.audit} />
+        </Panel>
+      </div>
+    </div>
+  );
+}

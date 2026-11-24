@@ -1,0 +1,35 @@
+@startuml
+!include _astyle.iuml
+title 5.6  Sub-Contractor / Vendor Selection & Reassessment (QP.34) — Activity
+|Applicant|
+start
+:Submit application / recommendation;
+|Purchasing / Production|
+:Verify & assess capability (F228);
+|QAD|
+:(Optional) site audit; evaluate QMS;
+|Purchasing / Production|
+:Table evaluation to JTP;
+|JTP / MD|
+:Select, rate & approve (min 3);
+if (Approved?) then (no)
+  |Purchasing / Production|
+  :No further action;
+  stop
+else (yes)
+  |Purchasing / Production|
+  :Register in AVL / MSN / F229;
+  :Issue PO (F312) for services / OV;
+  |Sub-Contractor|
+  :Return repaired items to Central Stores;
+  |Purchasing / Production|
+  :Receiving inspection (QP.15 / QP.52);
+  :Reassess performance every 3 years (F230);
+  if (Not Suitable & 2nd CAR?) then (yes)
+    :Deregister from AVL / MSN / F229;
+  else (no)
+    :Retain on lists;
+  endif
+  stop
+endif
+@enduml

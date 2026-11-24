@@ -1,0 +1,40 @@
+@startuml
+!include _ucstyle.iuml
+left to right direction
+title 5.6  Sub-Contractor / Vendor Selection & Reassessment (QP.34) — Use Cases
+actor Applicant
+actor "Purchasing /\nProduction Mgr" as MGR
+actor "QAD" as QAD
+actor "JTP Committee" as JTP
+actor "MD" as MD
+actor "Sub-Contractor" as SUB
+rectangle "Sub-Contractor / Vendor Management" {
+  usecase "Submit application" as U1
+  usecase "Assess capability" as U2
+  usecase "Conduct site audit" as U3
+  usecase "Evaluate QMS" as U4
+  usecase "Table to JTP" as U5
+  usecase "Select & approve" as U6
+  usecase "Register in AVL / MSN / F229" as U7
+  usecase "Issue purchase order" as U8
+  usecase "Receipt inspection" as U9
+  usecase "Reassess performance" as U10
+  usecase "Deregister sub-contractor" as U11
+}
+Applicant --> U1
+MGR --> U2
+MGR --> U5
+MGR --> U7
+MGR --> U8
+MGR --> U9
+MGR --> U10
+QAD --> U3
+QAD --> U4
+JTP --> U6
+MD --> U6
+SUB --> U8
+SUB --> U9
+U2 ..> U3 : <<extend>>
+U2 ..> U4 : <<include>>
+U10 ..> U11 : <<extend>>
+@enduml

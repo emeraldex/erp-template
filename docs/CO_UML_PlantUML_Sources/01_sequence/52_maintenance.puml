@@ -1,0 +1,37 @@
+@startuml
+!include _style.iuml
+title 5.2  Component Maintenance and Service (QP.17 / QP.17A)
+actor Customer
+participant "Stores\n(StS/StP)" as ST
+participant "MIS" as MIS
+participant "ATP /\nTechnologist" as ATP
+participant "MM / SMM" as MM
+participant "Purchasing" as PUR
+
+Customer -> ST : Deliver item for service
+ST -> ST : Receiving inspection (QP.20)
+ST -> MIS : Deliver to workshop (F219, <=5 days)
+MIS -> MIS : Register job (F125); assign ATP
+ATP -> ATP : Retrieve manual / WI (F175)
+ATP -> ATP : Tear-down inspection (F116, <=5 days)
+alt Beyond Economical Repair (BER)
+  MM -> Customer : Quotation (F119) + Defect Report (F135)
+  Customer --> MM : Indent
+  MM -> MM : Procure replacement; issue F231 / F232
+else Serious Occurrence (SOR)
+  MM -> Customer : SOR form
+else Beyond capability
+  MM -> MM : Route to Outside Vendor (see 5.4)
+else Normal repair
+  MM -> PUR : RFQ for spares
+  ATP -> MM : Internal Demand (F212)
+  PUR --> MM : Price & EDD (<=30 days)
+  MM -> Customer : Submit TDI / Quotation (F116/F119)
+  ATP -> ATP : Carry out maintenance (under MIS)
+end
+MIS -> ATP : Final inspection & testing
+ATP -> MM : Complete docs (F114/F114A/F117/F111/F174)
+MM -> MM : Approve documentation (SMM)
+MIS -> ST : Deliver item; Invoice (F311), DN (F218)
+ST -> Customer : Return serviceable item
+@enduml

@@ -1,0 +1,37 @@
+@startuml
+!include _ucstyle.iuml
+left to right direction
+title 5.5  Supplier / Vendor Selection & Reassessment (QP.13) — Use Cases
+actor Applicant
+actor "Purchasing\n(PcMgr/PcE)" as PUR
+actor "QAD" as QAD
+actor "JTP Committee" as JTP
+actor "MD" as MD
+rectangle "Supplier / Vendor Management" {
+  usecase "Submit application" as U1
+  usecase "Verify capability" as U2
+  usecase "Conduct site audit" as U3
+  usecase "Evaluate QMS" as U4
+  usecase "Table to JTP" as U5
+  usecase "Compare & select (min 3)" as U6
+  usecase "Rate & approve" as U7
+  usecase "Register in Approved List" as U8
+  usecase "Reassess performance" as U9
+  usecase "Issue CAR" as U10
+  usecase "Deregister supplier" as U11
+}
+Applicant --> U1
+PUR --> U2
+PUR --> U5
+PUR --> U8
+PUR --> U9
+QAD --> U3
+QAD --> U4
+JTP --> U6
+JTP --> U7
+MD --> U7
+U2 ..> U3 : <<extend>>
+U2 ..> U4 : <<include>>
+U9 ..> U10 : <<extend>>
+U10 ..> U11 : <<extend>>
+@enduml

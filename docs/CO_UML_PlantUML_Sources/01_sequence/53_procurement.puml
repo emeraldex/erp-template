@@ -1,0 +1,30 @@
+@startuml
+!include _style.iuml
+title 5.3  Parts Procurement and Verification (QP.14)
+actor "Technologist" as TST
+participant "WoS / HOD" as WOS
+participant "Stores (StS)" as ST
+participant "Logistic" as LOG
+participant "Purchasing" as PUR
+participant "Supplier" as SUP
+participant "Finance" as FIN
+
+TST -> WOS : Raise Internal Demand (F212)
+WOS -> ST : Verify & approve; forward to Stores
+ST -> LOG : Stock check (F244)
+alt Stock available
+  LOG -> ST : Issue via F213 to holding unit
+  ST -> TST : Issue part (F212)
+else NIL stock
+  ST -> PUR : Forward F213 (stock NIL)
+  PUR -> SUP : Request for Quotation (F220, <=2 days)
+  SUP --> PUR : Quotation
+  PUR -> PUR : Evaluate (F221); select (min 3 quotes)
+  PUR -> SUP : Purchase Order (F312)
+  SUP -> FIN : Proforma invoice
+  FIN -> SUP : Arrange payment
+  SUP -> ST : Deliver part
+  ST -> ST : Receipt inspection (QP.15); F217 if discrepancy
+  ST -> TST : Issue part to originator (F212)
+end
+@enduml

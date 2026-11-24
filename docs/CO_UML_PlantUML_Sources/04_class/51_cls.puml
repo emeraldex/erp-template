@@ -1,0 +1,48 @@
+@startuml
+!include _cstyle.iuml
+title 5.1  Master Job / Component Lifecycle (JTS) — Class Model
+class Job {
+  +jobNo : String
+  +psRfqNo : String
+  +currentStatus : Status
+  +currentLocation : String
+  +dateReceived : Date
+  +register()
+  +updateStatus()
+  +close()
+}
+class Component {
+  +partNo : String
+  +serialNo : String
+  +description : String
+  +condition : String
+}
+class StatusHistory {
+  +status : Status
+  +location : String
+  +timestamp : DateTime
+  +byUser : String
+}
+class Department {
+  +name : String
+  +processOwnerFor : String
+}
+class Customer {
+  +name : String
+  +unit : String
+}
+enum Status {
+  AWAITING_TDI
+  TDI
+  AWAITING_SPARE
+  WIP
+  SERVICEABLE
+  REC_OV
+  COMPLETED
+}
+Customer "1" -- "*" Job : submits >
+Job "1" *-- "1" Component
+Job "1" *-- "*" StatusHistory
+StatusHistory "*" --> "1" Department : owned by >
+Job ..> Status
+@enduml

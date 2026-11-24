@@ -1,0 +1,604 @@
+// ─── Maintenance ERP — PostgreSQL persistence (CO-RFP-IT-001) ─────────────────────
+// Models the actual QP domain: PS-numbered jobs (QP.44), spares demands (QP.14),
+// outside-vendor repairs (QP.33), supplier/sub-contractor registers (QP.13/34),
+// FOD & tool accountability (QP.46), and invoicing streams (QP.51).
+//
+// Audit entries and Section 6 form records are first-class append-only tables so
+// FR-04 (audit trail) and FR-12 (5-year retention) are queryable, not buried in
+// JSON blobs. Workflow rules (transitions, SLA timers, invoice streams) are rows
+// too, so FR-02 runtime rule changes survive a restart.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enumerations (Section 4 actors, Section 5 workflow statuses) ─────────────
+
+enum Role {
+  ADMIN
+  STORES
+  WORKSHOP
+  MIS
+  MM
+  PURCHASING
+  PCE
+  QUALITY
+  FINANCE
+  BILLING
+}
+
+enum Branch {
+  HQ
+  CENTRAL
+  EAST
+  NORTH
+  NORTHEAST  @map("NORTHEAST")
+  OFFSHORE
+}
+
+enum Location {
+  LOGISTIC
+  BAY
+  HQ
+  VENDOR
+  CUSTOMER
+}
+
+enum JobStatus {
+  REGISTERED
+  AWAITING_TDI
+  TDI
+  AWAITING_SPARE
+  AWAITING_INDENT
+  WIP
+  REC_OV
+  BER
+  SOR
+  SERVICEABLE
+  DELIVERED
+  CLOSED
+}
+
+enum ItemCategory {
+  MILITARY
+  NAS
+}
+
+enum DemandStatus {
+  RAISED
+  APPROVED
+  STOCK_CHECK
+  ISSUED_FROM_STOCK
+  RFQ_ISSUED
+  EVALUATED
+  PO_ISSUED
+  RECEIVED
+  ISSUED
+}
+
+enum OvStatus {
+  RECEIVED_HQ
+  VENDOR_IDENTIFIED
+  F134_SUBMITTED
+  APPROVED
+  REJECTED
+  PO_ISSUED
+  AT_VENDOR
+  COST_ADVISED
+  QUOTE_APPROVED
+  RECEIVED_BACK
+  RETURNED
+}
+
+enum InvoiceStream {
+  PBC
+  BRANCH_REPAIR
+  COE_MRA
+  ACD
+}
+
+enum InvoiceStatus {
+  DRAFTED
+  CERTIFIED
+  TAX_RAISED
+  CORRECTNESS_CHECK
+  SUBMITTED
+  REJECTED
+  PAID
+}
+
+enum PartnerType {
+  SUPPLIER
+  SUBCONTRACTOR
+}
+
+enum PartnerStatus {
+  APPLIED
+  UNDER_EVALUATION
+  JTP_APPROVED
+  REGISTERED
+  DROPPED
+}
+
+enum PriorityType {
+  AOG
+  ROA
+  CRITICAL
+}
+
+enum RepairRoute {
+  COE_UNIT
+  OV
+  POOLEX
+  AW_SPARE
+  UNIT_PROCEED
+}
+
+enum PriorityState {
+  OPEN
+  CLOSED
+}
+
+enum PriorityCloseReason {
+  DELIVERED
+  DOWNGRADED
+}
+
+enum FodArea {
+  AWARENESS
+  CONTROL
+  CRITICAL
+}
+
+enum FodStatus {
+  OPEN
+  UNDER_REVIEW
+  CLOSED
+}
+
+enum ToolStatus {
+  IN
+  OUT
+  MISSING
+}
+
+enum TrainingCourse {
+  FOD_INITIAL
+  FOD_RECURRENT
+}
+
+enum SlaEntity {
+  JOB
+  DEMAND
+  OV
+  INVOICE
+}
+
+enum WorkflowKind {
+  JOB
+  DEMAND
+  OV
+  INVOICE
+}
+
+// ─── Actors ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  designation  String
+  branch       Branch
+  createdAt    DateTime @default(now())
+
+  @@map("users")
+}
+
+// ─── QP.44 job lifecycle (FR-01) ──────────────────────────────────────────────
+
+model Job {
+  id          String       @id
+  psDate      String
+  component   String
+  partNo      String
+  serialNo    String
+  category    ItemCategory
+  originUnit  String
+  repairUnit  Branch
+  status      JobStatus
+  location    Location
+  receivedAt  DateTime
+  statusSince DateTime
+  indentRef   String?
+  ovId        String?
+  // Optimistic-concurrency guard: a transition that reads v=n writes v=n+1 and
+  // fails if another actor already advanced the row (two Stores clerks
+  // dispatching the same PS number must not silently overwrite each other).
+  version     Int          @default(0)
+  ordinal     Int          @default(0)
+
+  priority JobPriority?
+  demands  Demand[]
+  ov       OvRepair[]
+  invoices Invoice[]
+  records  FormRecord[]
+  audit    AuditEntry[]
+
+  @@index([status])
+  @@index([status, statusSince])
+  @@index([repairUnit])
+  @@index([ordinal])
+  @@map("jobs")
+}
+
+// QP.56 AOG / ROA / Critical overlay (5.9) — FR-15
+model JobPriority {
+  id          String               @id @default(cuid())
+  job         Job                  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId       String               @unique
+  type        PriorityType
+  quantity    Int                  @default(1)
+  route       RepairRoute
+  suffixK     Boolean              @default(false)
+  state       PriorityState        @default(OPEN)
+  colRef      String
+  raisedAt    DateTime
+  raisedBy    String
+  edd         String?
+  remark      String?
+  closedAt    DateTime?
+  closeReason PriorityCloseReason?
+
+  audit AuditEntry[]
+
+  @@index([state])
+  @@map("job_priorities")
+}
+
+// ─── QP.14 spares demand / procurement (FR-08) ────────────────────────────────
+
+model Demand {
+  id              String       @id
+  job             Job          @relation(fields: [jobId], references: [id])
+  jobId           String
+  partDescription String
+  partNo          String
+  qty             Int
+  status          DemandStatus
+  statusSince     DateTime
+  raisedBy        String
+  branch          Branch
+  version         Int          @default(0)
+  ordinal     Int          @default(0)
+
+  // stockCheck (F244)
+  stockF244Ref      String?
+  stockAvailable    Boolean?
+  stockHoldingUnit  String?
+  // RFQ (F220)
+  rfqRef            String?
+  // evaluation (F221 / local purchase F241)
+  evalF221Ref       String?
+  evalSupplierId    String?
+  evalLocalPurchase Boolean?
+  evalF241Ref       String?
+  // purchase order (F312)
+  poRef             String?
+  // receiving discrepancy (F217)
+  discF217Ref       String?
+  discNote          String?
+
+  quotations Quotation[]
+  records    FormRecord[]
+  audit      AuditEntry[]
+
+  @@index([status])
+  @@index([status, statusSince])
+  @@index([jobId])
+  @@index([ordinal])
+  @@map("demands")
+}
+
+model Quotation {
+  id         Int     @id @default(autoincrement())
+  demand     Demand  @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  demandId   String
+  supplierId String
+  supplier   String
+  priceMYR   Decimal @db.Decimal(14, 2)
+  eddDays    Int
+  remarks    String?
+  seq        Int
+
+  @@unique([demandId, seq])
+  @@map("quotations")
+}
+
+// ─── QP.33 outside-vendor repair (FR-09) ──────────────────────────────────────
+
+model OvRepair {
+  id              String   @id
+  job             Job      @relation(fields: [jobId], references: [id])
+  jobId           String
+  defectReportRef String
+  am75Ref         String
+  vendorId        String?
+  vendorName      String?
+  f134Ref         String?
+  poRef           String?
+  costMYR         Decimal? @db.Decimal(14, 2)
+  eddDays         Int?
+  aboveIndent     Boolean?
+  f119Ref         String?
+  status          OvStatus
+  statusSince     DateTime
+  version         Int      @default(0)
+  ordinal     Int          @default(0)
+
+  records FormRecord[]
+  audit   AuditEntry[]
+
+  @@index([status])
+  @@index([status, statusSince])
+  @@index([ordinal])
+  @@map("ov_repairs")
+}
+
+// ─── QP.13 / QP.34 supplier & sub-contractor registers (FR-07) ────────────────
+
+model Partner {
+  id               String        @id
+  name             String
+  type             PartnerType
+  status           PartnerStatus
+  country          String
+  certifications   String[]
+  lists            String[]
+  rating           Int?
+  evaluationRef    String?
+  siteAuditRef     String?
+  lastAssessed     String?
+  nextReassessment String?
+  nonConformances  Int           @default(0)
+  factorsEvaluated Int           @default(0)
+  version          Int           @default(0)
+  ordinal     Int          @default(0)
+
+  cars  Car[]
+  audit AuditEntry[]
+
+  @@index([status])
+  @@index([type])
+  @@index([ordinal])
+  @@map("partners")
+}
+
+model Car {
+  id        Int     @id @default(autoincrement())
+  partner   Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partnerId String
+  ref       String
+  date      String
+  reason    String
+  seq       Int
+
+  @@unique([partnerId, seq])
+  @@map("cars")
+}
+
+// ─── QP.46 FOD, tool accountability & training (FR-11) ────────────────────────
+
+model FodIncident {
+  id               String    @id
+  date             String
+  partName         String
+  typeModel        String
+  serialNo         String
+  area             FodArea
+  location         String
+  discovered       String
+  rootCause        String?
+  correctiveAction String?
+  reporter         String
+  focalPoint       String
+  status           FodStatus
+  version          Int       @default(0)
+  ordinal     Int          @default(0)
+
+  audit AuditEntry[]
+
+  @@index([status])
+  @@index([ordinal])
+  @@map("fod_incidents")
+}
+
+model Tool {
+  tag    String     @id
+  name   String
+  board  String
+  holder String?
+  status ToolStatus
+  since  DateTime
+  ordinal Int      @default(0)
+
+  @@index([status])
+  @@index([ordinal])
+  @@map("tools")
+}
+
+model TrainingRecord {
+  id      Int            @id @default(autoincrement())
+  person  String
+  course  TrainingCourse
+  date    String
+  nextDue String
+  ordinal Int    @default(0)
+
+  @@unique([person, course])
+  @@index([ordinal])
+  @@map("training_records")
+}
+
+// ─── QP.51 invoicing & revenue billing (FR-13 / FR-14) ────────────────────────
+
+model Invoice {
+  id              String        @id
+  stream          InvoiceStream
+  job             Job?          @relation(fields: [jobId], references: [id])
+  jobId           String?
+  customer        String
+  period          String?
+  amountMYR       Decimal       @db.Decimal(14, 2)
+  gstRate         Decimal       @db.Decimal(5, 2)
+  gstMYR          Decimal       @db.Decimal(14, 2)
+  totalMYR        Decimal       @db.Decimal(14, 2)
+  status          InvoiceStatus
+  statusSince     DateTime
+  f311Ref         String?
+  ctcRef          String?
+  customerSignRef String?
+  correctnessBy   String?
+  salesPerfRef    String?
+  paymentRef      String?
+  paidAt          String?
+  outstanding     Boolean       @default(true)
+  raisedBy        String
+  branch          Branch
+  version         Int           @default(0)
+  ordinal     Int          @default(0)
+
+  records FormRecord[]
+  audit   AuditEntry[]
+
+  @@index([status])
+  @@index([status, statusSince])
+  @@index([outstanding])
+  @@index([ordinal])
+  @@map("invoices")
+}
+
+// ─── Cross-cutting: audit trail (FR-04) & Section 6 forms register (FR-05) ────
+// Append-only. Nullable parent FKs rather than one table per parent: Prisma has
+// no polymorphic relations, and a single trail keeps "who touched what, when"
+// answerable in one query for the 5-year retention posture (FR-12).
+
+model AuditEntry {
+  id     BigInt   @id @default(autoincrement())
+  at     DateTime
+  by     String
+  role   Role
+  action String
+  fields Json?
+  seq    Int
+
+  job           Job?         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId         String?
+  jobPriority   JobPriority? @relation(fields: [jobPriorityId], references: [id], onDelete: Cascade)
+  jobPriorityId String?
+  demand        Demand?      @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  demandId      String?
+  ov            OvRepair?    @relation(fields: [ovId], references: [id], onDelete: Cascade)
+  ovId          String?
+  partner       Partner?     @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partnerId     String?
+  fod           FodIncident? @relation(fields: [fodId], references: [id], onDelete: Cascade)
+  fodId         String?
+  invoice       Invoice?     @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId     String?
+
+  @@index([jobId, seq])
+  @@index([jobPriorityId, seq])
+  @@index([demandId, seq])
+  @@index([ovId, seq])
+  @@index([partnerId, seq])
+  @@index([fodId, seq])
+  @@index([invoiceId, seq])
+  @@index([at])
+  @@map("audit_entries")
+}
+
+model FormRecord {
+  id     BigInt  @id @default(autoincrement())
+  formNo String
+  refNo  String
+  date   String
+  by     String
+  note   String?
+  seq    Int
+
+  job       Job?      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId     String?
+  demand    Demand?   @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  demandId  String?
+  ov        OvRepair? @relation(fields: [ovId], references: [id], onDelete: Cascade)
+  ovId      String?
+  invoice   Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId String?
+
+  @@index([jobId, seq])
+  @@index([demandId, seq])
+  @@index([ovId, seq])
+  @@index([invoiceId, seq])
+  @@index([formNo])
+  @@map("form_records")
+}
+
+// ─── Workflow-as-data (FR-02) ─────────────────────────────────────────────────
+// Persisted so a runtime rule change (PATCH /config/sla/:id) survives a restart.
+
+model TransitionRuleRow {
+  id          Int          @id @default(autoincrement())
+  kind        WorkflowKind
+  from        String
+  to          String
+  label       String
+  labelMs     String
+  roles       Role[]
+  requires    Json
+  setLocation Location?
+  seq         Int
+
+  @@unique([kind, from, to])
+  @@index([kind, seq])
+  @@map("transition_rules")
+}
+
+model SlaRule {
+  id     String    @id
+  entity SlaEntity
+  status String
+  days   Int
+  rule   String
+  source String
+  seq    Int
+
+  @@index([entity])
+  @@map("sla_rules")
+}
+
+model InvoiceStreamDef {
+  id        InvoiceStream @id
+  label     String
+  labelMs   String
+  customer  String
+  perJob    Boolean
+  docSet    String[]
+  deadlines Json
+  seq       Int
+
+  @@map("invoice_streams")
+}
+
+model WeeklyClosure {
+  week  Int @id
+  count Int
+
+  @@map("weekly_closures")
+}

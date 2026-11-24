@@ -1,0 +1,41 @@
+@startuml
+!include _cstyle.iuml
+title 5.9  AOG / ROA / Critical — Class Model
+class Component {
+  +partNo : String
+  +description : String
+  +serialNo : String
+}
+class PriorityStatus {
+  +type : Enum (AOG, ROA, Critical)
+  +quantity : Int
+  +raisedDate : Date
+  +closedDate : Date
+  +state : Enum (Open, Closed)
+  +suffixK : Boolean
+}
+class COLRecord {
+  +aogRoaColumn : String
+  +status : String
+  +updatedBy : String
+}
+class RepairRoute {
+  +type : Enum (CoE, OV, POOLEX, AWSpare)
+  +edd : Date
+  +serviceable : Boolean
+}
+class ServiceableTag {
+  +formNo = "F111"
+  +statusStamp : String
+}
+class DeliveryNote {
+  +formNo = "F218"
+  +temporary : Boolean
+  +actualDate : Date
+}
+Component "1" -- "0..1" PriorityStatus
+PriorityStatus "1" -- "1" COLRecord
+PriorityStatus "1" --> "1" RepairRoute
+RepairRoute "1" ..> "0..1" ServiceableTag : on serviceable >
+ServiceableTag "1" -- "1" DeliveryNote
+@enduml
