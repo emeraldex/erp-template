@@ -25,6 +25,7 @@ const DICT = {
   reports: { en: "Reports & Exports", ms: "Laporan & Eksport" },
   settings: { en: "Settings", ms: "Tetapan" },
   workflow: { en: "Workflow Editor", ms: "Penyunting Aliran Kerja" },
+  users: { en: "Users", ms: "Pengguna" },
   attachments: { en: "Attachments", ms: "Lampiran" },
   documents: { en: "Documents", ms: "Dokumen" },
   signOut: { en: "Sign out", ms: "Log keluar" },

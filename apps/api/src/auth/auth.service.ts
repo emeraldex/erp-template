@@ -45,8 +45,8 @@ export class AuthService {
 
   async login(email: string, password: string, meta: { ip?: string; userAgent?: string }) {
     const user = await this.sessions.userByEmail(email);
-    if (!user) {
-      await dummyVerify(); // same work whether or not the account exists
+    if (!user || user.deactivatedAt) {
+      await dummyVerify(); // same work whether or not the account exists (or is active)
       throw new UnauthorizedException(INVALID);
     }
     if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
@@ -70,7 +70,7 @@ export class AuthService {
   /** After a verified single sign-on: start a session for the matching user, if any. */
   async loginSso(email: string, meta: { ip?: string; userAgent?: string }) {
     const user = await this.sessions.userByEmail(email);
-    if (!user) return null;
+    if (!user || user.deactivatedAt) return null;
     if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) return null;
     return this.issue(user, meta, 'sso');
   }
@@ -91,7 +91,7 @@ export class AuthService {
     if (claims.tid !== currentTenant().id) throw new UnauthorizedException('Session belongs to another organisation');
     const session = await this.sessions.find(claims.sid);
     const now = Date.now();
-    if (!session || session.revokedAt) throw new UnauthorizedException('Session has ended — sign in again');
+    if (!session || session.revokedAt || session.user.deactivatedAt) throw new UnauthorizedException('Session has ended — sign in again');
     if (session.expiresAt.getTime() <= now) throw new UnauthorizedException('Session expired — sign in again');
     if (now - session.lastSeenAt.getTime() > authConfig.idleMs) {
       await this.sessions.revoke(session.id);

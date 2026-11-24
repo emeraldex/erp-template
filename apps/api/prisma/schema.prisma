@@ -203,6 +203,8 @@ model User {
   lockedUntil        DateTime?
   mustChangePassword Boolean   @default(false)
   passwordChangedAt  DateTime?
+  /// Set when an administrator deactivates the account; history stays attributed.
+  deactivatedAt      DateTime?
   sessions           Session[]
   notifications      Notification[]
 
