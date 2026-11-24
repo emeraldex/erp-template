@@ -6,8 +6,9 @@
 set -e
 
 if [ "${RUN_MIGRATIONS:-1}" = "1" ]; then
+  # The default schema plus every registered client organisation's schema.
   echo "→ applying migrations"
-  npx prisma migrate deploy
+  node dist/tenants-cli.js migrate-all
 fi
 
 if [ "${RUN_SEED:-0}" = "1" ]; then

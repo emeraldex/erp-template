@@ -10,7 +10,8 @@ export interface ObjectStorage {
   get(key: string): Promise<Buffer>;
 }
 
-const KEY = /^[a-z]+\/[0-9a-f]{2}\/[0-9a-f-]{36}$/;
+// <tenant>/<entity>/<sha256 prefix>/<uuid>; keys without a tenant prefix predate multi-tenancy.
+const KEY = /^(?:[a-z][a-z0-9-]{1,30}\/)?[a-z]+\/[0-9a-f]{2}\/[0-9a-f-]{36}$/;
 function assertKey(key: string): void {
   if (!KEY.test(key)) throw new Error(`Refusing unexpected storage key "${key}"`);
 }

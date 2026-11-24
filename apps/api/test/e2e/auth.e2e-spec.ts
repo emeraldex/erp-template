@@ -1,13 +1,13 @@
 import { INestApplication } from '@nestjs/common';
 import request = require('supertest');
-import { PrismaService } from '../../src/common/prisma.service';
+import { PrismaClient } from '../../src/generated/prisma/client';
 import { bearer, createApp, login, PASSWORD } from './app';
 
 const API = '/api/v1';
 
 describe('Authentication & sessions (integration)', () => {
   let app: INestApplication;
-  let prisma: PrismaService;
+  let prisma: PrismaClient;
   let http: ReturnType<typeof request>;
 
   beforeAll(async () => {

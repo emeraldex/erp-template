@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { currentTenant } from '../tenancy/tenant';
 import { PrismaService } from '../common/prisma.service';
 
 export interface CompanyProfile {
@@ -45,22 +46,33 @@ const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice
 
 /** Organisation settings, cached in memory and persisted in the settings table. */
 @Injectable()
-export class SettingsService implements OnModuleInit {
-  private cache: Settings = structuredClone(DEFAULT_SETTINGS);
+export class SettingsService {
+  /** Per tenant, re-read every 30 s so changes made on another replica show up. */
+  private readonly caches = new Map<string, { settings: Settings; loadedAt: number }>();
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async onModuleInit(): Promise<void> {
-    await this.reload();
+  private get cache(): Settings {
+    const c = this.caches.get(currentTenant().id);
+    if (!c) throw new Error(`Settings not loaded for tenant ${currentTenant().id}`);
+    return c.settings;
+  }
+
+  async ensureLoaded(): Promise<void> {
+    const c = this.caches.get(currentTenant().id);
+    if (!c || Date.now() - c.loadedAt > 30_000) await this.reload();
   }
 
   async reload(): Promise<void> {
     const rows = await this.prisma.setting.findMany();
     const byKey = Object.fromEntries(rows.map((r) => [r.key, r.value as object]));
-    this.cache = {
-      company: { ...DEFAULT_SETTINGS.company, ...(byKey.company ?? {}) },
-      tax: { ...DEFAULT_SETTINGS.tax, ...(byKey.tax ?? {}) },
-    };
+    this.caches.set(currentTenant().id, {
+      settings: {
+        company: { ...DEFAULT_SETTINGS.company, ...(byKey.company ?? {}) },
+        tax: { ...DEFAULT_SETTINGS.tax, ...(byKey.tax ?? {}) },
+      },
+      loadedAt: Date.now(),
+    });
   }
 
   get(): Settings {

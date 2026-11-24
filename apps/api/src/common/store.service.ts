@@ -1,4 +1,5 @@
-import { ConflictException, Injectable, OnModuleInit } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
+import { currentTenant } from '../tenancy/tenant';
 import { PrismaService } from './prisma.service';
 import {
   fromBranch, mapDemand, mapFod, mapInvoice, mapJob, mapOv, mapPartner, mapSla,
@@ -53,23 +54,47 @@ const INVOICE_INCLUDE = { records: ordered, audit: ordered };
  * touched by the same workflow step (a job plus the demand it raises) can be
  * passed together so they commit atomically.
  */
+interface WorkflowConfig {
+  jobTransitions: TransitionRule<JobStatus>[];
+  demandTransitions: TransitionRule<DemandStatus>[];
+  ovTransitions: TransitionRule<OvStatus>[];
+  invoiceTransitions: TransitionRule<InvoiceStatus>[];
+  invoiceStreams: InvoiceStreamDef[];
+  slaRules: SlaRule[];
+  loadedAt: number;
+}
+
+/** How long a tenant's cached workflow config is trusted before re-reading it. */
+const CONFIG_TTL_MS = 30_000;
+
 @Injectable()
-export class StoreService implements OnModuleInit {
+export class StoreService {
   private readonly snaps = new WeakMap<object, Snapshot>();
 
-  // Workflow-as-data (FR-02) is small, read on every transition and mutated
-  // only through the admin config endpoints — cached in memory, reloaded on write.
-  jobTransitions: TransitionRule<JobStatus>[] = [];
-  demandTransitions: TransitionRule<DemandStatus>[] = [];
-  ovTransitions: TransitionRule<OvStatus>[] = [];
-  invoiceTransitions: TransitionRule<InvoiceStatus>[] = [];
-  invoiceStreams: InvoiceStreamDef[] = [];
-  slaRules: SlaRule[] = [];
+  // Workflow-as-data (FR-02) is small and read on every transition, so each
+  // tenant's copy is cached in memory, re-read every 30 s (so a change made on
+  // another API replica shows up) and immediately after a change made here.
+  private readonly configs = new Map<string, WorkflowConfig>();
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async onModuleInit(): Promise<void> {
-    await this.reloadConfig();
+  private cfg(): WorkflowConfig {
+    const c = this.configs.get(currentTenant().id);
+    if (!c) throw new Error(`Workflow config not loaded for tenant ${currentTenant().id}`);
+    return c;
+  }
+
+  get jobTransitions() { return this.cfg().jobTransitions; }
+  get demandTransitions() { return this.cfg().demandTransitions; }
+  get ovTransitions() { return this.cfg().ovTransitions; }
+  get invoiceTransitions() { return this.cfg().invoiceTransitions; }
+  get invoiceStreams() { return this.cfg().invoiceStreams; }
+  get slaRules() { return this.cfg().slaRules; }
+
+  /** Load the current tenant's config if missing or stale. */
+  async ensureConfig(): Promise<void> {
+    const c = this.configs.get(currentTenant().id);
+    if (!c || Date.now() - c.loadedAt > CONFIG_TTL_MS) await this.reloadConfig();
   }
 
   async reloadConfig(): Promise<void> {
@@ -79,12 +104,15 @@ export class StoreService implements OnModuleInit {
       this.prisma.slaRule.findMany({ orderBy: { seq: 'asc' } }),
     ]);
     const of = (kind: string) => rules.filter((r) => r.kind === kind).map(mapTransition);
-    this.jobTransitions = of('JOB') as TransitionRule<JobStatus>[];
-    this.demandTransitions = of('DEMAND') as TransitionRule<DemandStatus>[];
-    this.ovTransitions = of('OV') as TransitionRule<OvStatus>[];
-    this.invoiceTransitions = of('INVOICE') as TransitionRule<InvoiceStatus>[];
-    this.invoiceStreams = streams.map(mapStream);
-    this.slaRules = sla.map(mapSla);
+    this.configs.set(currentTenant().id, {
+      jobTransitions: of('JOB') as TransitionRule<JobStatus>[],
+      demandTransitions: of('DEMAND') as TransitionRule<DemandStatus>[],
+      ovTransitions: of('OV') as TransitionRule<OvStatus>[],
+      invoiceTransitions: of('INVOICE') as TransitionRule<InvoiceStatus>[],
+      invoiceStreams: streams.map(mapStream),
+      slaRules: sla.map(mapSla),
+      loadedAt: Date.now(),
+    });
   }
 
   // ─── helpers carried over from the in-memory store ──────────────────────────

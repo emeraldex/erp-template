@@ -5,8 +5,9 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser = require('cookie-parser');
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { hostOf, TenantRegistry } from './tenancy/tenant-registry';
 
-/** Browser origins allowed to call the API with credentials. */
+/** Browser origins allowed to call the API with credentials (from WEB_ORIGIN). */
 export function allowedOrigins(): string[] | true {
   const raw = process.env.WEB_ORIGIN?.trim();
   if (raw) return raw.split(',').map((o) => o.trim()).filter(Boolean);
@@ -25,8 +26,15 @@ export function configureApp(app: INestApplication): void {
   app.setGlobalPrefix('api/v1');
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));
   app.use(cookieParser());
+  const configured = allowedOrigins();
+  const registry = app.get(TenantRegistry);
   app.enableCors({
-    origin: allowedOrigins(),
+    // WEB_ORIGIN, plus any web address registered to a tenant.
+    origin: configured === true ? true : (origin, cb) => {
+      if (!origin) return cb(null, false);
+      const host = hostOf(origin);
+      cb(null, configured.includes(origin) || (!!host && registry.knownHosts().has(host.toLowerCase())));
+    },
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],

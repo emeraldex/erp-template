@@ -5,10 +5,13 @@ import { toBranch } from '../common/mappers';
 import { Branch, Role } from '../common/types';
 import { authConfig } from './auth.config';
 import { SessionStore } from './session.store';
+import { currentTenant } from '../tenancy/tenant';
 
 /** What the signed token carries: only a session reference and its expiry. */
 interface TokenClaims {
   sid: string;
+  /** Tenant the session belongs to; a token is useless at another organisation's address. */
+  tid: string;
   exp: number;
 }
 
@@ -56,12 +59,13 @@ export class AuthService {
     await this.sessions.recordSuccess(user.id);
     const session = await this.sessions.create(user.id, meta);
     const authUser = this.toAuthUser(user, session.id);
-    return { token: this.sign({ sid: session.id, exp: session.expiresAt.getTime() }), user: authUser, expiresAt: session.expiresAt };
+    return { token: this.sign({ sid: session.id, tid: currentTenant().id, exp: session.expiresAt.getTime() }), user: authUser, expiresAt: session.expiresAt };
   }
 
   /** Resolve a token to a live session, enforcing expiry, idle timeout and revocation. */
   async authenticate(token: string): Promise<AuthUser> {
     const claims = this.verify(token);
+    if (claims.tid !== currentTenant().id) throw new UnauthorizedException('Session belongs to another organisation');
     const session = await this.sessions.find(claims.sid);
     const now = Date.now();
     if (!session || session.revokedAt) throw new UnauthorizedException('Session has ended — sign in again');
@@ -115,7 +119,7 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('Malformed token');
     }
-    if (typeof claims.sid !== 'string' || typeof claims.exp !== 'number') throw new UnauthorizedException('Malformed token');
+    if (typeof claims.sid !== 'string' || typeof claims.tid !== 'string' || typeof claims.exp !== 'number') throw new UnauthorizedException('Malformed token');
     if (claims.exp <= Date.now()) throw new UnauthorizedException('Session expired — sign in again');
     return claims;
   }

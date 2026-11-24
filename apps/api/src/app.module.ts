@@ -1,7 +1,6 @@
 import { Global, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { PrismaService } from './common/prisma.service';
 import { StoreService } from './common/store.service';
 import { RequestLoggerMiddleware } from './common/request-logger.middleware';
 import { authConfig } from './auth/auth.config';
@@ -21,21 +20,24 @@ import { AttachmentsModule } from './attachments/attachments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RetentionModule } from './retention/retention.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
+import { TenancyModule } from './tenancy/tenancy.module';
+import { TenantMiddleware } from './tenancy/tenant.middleware';
 
 @Global()
 @Module({
   imports: [
     // Per-IP request ceiling for the whole API; sign-in has a tighter limit.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: authConfig.apiRateLimit }]),
-    SettingsModule, AuthModule, JobsModule, DemandsModule, OvModule, RegistersModule, FodModule, InvoicingModule, DashboardModule, DocumentsModule, ReportsModule, AttachmentsModule,
+    TenancyModule, SettingsModule, AuthModule, JobsModule, DemandsModule, OvModule, RegistersModule, FodModule, InvoicingModule, DashboardModule, DocumentsModule, ReportsModule, AttachmentsModule,
     NotificationsModule, RetentionModule, SchedulerModule,
   ],
   controllers: [HealthController],
-  providers: [PrismaService, StoreService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
-  exports: [PrismaService, StoreService],
+  providers: [StoreService, TenantMiddleware, { provide: APP_GUARD, useClass: ThrottlerGuard }],
+  exports: [StoreService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestLoggerMiddleware).forRoutes('{*path}');
+    // Every route runs inside its tenant, except the health check (no tenant needed).
+    consumer.apply(TenantMiddleware, RequestLoggerMiddleware).exclude('health').forRoutes('{*path}');
   }
 }

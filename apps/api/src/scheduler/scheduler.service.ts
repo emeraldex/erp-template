@@ -2,6 +2,9 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RetentionService } from '../retention/retention.service';
+import { StoreService } from '../common/store.service';
+import { runWithTenant } from '../tenancy/tenant';
+import { TenantRegistry } from '../tenancy/tenant-registry';
 
 /**
  * Background jobs: SLA alerts every ALERT_INTERVAL_MINUTES (default 15) and
@@ -17,15 +20,31 @@ export class SchedulerService implements OnApplicationBootstrap {
     private readonly registry: SchedulerRegistry,
     private readonly notifications: NotificationsService,
     private readonly retention: RetentionService,
+    private readonly tenants: TenantRegistry,
+    private readonly store: StoreService,
   ) {}
+
+  /** Run a job for every active tenant in turn; one tenant's failure doesn't stop the rest. */
+  async forEachTenant(name: string, job: () => Promise<unknown>): Promise<void> {
+    for (const tenant of this.tenants.all().filter((t) => t.status === 'active')) {
+      try {
+        await runWithTenant(tenant, async () => {
+          await this.store.ensureConfig();
+          await job();
+        });
+      } catch (err) {
+        this.log.error(`${name} failed for tenant ${tenant.id}: ${(err as Error).message}`);
+      }
+    }
+  }
 
   onApplicationBootstrap(): void {
     if (['false', '0', 'off'].includes((process.env.SCHEDULER_ENABLED || 'true').toLowerCase())) {
       this.log.log('Scheduler disabled');
       return;
     }
-    this.every('sla-alerts', Number(process.env.ALERT_INTERVAL_MINUTES || 15) * 60_000, () => this.notifications.runAlerts());
-    this.every('archive', Number(process.env.ARCHIVE_INTERVAL_HOURS || 24) * 3_600_000, () => this.retention.archiveClosedJobs());
+    this.every('sla-alerts', Number(process.env.ALERT_INTERVAL_MINUTES || 15) * 60_000, () => this.forEachTenant('sla-alerts', () => this.notifications.runAlerts()));
+    this.every('archive', Number(process.env.ARCHIVE_INTERVAL_HOURS || 24) * 3_600_000, () => this.forEachTenant('archive', () => this.retention.archiveClosedJobs()));
   }
 
   private every(name: string, ms: number, job: () => Promise<unknown>): void {
