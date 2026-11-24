@@ -161,7 +161,7 @@ export function OfflineNotice({ show }: { show: boolean }) {
   if (!show) return null;
   return (
     <p className="mono mb-4 inline-block rounded border border-amber/40 bg-amber/10 px-3 py-1.5 text-xs text-amber">
-      OFFLINE SAMPLE — API not reachable, showing bundled demo data. Start apps/api to go live.
+      DEMO DATA — the API is not reachable, so bundled sample records are shown.
     </p>
   );
 }

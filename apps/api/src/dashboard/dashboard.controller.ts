@@ -21,9 +21,10 @@ export class DashboardController {
   /**
    * FR-02 — the workflow definition served as data. The web client renders
    * its status pills, action buttons and mandatory-field forms from this.
-   * Public read; rule mutation is ADMIN-only below.
+   * Any signed-in user may read it; rule mutation is ADMIN/QUALITY only below.
    */
   @Get('config')
+  @UseGuards(AuthGuard)
   config() {
     return {
       jobStatusMeta: JOB_STATUS_META,

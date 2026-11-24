@@ -27,7 +27,7 @@ for role, mail in {
     "PURCHASING": "suresh", "PCE": "kumar", "QUALITY": "qistina",
     "FINANCE": "farah", "BILLING": "zara",
 }.items():
-    res, _ = call("POST", "/auth/login", {"email": f"{mail}@company.example", "password": PASSWORD})
+    res, _ = call("POST", "/auth/login", {"email": f"{mail}@company.example", "password": PASSWORD, "tokenInBody": True})
     TOK[role] = res["token"]
 print("1. all 9 role logins OK")
 

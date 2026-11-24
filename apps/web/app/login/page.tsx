@@ -2,8 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, setSession } from "@/lib/api";
+import { api, ApiError, DEMO_MODE, setSession } from "@/lib/api";
 import { Button } from "@/components/ui";
+
+// Demo shortcuts are shown in development and demo builds only — a production
+// build must not advertise accounts or the reference password.
+const SHOW_DEMO_ACCOUNTS = DEMO_MODE || process.env.NODE_ENV !== "production";
 
 // Section 4 actors — every role a "process owner" of specific JTS stages
 const DEMO_USERS: [string, string][] = [
@@ -21,8 +25,8 @@ const DEMO_USERS: [string, string][] = [
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("aisyah@company.example");
-  const [password, setPassword] = useState("demo123");
+  const [email, setEmail] = useState(SHOW_DEMO_ACCOUNTS ? "aisyah@company.example" : "");
+  const [password, setPassword] = useState(SHOW_DEMO_ACCOUNTS ? "demo123" : "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -30,14 +34,13 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const session = await api.login(email, password);
-      setSession(session);
-      router.replace("/dashboard");
+      const { user } = await api.login(email, password);
+      setSession({ user });
+      router.replace(user.mustChangePassword ? "/change-password" : "/dashboard");
     } catch (e) {
-      // API offline → allow demo entry with a stub session
-      if (e instanceof TypeError || (e as { status?: number }).status === undefined) {
+      // Demo builds only: let the UI be explored with sample data when no API runs.
+      if (DEMO_MODE && e instanceof ApiError && e.status === 0) {
         setSession({
-          token: "demo-offline",
           user: { id: "u1", name: "Demo User", email, role: "ADMIN", designation: "IT Mgmt", branch: "HQ" },
         });
         router.replace("/dashboard");
@@ -54,8 +57,8 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="fade-up mb-8 text-center">
           <svg viewBox="0 0 32 32" className="mx-auto mb-3 h-12 w-12" aria-hidden>
-            <rect x="4" y="4" width="24" height="24" rx="3" fill="none" stroke="var(--z-red)" strokeWidth="2.5" />
-            <path d="M10 11h12l-12 10h12" fill="none" stroke="var(--z-text)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            <rect x="4" y="4" width="24" height="24" rx="3" fill="none" stroke="var(--c-red)" strokeWidth="2.5" />
+            <path d="M10 11.5h12M10 16h12M10 20.5h7" fill="none" stroke="var(--c-text)" strokeWidth="2.5" strokeLinecap="round" />
           </svg>
           <h1 className="display text-3xl font-bold">COMPANY ERP</h1>
           <p className="eyebrow mt-1">Integrated Maintenance, Procurement &amp; Job-Tracking · CO-RFP-IT-001</p>
@@ -90,6 +93,7 @@ export default function LoginPage() {
           </Button>
         </div>
 
+        {SHOW_DEMO_ACCOUNTS && (
         <div className="fade-up d3 mt-6">
           <p className="eyebrow mb-2">Demo accounts · password demo123</p>
           <div className="grid grid-cols-2 gap-1.5">
@@ -104,6 +108,7 @@ export default function LoginPage() {
             ))}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

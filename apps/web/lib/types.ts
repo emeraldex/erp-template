@@ -11,6 +11,7 @@ export interface SessionUser {
   role: Role;
   designation: string;
   branch: string;
+  mustChangePassword?: boolean;
 }
 
 export type Branch = "HQ" | "CENTRAL" | "EAST" | "NORTH" | "NORTHEAST" | "OFFSHORE";

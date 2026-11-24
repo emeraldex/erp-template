@@ -198,7 +198,31 @@ model User {
   branch       Branch
   createdAt    DateTime @default(now())
 
+  // Account protection (Phase 1 hardening)
+  failedLogins       Int       @default(0)
+  lockedUntil        DateTime?
+  mustChangePassword Boolean   @default(false)
+  passwordChangedAt  DateTime?
+  sessions           Session[]
+
   @@map("users")
+}
+
+/// Server-side login session. The signed token only carries the session id, so
+/// signing out, a password change or an admin can revoke access immediately.
+model Session {
+  id         String    @id
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  ip         String?
+  userAgent  String?
+
+  @@index([userId])
+  @@map("sessions")
 }
 
 // ─── QP.44 job lifecycle (FR-01) ──────────────────────────────────────────────

@@ -9,37 +9,37 @@
    if the official Company brand guide differs.
    ============================================================ */
 :root {
-  --z-ink: #0a1526;        /* base background — console navy */
-  --z-ink-deep: #060d1a;
-  --z-panel: #0f1e33;      /* card surface */
-  --z-panel-2: #142840;    /* raised surface / hover */
-  --z-line: rgba(147, 168, 196, 0.14);
-  --z-line-strong: rgba(147, 168, 196, 0.28);
+  --c-ink: #0a1526;        /* base background — console navy */
+  --c-ink-deep: #060d1a;
+  --c-panel: #0f1e33;      /* card surface */
+  --c-panel-2: #142840;    /* raised surface / hover */
+  --c-line: rgba(147, 168, 196, 0.14);
+  --c-line-strong: rgba(147, 168, 196, 0.28);
 
-  --z-red: #c8102e;        /* Company action red */
-  --z-red-bright: #ff3b4e;
-  --z-phosphor: #34e8a0;   /* radar phosphor — live/OK only */
-  --z-amber: #f5b841;      /* caution */
-  --z-cyan: #4fc3f7;       /* informational trace */
+  --c-red: #c8102e;        /* Company action red */
+  --c-red-bright: #ff3b4e;
+  --c-phosphor: #34e8a0;   /* radar phosphor — live/OK only */
+  --c-amber: #f5b841;      /* caution */
+  --c-cyan: #4fc3f7;       /* informational trace */
 
-  --z-text: #e8eff9;
-  --z-steel: #93a8c4;      /* secondary text */
-  --z-dim: #5c7395;        /* tertiary text */
+  --c-text: #e8eff9;
+  --c-steel: #93a8c4;      /* secondary text */
+  --c-dim: #5c7395;        /* tertiary text */
 }
 
 @theme inline {
-  --color-ink: var(--z-ink);
-  --color-ink-deep: var(--z-ink-deep);
-  --color-panel: var(--z-panel);
-  --color-panel-2: var(--z-panel-2);
-  --color-brand: var(--z-red);
-  --color-brand-bright: var(--z-red-bright);
-  --color-phosphor: var(--z-phosphor);
-  --color-amber: var(--z-amber);
-  --color-trace: var(--z-cyan);
-  --color-fg: var(--z-text);
-  --color-steel: var(--z-steel);
-  --color-dim: var(--z-dim);
+  --color-ink: var(--c-ink);
+  --color-ink-deep: var(--c-ink-deep);
+  --color-panel: var(--c-panel);
+  --color-panel-2: var(--c-panel-2);
+  --color-brand: var(--c-red);
+  --color-brand-bright: var(--c-red-bright);
+  --color-phosphor: var(--c-phosphor);
+  --color-amber: var(--c-amber);
+  --color-trace: var(--c-cyan);
+  --color-fg: var(--c-text);
+  --color-steel: var(--c-steel);
+  --color-dim: var(--c-dim);
   --font-display: var(--font-rajdhani);
   --font-sans: var(--font-plex-sans);
   --font-mono: var(--font-plex-mono);
@@ -47,8 +47,8 @@
 
 html,
 body {
-  background: var(--z-ink);
-  color: var(--z-text);
+  background: var(--c-ink);
+  color: var(--c-text);
   font-family: var(--font-plex-sans), system-ui, sans-serif;
 }
 
@@ -67,22 +67,22 @@ body::before {
 }
 
 ::selection {
-  background: var(--z-red);
+  background: var(--c-red);
   color: #fff;
 }
 
 /* ---------- utility classes used across the app ---------- */
 .panel {
-  background: linear-gradient(180deg, var(--z-panel) 0%, color-mix(in srgb, var(--z-panel) 92%, black) 100%);
-  border: 1px solid var(--z-line);
+  background: linear-gradient(180deg, var(--c-panel) 0%, color-mix(in srgb, var(--c-panel) 92%, black) 100%);
+  border: 1px solid var(--c-line);
   border-radius: 10px;
 }
 .panel:hover {
-  border-color: var(--z-line-strong);
+  border-color: var(--c-line-strong);
 }
 
 .hairline {
-  border-color: var(--z-line);
+  border-color: var(--c-line);
 }
 
 .display {
@@ -100,7 +100,7 @@ body::before {
   font-size: 10.5px;
   letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--z-dim);
+  color: var(--c-dim);
 }
 
 /* corner ticks on panels — drafting-table framing, applied sparingly */
@@ -114,8 +114,8 @@ body::before {
   left: -1px;
   width: 14px;
   height: 14px;
-  border-top: 2px solid var(--z-red);
-  border-left: 2px solid var(--z-red);
+  border-top: 2px solid var(--c-red);
+  border-left: 2px solid var(--c-red);
   border-radius: 2px 0 0 0;
 }
 
@@ -186,7 +186,7 @@ body::before {
 
 /* keyboard focus */
 :focus-visible {
-  outline: 2px solid var(--z-cyan);
+  outline: 2px solid var(--c-cyan);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -194,5 +194,5 @@ body::before {
 /* thin scrollbars for data tables */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--z-line-strong) transparent;
+  scrollbar-color: var(--c-line-strong) transparent;
 }

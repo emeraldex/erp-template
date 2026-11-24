@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getSession, setSession, Session } from "@/lib/api";
+import { api, DEMO_MODE, getSession, onConnectionChange, setSession, Session } from "@/lib/api";
 import { DictKey, useLang } from "@/lib/i18n";
 
 const NAV: { group: DictKey; items: { href: string; label: DictKey; code: string }[] }[] = [
@@ -37,8 +37,8 @@ function CompanyMark() {
   return (
     <Link href="/dashboard" className="flex items-center gap-3 px-5 py-5">
       <svg viewBox="0 0 32 32" className="h-8 w-8" aria-hidden>
-        <rect x="4" y="4" width="24" height="24" rx="3" fill="none" stroke="var(--z-red)" strokeWidth="2.5" />
-        <path d="M10 11h12l-12 10h12" fill="none" stroke="var(--z-text)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <rect x="4" y="4" width="24" height="24" rx="3" fill="none" stroke="var(--c-red)" strokeWidth="2.5" />
+        <path d="M10 11.5h12M10 16h12M10 20.5h7" fill="none" stroke="var(--c-text)" strokeWidth="2.5" strokeLinecap="round" />
       </svg>
       <div>
         <p className="display text-lg font-bold leading-none text-fg">COMPANY</p>
@@ -97,6 +97,8 @@ export function Topbar() {
   const { lang, setLang } = useLang();
   const [session, setLocal] = useState<Session | null>(null);
   const [clock, setClock] = useState("");
+  const [link, setLink] = useState<"ok" | "unreachable">("ok");
+  useEffect(() => onConnectionChange(setLink), []);
 
   useEffect(() => {
     const s = getSession();
@@ -105,6 +107,15 @@ export function Topbar() {
       return;
     }
     setLocal(s);
+    // Confirm the cookie session is still live and refresh the cached profile;
+    // a 401 here sends the user back to sign in.
+    api.me()
+      .then(({ user }) => {
+        setSession({ user });
+        setLocal({ user });
+        if (user.mustChangePassword) router.replace("/change-password");
+      })
+      .catch(() => { /* handled by the API client (redirect / banner) */ });
     const tick = () =>
       setClock(
         new Date().toLocaleTimeString("en-MY", { hour12: false, timeZone: "Asia/Kuala_Lumpur" }) + " MYT",
@@ -117,10 +128,17 @@ export function Topbar() {
   return (
     <header className="sticky top-0 z-10 flex items-center justify-between border-b hairline bg-ink/85 px-6 py-3 backdrop-blur">
       <div className="flex items-center gap-3">
-        <span className="mono flex items-center gap-1.5 text-[10.5px] tracking-widest text-phosphor">
-          <span className="blip h-1.5 w-1.5 rounded-full bg-phosphor" />
-          SYSTEM NOMINAL
-        </span>
+        {link === "ok" ? (
+          <span className="mono flex items-center gap-1.5 text-[10.5px] tracking-widest text-phosphor">
+            <span className="blip h-1.5 w-1.5 rounded-full bg-phosphor" />
+            SYSTEM NOMINAL
+          </span>
+        ) : (
+          <span className="mono flex items-center gap-1.5 text-[10.5px] tracking-widest text-amber">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber" />
+            SERVER UNREACHABLE
+          </span>
+        )}
         <span className="mono hidden text-[10.5px] tracking-widest text-dim sm:inline">{clock}</span>
       </div>
       <div className="flex items-center gap-4">
@@ -147,7 +165,14 @@ export function Topbar() {
               </p>
             </div>
             <button
-              onClick={() => {
+              onClick={() => router.push("/change-password")}
+              className="mono hidden rounded border hairline px-2.5 py-1.5 text-[10.5px] tracking-widest text-steel transition-colors hover:border-steel/50 hover:text-fg sm:inline"
+            >
+              {lang === "ms" ? "KATA LALUAN" : "PASSWORD"}
+            </button>
+            <button
+              onClick={async () => {
+                await api.logout().catch(() => { /* already signed out server-side */ });
                 setSession(null);
                 router.replace("/login");
               }}
@@ -159,5 +184,19 @@ export function Topbar() {
         )}
       </div>
     </header>
+  );
+}
+
+/** App-wide notice when the API cannot be reached (or when running on demo data). */
+export function ConnectionBanner() {
+  const [state, setState] = useState<"ok" | "unreachable">("ok");
+  useEffect(() => onConnectionChange(setState), []);
+  if (state === "ok") return null;
+  return (
+    <div role="alert" className="mono border-b border-amber/40 bg-amber/10 px-6 py-2 text-center text-xs tracking-wider text-amber">
+      {DEMO_MODE
+        ? "DEMO MODE — the server is not reachable, so bundled sample data is shown. Changes will not be saved."
+        : "CANNOT REACH THE SERVER — data shown may be out of date and changes will not be saved. Retrying on your next action."}
+    </div>
   );
 }

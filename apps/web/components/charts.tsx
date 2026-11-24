@@ -24,7 +24,7 @@ export function Bars({ data, label }: { data: number[]; label: string }) {
 }
 
 /** Inline sparkline for table rows. */
-export function Sparkline({ data, color = "var(--z-phosphor)" }: { data: number[]; color?: string }) {
+export function Sparkline({ data, color = "var(--c-phosphor)" }: { data: number[]; color?: string }) {
   const max = Math.max(...data, 1);
   const min = Math.min(...data, 0);
   const pts = data
@@ -39,7 +39,7 @@ export function Sparkline({ data, color = "var(--z-phosphor)" }: { data: number[
 
 /** Availability gauge as a slim horizontal bar. */
 export function AvailabilityBar({ pct }: { pct: number }) {
-  const tone = pct >= 95 ? "var(--z-phosphor)" : pct >= 80 ? "var(--z-amber)" : "var(--z-red-bright)";
+  const tone = pct >= 95 ? "var(--c-phosphor)" : pct >= 80 ? "var(--c-amber)" : "var(--c-red-bright)";
   return (
     <div className="flex items-center gap-2">
       <div className="h-1.5 w-24 overflow-hidden rounded-full bg-ink-deep">

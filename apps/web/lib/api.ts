@@ -1,67 +1,131 @@
 "use client";
 
 import { SessionUser } from "./types";
-import { mock } from "./mock-data";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
-const SESSION_KEY = "erp.session";
+const PROFILE_KEY = "erp.profile";
 
+/**
+ * Demo mode: when the API is unreachable, serve the bundled sample data so the
+ * UI can be shown without a backend. Off unless NEXT_PUBLIC_DEMO_MODE=1 at
+ * build time, so a production build never shows invented records.
+ */
+export const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === "1";
+
+/**
+ * The signed-in user's profile, cached for display only. The credential itself
+ * is an httpOnly cookie set by the API, which page scripts cannot read.
+ */
 export interface Session {
-  token: string;
   user: SessionUser;
 }
 
 export function getSession(): Session | null {
   if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(SESSION_KEY);
-  return raw ? (JSON.parse(raw) as Session) : null;
+  try {
+    const raw = window.localStorage.getItem(PROFILE_KEY);
+    return raw ? { user: JSON.parse(raw) as SessionUser } : null;
+  } catch {
+    return null;
+  }
 }
 
 export function setSession(s: Session | null) {
-  if (s) window.localStorage.setItem(SESSION_KEY, JSON.stringify(s));
-  else window.localStorage.removeItem(SESSION_KEY);
+  try {
+    if (s) window.localStorage.setItem(PROFILE_KEY, JSON.stringify(s.user));
+    else window.localStorage.removeItem(PROFILE_KEY);
+  } catch {
+    /* storage unavailable (private mode) — the cookie still authenticates */
+  }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const session = getSession();
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(session ? { Authorization: `Bearer ${session.token}` } : {}),
-      ...init?.headers,
-    },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, body?.message ?? res.statusText);
-  }
-  return res.json() as Promise<T>;
+// ─── connection status, for the app-wide banner ──────────────────────────────
+
+export type ConnectionState = "ok" | "unreachable";
+const listeners = new Set<(s: ConnectionState) => void>();
+let connection: ConnectionState = "ok";
+
+function setConnection(s: ConnectionState) {
+  if (s === connection) return;
+  connection = s;
+  listeners.forEach((l) => l(s));
+}
+
+export function onConnectionChange(l: (s: ConnectionState) => void): () => void {
+  listeners.add(l);
+  l(connection);
+  return () => listeners.delete(l);
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string | string[], public code?: string) {
     super(Array.isArray(message) ? message.join("; ") : message);
   }
 }
 
-/**
- * GET with a demo fallback: if the API isn't reachable, serve bundled
- * sample data and flag the response as offline so the UI can say so.
- */
-export async function getWithFallback<T>(path: string, mockKey: keyof typeof mock): Promise<{ data: T; offline: boolean }> {
+function redirect(path: string) {
+  if (typeof window !== "undefined" && window.location.pathname !== path) window.location.assign(path);
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let res: Response;
   try {
-    const data = await request<T>(path);
-    return { data, offline: false };
+    res = await fetch(`${BASE}${path}`, {
+      ...init,
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        // The API requires this on state changes made with the session cookie,
+        // which a cross-site form or image tag cannot send (CSRF protection).
+        "X-Requested-With": "erp-web",
+        ...init?.headers,
+      },
+    });
+  } catch {
+    setConnection("unreachable");
+    throw new ApiError(0, "Cannot reach the server. Check your connection and try again.");
+  }
+  setConnection("ok");
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const err = new ApiError(res.status, body?.message ?? res.statusText, body?.code);
+    const isAuthCall = path.startsWith("/auth/login") || path.startsWith("/auth/change-password");
+    if (res.status === 401 && !isAuthCall) {
+      setSession(null);
+      redirect("/login");
+    } else if (err.code === "PASSWORD_CHANGE_REQUIRED") {
+      redirect("/change-password");
+    }
+    throw err;
+  }
+  return res.json() as Promise<T>;
+}
+
+/**
+ * GET that, in demo mode only, falls back to bundled sample data when the API
+ * is unreachable. Outside demo mode an unreachable API is an error the user sees.
+ */
+export async function getWithFallback<T>(path: string, mockKey: string): Promise<{ data: T; offline: boolean }> {
+  try {
+    return { data: await request<T>(path), offline: false };
   } catch (e) {
-    if (e instanceof ApiError && e.status !== 0) throw e; // real API errors surface
-    return { data: mock[mockKey] as unknown as T, offline: true };
+    if (!DEMO_MODE || !(e instanceof ApiError) || e.status !== 0) throw e;
+    const { mock } = await import("./mock-data");
+    return { data: (mock as Record<string, unknown>)[mockKey] as T, offline: true };
   }
 }
 
 export const api = {
   login: (email: string, password: string) =>
-    request<Session>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+    request<{ user: SessionUser }>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  logout: () => request<{ ok: true }>("/auth/logout", { method: "POST" }),
+  me: () => request<{ user: SessionUser }>("/auth/me"),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ user: SessionUser }>("/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
   get: <T,>(path: string) => request<T>(path),
   post: <T,>(path: string, body: unknown) =>
     request<T>(path, { method: "POST", body: JSON.stringify(body) }),
