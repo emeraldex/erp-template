@@ -190,3 +190,17 @@ FR-02 runtime change such as `PATCH /config/sla/:id` now survives a restart.
   corporate IdP, replace `verify()` with the provider's token introspection;
   the guard and role gates above it are unchanged.
 - **Backups.** Nothing here backs up the `pgdata` volume. Schedule `pg_dump`.
+
+## License
+
+Copyright 2026 emeraldex. Licensed under the
+[PolyForm Strict License 1.0.0](LICENSE).
+
+You may use this software for **non-commercial purposes only**, such as
+personal study or evaluating it as a prospective client. You may **not**
+modify it, create works based on it, distribute it, or use it in the course
+of running a business. Commercial use, deployment or customisation requires a
+separate written licence. Contact the copyright holder via
+[GitHub](https://github.com/emeraldex).
+
+Third-party dependencies remain under their own licences.

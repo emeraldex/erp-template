@@ -1,6 +1,7 @@
 {
   "name": "erp-system",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE",
   "packageManager": "pnpm@11.9.0",
   "scripts": {
     "dev": "turbo run dev",
