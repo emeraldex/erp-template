@@ -253,14 +253,14 @@ export interface TrainingRecord {
 
 // ─── QP.51 Invoicing & Revenue Billing (5.8) — FR-13 / FR-14 ───────────────────
 // Four parallel invoicing streams modelled as configurable variants of a single
-// billing process: each adds 6% GST, produces a Certified True Copy (CTC), passes
+// billing process: each adds tax (rate from settings), produces a Certified True Copy (CTC), passes
 // a correctness gate and routes the tax invoice to CPU (Finance) for payment.
 export type InvoiceStream = "PBC" | "BRANCH_REPAIR" | "COE_MRA" | "ACD";
 
 export type InvoiceStatus =
   | "DRAFTED"           // stream document set assembled
   | "CERTIFIED"         // Customer/CAO signatures obtained + CTC made
-  | "TAX_RAISED"        // Tax Invoice (F311) raised + 6% GST
+  | "TAX_RAISED"        // Tax Invoice (F311) raised with tax
   | "CORRECTNESS_CHECK" // HQ / CoE Invoicing correctness & completeness gate
   | "SUBMITTED"         // forwarded to CPU (Finance) / MRA
   | "REJECTED"          // incomplete / rejected — correct promptly

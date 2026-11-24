@@ -15,13 +15,14 @@ import { FodModule } from './fod/fod.module';
 import { InvoicingModule } from './invoicing/invoicing.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SettingsModule } from './settings/settings.module';
+import { DocumentsModule } from './documents/documents.module';
 
 @Global()
 @Module({
   imports: [
     // Per-IP request ceiling for the whole API; sign-in has a tighter limit.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: authConfig.apiRateLimit }]),
-    SettingsModule, AuthModule, JobsModule, DemandsModule, OvModule, RegistersModule, FodModule, InvoicingModule, DashboardModule,
+    SettingsModule, AuthModule, JobsModule, DemandsModule, OvModule, RegistersModule, FodModule, InvoicingModule, DashboardModule, DocumentsModule,
   ],
   controllers: [HealthController],
   providers: [PrismaService, StoreService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
