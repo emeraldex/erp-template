@@ -66,6 +66,7 @@ export interface FormRecord {
 }
 
 export interface Job {
+  archivedAt?: string;        // FR-12: out of active lists, read-only
   id: string;              // PS / Job number — FR-01
   psDate: string;
   component: string;

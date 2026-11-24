@@ -18,3 +18,5 @@ process.env.SEED_FORCE_PASSWORD_CHANGE = '0';
 process.env.STORAGE_DRIVER = 'local';
 process.env.ATTACHMENTS_DIR = require('path').join(require('os').tmpdir(), `erp-e2e-attachments-${process.pid}`);
 process.env.ATTACHMENT_MAX_MB = '1';
+process.env.SCHEDULER_ENABLED = 'false';
+process.env.MAIL_TRANSPORT = 'memory';

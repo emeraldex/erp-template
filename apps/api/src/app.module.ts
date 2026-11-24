@@ -18,6 +18,9 @@ import { SettingsModule } from './settings/settings.module';
 import { DocumentsModule } from './documents/documents.module';
 import { ReportsModule } from './reports/reports.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { RetentionModule } from './retention/retention.module';
+import { SchedulerModule } from './scheduler/scheduler.module';
 
 @Global()
 @Module({
@@ -25,6 +28,7 @@ import { AttachmentsModule } from './attachments/attachments.module';
     // Per-IP request ceiling for the whole API; sign-in has a tighter limit.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: authConfig.apiRateLimit }]),
     SettingsModule, AuthModule, JobsModule, DemandsModule, OvModule, RegistersModule, FodModule, InvoicingModule, DashboardModule, DocumentsModule, ReportsModule, AttachmentsModule,
+    NotificationsModule, RetentionModule, SchedulerModule,
   ],
   controllers: [HealthController],
   providers: [PrismaService, StoreService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

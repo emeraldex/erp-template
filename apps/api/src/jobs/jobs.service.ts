@@ -7,8 +7,8 @@ import { Branch, Job, JobStatus, PriorityType, RepairRoute, Role } from '../comm
 export class JobsService {
   constructor(private readonly store: StoreService) {}
 
-  list(): Promise<Job[]> {
-    return this.store.jobs();
+  list(archived: 'exclude' | 'include' | 'only' = 'exclude'): Promise<Job[]> {
+    return this.store.jobs(archived);
   }
 
   async get(id: string): Promise<Job> {
@@ -44,6 +44,7 @@ export class JobsService {
 
   async transition(id: string, to: JobStatus, fields: Record<string, string>, actor: { name: string; role: Role }): Promise<Job> {
     const job = await this.get(id);
+    if (job.archivedAt) throw new BadRequestException('Job is archived — read-only (FR-12)');
     if (job.status === 'CLOSED') throw new BadRequestException('Job is closed — editing locked (QP.44 stage 10)');
     applyTransition(job, this.store.jobTransitions, to, fields ?? {}, actor);
     if (fields?.indentRef) job.indentRef = fields.indentRef;

@@ -74,6 +74,7 @@ export function mapJob(r: any): Job {
   const demandIds: string[] = (r.demands ?? []).map((d: { id: string }) => d.id);
   const invoiceIds: string[] = (r.invoices ?? []).map((i: { id: string }) => i.id);
   return compact({
+    archivedAt: r.archivedAt ? iso(r.archivedAt) : undefined,
     id: r.id,
     psDate: r.psDate,
     component: r.component,

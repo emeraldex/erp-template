@@ -173,8 +173,10 @@ export class StoreService implements OnModuleInit {
     return r ? mapUser(r) : null;
   }
 
-  async jobs(): Promise<Job[]> {
-    const rows = await this.prisma.job.findMany({ include: JOB_INCLUDE, orderBy: { ordinal: 'desc' } });
+  /** Active jobs by default; archived ones (FR-12) only when asked for. */
+  async jobs(archived: 'exclude' | 'include' | 'only' = 'exclude'): Promise<Job[]> {
+    const where = archived === 'include' ? {} : archived === 'only' ? { archivedAt: { not: null } } : { archivedAt: null };
+    const rows = await this.prisma.job.findMany({ where, include: JOB_INCLUDE, orderBy: { ordinal: 'desc' } });
     return rows.map((r) => this.track(mapJob(r), 'job', r.version, {
       priorityAudit: r.priority?.audit.length ?? 0,
       hadPriority: !!r.priority,
