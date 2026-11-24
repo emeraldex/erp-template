@@ -16,7 +16,7 @@ export class SessionStore {
     return this.prisma.user.findUnique({ where: { id } });
   }
 
-  async create(userId: string, meta: { ip?: string; userAgent?: string }) {
+  async create(userId: string, meta: { ip?: string; userAgent?: string }, method: 'password' | 'sso' = 'password') {
     const now = Date.now();
     return this.prisma.session.create({
       data: {
@@ -25,6 +25,7 @@ export class SessionStore {
         expiresAt: new Date(now + authConfig.ttlMs),
         ip: meta.ip?.slice(0, 64),
         userAgent: meta.userAgent?.slice(0, 256),
+        method,
       },
     });
   }

@@ -3,6 +3,8 @@
 import { SessionUser } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api/v1";
+/** The API base URL, for links the browser follows itself (e.g. single sign-on). */
+export const API_BASE = BASE;
 const PROFILE_KEY = "erp.profile";
 
 /**

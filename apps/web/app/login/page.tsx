@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, ApiError, DEMO_MODE, setSession } from "@/lib/api";
+import { api, API_BASE, ApiError, DEMO_MODE, setSession } from "@/lib/api";
 import { Button } from "@/components/ui";
 
 // Demo shortcuts are shown in development and demo builds only — a production
@@ -23,8 +23,36 @@ const DEMO_USERS: [string, string][] = [
   ["zara@company.example", "BILLING"],
 ];
 
+const SSO_ERRORS: Record<string, string> = {
+  not_registered: "Your organisation account worked, but you don't have an account in this ERP yet. Ask an administrator to add you.",
+  not_enabled: "Single sign-on is not set up for this organisation.",
+  idp_error: "Your organisation's sign-in service refused the request.",
+  email_unverified: "Your email address isn't verified with your organisation's sign-in service.",
+  no_email: "Your organisation's sign-in service didn't share your email address.",
+  state_expired: "Sign-in took too long. Please try again.",
+  state_missing: "Sign-in session expired. Please try again.",
+};
+
 export default function LoginPage() {
   const router = useRouter();
+  const [org, setOrg] = useState<string | null>(null);
+  const [sso, setSso] = useState<{ enabled: boolean; label: string; passwordLogin: boolean } | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    api.get<{ name: string }>("/tenant").then((t) => setOrg(t.name)).catch(() => {});
+    api.get<{ enabled: boolean; label: string; passwordLogin: boolean }>("/auth/sso").then(setSso).catch(() => {});
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("sso") === "ok") {
+      // Back from the identity provider: the session cookie is set; load the profile.
+      api.me().then(({ user }) => { setSession({ user }); router.replace("/dashboard"); })
+        .catch(() => setError("Single sign-on finished but no session was created. Please try again."));
+    } else if (q.get("sso_error")) {
+      setError(SSO_ERRORS[q.get("sso_error")!] ?? "Single sign-on failed. Please try again or contact an administrator.");
+    }
+  }, [router]);
+
+  const passwordForm = !sso || sso.passwordLogin || showPassword;
   const [email, setEmail] = useState(SHOW_DEMO_ACCOUNTS ? "aisyah@company.example" : "");
   const [password, setPassword] = useState(SHOW_DEMO_ACCOUNTS ? "demo123" : "");
   const [error, setError] = useState<string | null>(null);
@@ -60,11 +88,28 @@ export default function LoginPage() {
             <rect x="4" y="4" width="24" height="24" rx="3" fill="none" stroke="var(--c-red)" strokeWidth="2.5" />
             <path d="M10 11.5h12M10 16h12M10 20.5h7" fill="none" stroke="var(--c-text)" strokeWidth="2.5" strokeLinecap="round" />
           </svg>
-          <h1 className="display text-3xl font-bold">COMPANY ERP</h1>
+          <h1 className="display text-3xl font-bold">{org ? org.toUpperCase() : "\u00a0"}</h1>
           <p className="eyebrow mt-1">Integrated Maintenance, Procurement &amp; Job-Tracking · CO-RFP-IT-001</p>
         </div>
 
         <div className="panel ticked fade-up d2 p-6">
+          {sso?.enabled && (
+            <div className={passwordForm ? "mb-5 border-b hairline pb-5" : ""}>
+              <a
+                href={`${API_BASE}/auth/sso/start`}
+                className="display block w-full rounded-md bg-brand px-4 py-2.5 text-center text-sm font-semibold tracking-wider text-white transition-colors hover:bg-brand-bright"
+              >
+                SIGN IN WITH {sso.label.toUpperCase()}
+              </a>
+              {!passwordForm && error && <p className="mt-4 text-sm text-brand-bright">{error}</p>}
+              {!sso.passwordLogin && !showPassword && (
+                <button onClick={() => setShowPassword(true)} className="mono mt-4 block w-full text-center text-[10.5px] tracking-widest text-dim hover:text-steel">
+                  ADMINISTRATOR SIGN-IN
+                </button>
+              )}
+            </div>
+          )}
+          {passwordForm && (<>
           <label className="eyebrow mb-1.5 block" htmlFor="email">
             Email
           </label>
@@ -91,6 +136,7 @@ export default function LoginPage() {
           <Button onClick={submit} disabled={busy}>
             {busy ? "AUTHENTICATING…" : "SIGN IN"}
           </Button>
+          </>)}
         </div>
 
         {SHOW_DEMO_ACCOUNTS && (

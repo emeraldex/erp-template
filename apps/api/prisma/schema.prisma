@@ -221,6 +221,8 @@ model Session {
   revokedAt  DateTime?
   ip         String?
   userAgent  String?
+  /// "password" or "sso" — SSO users are not asked to change a password they don't use.
+  method     String    @default("password")
 
   @@index([userId])
   @@map("sessions")

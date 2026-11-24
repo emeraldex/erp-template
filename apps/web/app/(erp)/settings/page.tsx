@@ -100,7 +100,72 @@ export default function SettingsPage() {
           <p className="mono mt-2 text-[10.5px] text-dim">The RFP specifies GST at 6%. Malaysia currently levies SST — set what your contract requires.</p>
           {isAdmin && <div className="mt-4"><Button disabled={busy} onClick={() => save("tax")}>Save tax</Button></div>}
         </Panel>
-      </div>
+            </div>
+      {isAdmin && <SsoSettings />}
     </div>
+  );
+}
+
+type Sso = { enabled: boolean; issuer: string; clientId: string; label: string; allowPasswordLogin: boolean; hasClientSecret: boolean; callbackUrl: string };
+
+/** Single sign-on with the organisation's identity provider (OpenID Connect). */
+function SsoSettings() {
+  const [sso, setSso] = useState<Sso | null>(null);
+  const [secret, setSecret] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => { api.get<Sso>("/auth/sso/settings").then(setSso).catch((e) => setMsg({ ok: false, text: (e as Error).message })); }, []);
+  if (!sso) return msg ? <p className="mt-5 text-sm text-brand-bright">{msg.text}</p> : null;
+
+  async function save() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const saved = await api.put<Sso>("/auth/sso/settings", {
+        enabled: sso!.enabled, issuer: sso!.issuer, clientId: sso!.clientId, label: sso!.label,
+        allowPasswordLogin: sso!.allowPasswordLogin, ...(secret ? { clientSecret: secret } : {}),
+      });
+      setSso(saved);
+      setSecret("");
+      setMsg({ ok: true, text: saved.enabled ? "Single sign-on is on. Test it in a private window before signing out." : "Single sign-on is off." });
+    } catch (e) {
+      setMsg({ ok: false, text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel className="fade-up d3 mt-5 p-5">
+      <p className="eyebrow mb-1">Single sign-on</p>
+      <p className="mb-4 text-sm text-steel">
+        Let people sign in with their organisation account — Microsoft Entra ID, Google Workspace, Okta, Keycloak or any OpenID Connect provider.
+        Users must already exist here; they are matched by email.
+      </p>
+      <div className="mb-4 rounded border hairline bg-ink-deep/50 px-3 py-2">
+        <p className="mono text-[10px] tracking-widest text-steel">REDIRECT URI TO REGISTER WITH YOUR PROVIDER</p>
+        <p className="mono break-all text-xs text-trace">{sso.callbackUrl}</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block sm:col-span-2"><span className="mono mb-1 block text-[10px] tracking-widest text-steel">Issuer URL</span>
+          <input value={sso.issuer} placeholder="https://login.microsoftonline.com/<tenant-id>/v2.0" onChange={(e) => setSso({ ...sso, issuer: e.target.value })} className={inputClass} /></label>
+        <label className="block"><span className="mono mb-1 block text-[10px] tracking-widest text-steel">Client (application) ID</span>
+          <input value={sso.clientId} onChange={(e) => setSso({ ...sso, clientId: e.target.value })} className={inputClass} /></label>
+        <label className="block"><span className="mono mb-1 block text-[10px] tracking-widest text-steel">Client secret</span>
+          <input type="password" value={secret} placeholder={sso.hasClientSecret ? "•••••••• stored — type to replace" : "optional for public clients"} onChange={(e) => setSecret(e.target.value)} className={inputClass} autoComplete="new-password" /></label>
+        <label className="block"><span className="mono mb-1 block text-[10px] tracking-widest text-steel">Button text: "Sign in with …"</span>
+          <input value={sso.label} onChange={(e) => setSso({ ...sso, label: e.target.value })} className={inputClass} /></label>
+      </div>
+      <div className="mt-4 space-y-2">
+        <label className="flex items-center gap-2 text-sm text-fg"><input type="checkbox" checked={sso.enabled} onChange={(e) => setSso({ ...sso, enabled: e.target.checked })} className="accent-[var(--c-red)]" />Enable single sign-on</label>
+        <label className="flex items-center gap-2 text-sm text-fg"><input type="checkbox" checked={sso.allowPasswordLogin} onChange={(e) => setSso({ ...sso, allowPasswordLogin: e.target.checked })} className="accent-[var(--c-red)]" />Also allow passwords for everyone</label>
+        <p className="mono text-[10.5px] text-dim">With passwords off, administrators can still sign in with a password, so a provider outage can never lock everyone out.</p>
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button disabled={busy} onClick={save}>{busy ? "CHECKING PROVIDER…" : "Save single sign-on"}</Button>
+        {msg && <span className={`text-sm ${msg.ok ? "text-phosphor" : "text-brand-bright"}`}>{msg.text}</span>}
+      </div>
+    </Panel>
   );
 }

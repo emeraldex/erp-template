@@ -1,10 +1,11 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { dummyVerify, hashPassword, verifyPassword } from '../common/password';
 import { toBranch } from '../common/mappers';
 import { Branch, Role } from '../common/types';
 import { authConfig } from './auth.config';
 import { SessionStore } from './session.store';
+import { SsoConfigService } from './sso-config.service';
 import { currentTenant } from '../tenancy/tenant';
 
 /** What the signed token carries: only a session reference and its expiry. */
@@ -40,7 +41,7 @@ export function profile(u: AuthUser) {
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly sessions: SessionStore) {}
+  constructor(private readonly sessions: SessionStore, private readonly sso: SsoConfigService) {}
 
   async login(email: string, password: string, meta: { ip?: string; userAgent?: string }) {
     const user = await this.sessions.userByEmail(email);
@@ -56,9 +57,31 @@ export class AuthService {
       const locked = await this.sessions.recordFailure(user.id, user.failedLogins);
       throw new UnauthorizedException(locked ? LOCKED : INVALID);
     }
+    // With SSO enforced, passwords only work for administrators (break-glass access
+    // if the identity provider is down or misconfigured).
+    const sso = await this.sso.get();
+    if (sso.enabled && !sso.allowPasswordLogin && user.role !== 'ADMIN') {
+      throw new ForbiddenException({ statusCode: 403, code: 'SSO_REQUIRED', message: `Sign in with ${sso.label} instead` });
+    }
     await this.sessions.recordSuccess(user.id);
-    const session = await this.sessions.create(user.id, meta);
-    const authUser = this.toAuthUser(user, session.id);
+    return this.issue(user, meta, 'password');
+  }
+
+  /** After a verified single sign-on: start a session for the matching user, if any. */
+  async loginSso(email: string, meta: { ip?: string; userAgent?: string }) {
+    const user = await this.sessions.userByEmail(email);
+    if (!user) return null;
+    if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) return null;
+    return this.issue(user, meta, 'sso');
+  }
+
+  private async issue(
+    user: NonNullable<Awaited<ReturnType<SessionStore['userByEmail']>>>,
+    meta: { ip?: string; userAgent?: string },
+    method: 'password' | 'sso',
+  ) {
+    const session = await this.sessions.create(user.id, meta, method);
+    const authUser = this.toAuthUser(user, session.id, method);
     return { token: this.sign({ sid: session.id, tid: currentTenant().id, exp: session.expiresAt.getTime() }), user: authUser, expiresAt: session.expiresAt };
   }
 
@@ -75,7 +98,7 @@ export class AuthService {
       throw new UnauthorizedException('Signed out after inactivity — sign in again');
     }
     if (now - session.lastSeenAt.getTime() > 60_000) await this.sessions.touch(session.id);
-    return this.toAuthUser(session.user, session.id);
+    return this.toAuthUser(session.user, session.id, session.method === 'sso' ? 'sso' : 'password');
   }
 
   logout(sid: string) {
@@ -127,11 +150,13 @@ export class AuthService {
   private toAuthUser(
     u: { id: string; name: string; email: string; role: string; branch: string; designation: string; mustChangePassword: boolean },
     sid: string,
+    method: 'password' | 'sso' = 'password',
   ): AuthUser {
     return {
       sub: u.id, sid, name: u.name, email: u.email, role: u.role as Role,
       branch: toBranch(u.branch),
-      designation: u.designation, mustChangePassword: u.mustChangePassword,
+      // Someone who signed in through their identity provider has no password to change here.
+      designation: u.designation, mustChangePassword: method === 'sso' ? false : u.mustChangePassword,
     };
   }
 }
