@@ -21,6 +21,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { RetentionModule } from './retention/retention.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { TenancyModule } from './tenancy/tenancy.module';
+import { WorkflowModule } from './workflow/workflow.module';
 import { TenantMiddleware } from './tenancy/tenant.middleware';
 
 @Global()
@@ -29,7 +30,7 @@ import { TenantMiddleware } from './tenancy/tenant.middleware';
     // Per-IP request ceiling for the whole API; sign-in has a tighter limit.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: authConfig.apiRateLimit }]),
     TenancyModule, SettingsModule, AuthModule, JobsModule, DemandsModule, OvModule, RegistersModule, FodModule, InvoicingModule, DashboardModule, DocumentsModule, ReportsModule, AttachmentsModule,
-    NotificationsModule, RetentionModule, SchedulerModule,
+    NotificationsModule, RetentionModule, SchedulerModule, WorkflowModule,
   ],
   controllers: [HealthController],
   providers: [StoreService, TenantMiddleware, { provide: APP_GUARD, useClass: ThrottlerGuard }],

@@ -36,6 +36,7 @@ const NAV: { group: DictKey; items: { href: string; label: DictKey; code: string
     group: "administration",
     items: [
       { href: "/reports", label: "reports", code: "FR-14" },
+      { href: "/workflow", label: "workflow", code: "FR-02" },
       { href: "/settings", label: "settings", code: "ADM" },
     ],
   },

@@ -700,3 +700,18 @@ model SlaAlert {
   @@unique([ref, ruleId, level])
   @@map("sla_alerts")
 }
+
+/// Change control for workflow configuration (who changed which rules, before/after).
+model ConfigChange {
+  id      String   @id
+  at      DateTime @default(now())
+  by      String
+  role    Role
+  area    String
+  summary String
+  before  Json
+  after   Json
+
+  @@index([at])
+  @@map("config_changes")
+}

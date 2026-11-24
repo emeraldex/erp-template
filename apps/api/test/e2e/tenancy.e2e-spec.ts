@@ -71,12 +71,18 @@ describe('Multi-tenancy: one schema per client organisation', () => {
   it('keeps settings, tax and workflow rules per organisation', async () => {
     const acmeAdmin = at('acme.test', await login(app, 'aisyah', PASSWORD, 'acme.test'));
     const defAdmin = at('localhost', await login(app, 'aisyah'));
+    const tdiDays = async (who: typeof defAdmin) =>
+      (await who.get('/config').expect(200)).body.slaRules.find((r: { id: string }) => r.id === 'SLA-TDI').days;
+    const defTaxBefore = (await defAdmin.get('/settings').expect(200)).body.tax;
+    const defTdiBefore = await tdiDays(defAdmin);
+
     await acmeAdmin.patch('/settings/tax', { label: 'SST', ratePct: 8 }).expect(200);
     await acmeAdmin.patch('/config/sla/SLA-TDI', { days: 9 }).expect(200);
-    expect((await defAdmin.get('/settings').expect(200)).body.tax).toEqual({ label: 'GST', ratePct: 6 });
-    const defSla = (await defAdmin.get('/config').expect(200)).body.slaRules.find((r: { id: string }) => r.id === 'SLA-TDI');
-    const acmeSla = (await acmeAdmin.get('/config').expect(200)).body.slaRules.find((r: { id: string }) => r.id === 'SLA-TDI');
-    expect([defSla.days, acmeSla.days]).toEqual([5, 9]);
+
+    expect((await acmeAdmin.get('/settings').expect(200)).body.tax).toEqual({ label: 'SST', ratePct: 8 });
+    expect(await tdiDays(acmeAdmin)).toBe(9);
+    expect((await defAdmin.get('/settings').expect(200)).body.tax).toEqual(defTaxBefore);
+    expect(await tdiDays(defAdmin)).toBe(defTdiBefore);
   });
 
   it('starts a new organisation with one administrator who must change their password', async () => {

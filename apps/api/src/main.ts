@@ -37,7 +37,7 @@ export function configureApp(app: INestApplication): void {
     },
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-    methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'OPTIONS'],
     maxAge: 600,
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
