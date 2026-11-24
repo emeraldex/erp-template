@@ -196,8 +196,9 @@ FR-02 runtime change such as `PATCH /config/sla/:id` now survives a restart.
 Copyright 2026 emeraldex. Licensed under the
 [PolyForm Strict License 1.0.0](LICENSE).
 
-You may use this software for **non-commercial purposes only**, such as
-personal study or evaluating it as a prospective client. You may **not**
+You may use this software for **non-commercial purposes only**, as defined in
+the licence (for example personal study, or use by a charity, school or
+government body). You may **not**
 modify it, create works based on it, distribute it, or use it in the course
 of running a business. Commercial use, deployment or customisation requires a
 separate written licence. Contact the copyright holder via
