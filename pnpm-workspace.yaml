@@ -2,6 +2,7 @@ packages:
   - 'apps/*'
 
 allowBuilds:
+  '@parcel/watcher': false
   '@prisma/engines': true
   prisma: true
   sharp: true
@@ -13,3 +14,8 @@ onlyBuiltDependencies:
   - unrs-resolver
   - prisma
   - '@prisma/engines'
+
+# Security fixes for transitive dependencies that upstream still pins.
+# Remove once Prisma ships with effect >= 3.22.1 (GHSA advisory on effect <= 3.22.0).
+overrides:
+  effect@<3.22.1: ^3.22.5

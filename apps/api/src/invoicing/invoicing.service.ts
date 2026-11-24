@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { StoreService } from '../common/store.service';
 import { applyTransition } from '../common/transition.engine';
 import { Branch, Invoice, InvoiceStatus, InvoiceStream, Role } from '../common/types';
+import { computeTax } from '../common/money';
 
 /**
  * QP.51 Invoicing & Revenue Billing (5.8) — FR-13 / FR-14.
@@ -30,8 +31,8 @@ export class InvoicingService {
   }
 
   private gst(amount: number, rate: number) {
-    const gstMYR = Math.round(amount * rate) / 100;
-    return { gstMYR, totalMYR: Math.round((amount + gstMYR) * 100) / 100 };
+    const { taxMYR, totalMYR } = computeTax(amount, rate);
+    return { gstMYR: taxMYR, totalMYR };
   }
 
   /** Open a new billing record for a job (or a periodic PBC run). */

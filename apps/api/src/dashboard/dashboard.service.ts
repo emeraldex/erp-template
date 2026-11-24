@@ -2,15 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { StoreService } from '../common/store.service';
 import { JOB_STATUS_META } from '../common/workflow-config';
 import { JobStatus } from '../common/types';
+import { computeBreaches, daysSince, SlaBreach } from './sla';
 
-export interface SlaBreach {
-  ref: string;
-  entity: 'JOB' | 'DEMAND' | 'OV' | 'INVOICE';
-  detail: string;
-  rule: string;
-  source: string;
-  daysOver: number;
-}
+export type { SlaBreach } from './sla';
 
 type Snapshot = Awaited<ReturnType<StoreService['dashboardSnapshot']>>;
 
@@ -20,31 +14,11 @@ export class DashboardService {
   constructor(private readonly store: StoreService) {}
 
   private daysIn(since: string): number {
-    return Math.floor((Date.now() - new Date(since).getTime()) / 86_400_000);
+    return daysSince(since, Date.now());
   }
 
-  /** Evaluate every configured SLA timer against the current status ages. */
   private breachesOf(snap: Snapshot): SlaBreach[] {
-    const out: SlaBreach[] = [];
-    for (const rule of this.store.slaRules) {
-      const pool =
-        rule.entity === 'JOB' ? snap.jobs :
-        rule.entity === 'DEMAND' ? snap.demands :
-        rule.entity === 'OV' ? snap.ovs : snap.invoices;
-      for (const e of pool as { id: string; status: string; statusSince: string }[]) {
-        if (e.status !== rule.status) continue;
-        const days = this.daysIn(e.statusSince);
-        if (days > rule.days) {
-          const detail =
-            rule.entity === 'JOB' ? (e as never as { component: string }).component :
-            rule.entity === 'DEMAND' ? (e as never as { partDescription: string }).partDescription :
-            rule.entity === 'OV' ? ((e as never as { vendorName?: string }).vendorName ?? 'Outside vendor repair') :
-            `${(e as never as { stream: string }).stream} → ${(e as never as { customer: string }).customer}`;
-          out.push({ ref: e.id, entity: rule.entity, detail, rule: rule.rule, source: rule.source, daysOver: days - rule.days });
-        }
-      }
-    }
-    return out.sort((x, y) => y.daysOver - x.daysOver);
+    return computeBreaches(this.store.slaRules, snap as never, Date.now());
   }
 
   async breaches(): Promise<SlaBreach[]> {

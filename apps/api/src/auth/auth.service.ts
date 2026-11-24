@@ -1,73 +1,133 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { StoreService } from '../common/store.service';
-import { dummyVerify, verifyPassword } from '../common/password';
-import { Role } from '../common/types';
+import { dummyVerify, hashPassword, verifyPassword } from '../common/password';
+import { toBranch } from '../common/mappers';
+import { Branch, Role } from '../common/types';
+import { authConfig } from './auth.config';
+import { SessionStore } from './session.store';
 
-const SECRET = process.env.AUTH_SECRET;
-if (!SECRET || SECRET === 'change-me-in-production') {
-  throw new Error('AUTH_SECRET must be set to a strong random value before the API will start.');
-}
-const TTL_HOURS = Number(process.env.AUTH_TTL_HOURS ?? 8);
-
-export interface TokenPayload {
-  sub: string;
-  name: string;
-  role: Role;
-  branch: string;
+/** What the signed token carries: only a session reference and its expiry. */
+interface TokenClaims {
+  sid: string;
   exp: number;
 }
 
-/**
- * HMAC-signed bearer token (JWT-compatible shape). To move to a corporate IdP,
- * replace verify() with the provider's token introspection — the guard and the
- * role gates above it are unchanged.
- */
+/** The authenticated caller, attached to the request by AuthGuard. */
+export interface AuthUser {
+  sub: string;
+  sid: string;
+  name: string;
+  email: string;
+  role: Role;
+  branch: Branch;
+  designation: string;
+  mustChangePassword: boolean;
+}
+
+const INVALID = 'Invalid email or password';
+const LOCKED = 'Account temporarily locked after repeated failed sign-ins. Try again later or contact an administrator.';
+const WEAK = new Set(['demo123', 'password', 'password123', 'changeme', '123456789012', 'qwertyuiopas']);
+
+export function profile(u: AuthUser) {
+  return {
+    id: u.sub, name: u.name, email: u.email, role: u.role,
+    branch: u.branch, designation: u.designation, mustChangePassword: u.mustChangePassword,
+  };
+}
+
 @Injectable()
 export class AuthService {
-  constructor(private readonly store: StoreService) {}
+  constructor(private readonly sessions: SessionStore) {}
 
-  async login(email: string, password: string) {
-    const user = await this.store.userByEmail(email);
+  async login(email: string, password: string, meta: { ip?: string; userAgent?: string }) {
+    const user = await this.sessions.userByEmail(email);
     if (!user) {
       await dummyVerify(); // same work whether or not the account exists
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException(INVALID);
+    }
+    if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+      await dummyVerify();
+      throw new UnauthorizedException(LOCKED);
     }
     if (!(await verifyPassword(password, user.passwordHash))) {
-      throw new UnauthorizedException('Invalid email or password');
+      const locked = await this.sessions.recordFailure(user.id, user.failedLogins);
+      throw new UnauthorizedException(locked ? LOCKED : INVALID);
     }
-    const payload: TokenPayload = {
-      sub: user.id,
-      name: user.name,
-      role: user.role,
-      branch: user.branch,
-      exp: Date.now() + TTL_HOURS * 3600_000,
-    };
-    return {
-      token: this.sign(payload),
-      user: {
-        id: user.id, name: user.name, email: user.email,
-        role: user.role, branch: user.branch, designation: user.designation,
-      },
-    };
+    await this.sessions.recordSuccess(user.id);
+    const session = await this.sessions.create(user.id, meta);
+    const authUser = this.toAuthUser(user, session.id);
+    return { token: this.sign({ sid: session.id, exp: session.expiresAt.getTime() }), user: authUser, expiresAt: session.expiresAt };
   }
 
-  sign(payload: TokenPayload): string {
-    const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-    const sig = createHmac('sha256', SECRET as string).update(body).digest('base64url');
+  /** Resolve a token to a live session, enforcing expiry, idle timeout and revocation. */
+  async authenticate(token: string): Promise<AuthUser> {
+    const claims = this.verify(token);
+    const session = await this.sessions.find(claims.sid);
+    const now = Date.now();
+    if (!session || session.revokedAt) throw new UnauthorizedException('Session has ended — sign in again');
+    if (session.expiresAt.getTime() <= now) throw new UnauthorizedException('Session expired — sign in again');
+    if (now - session.lastSeenAt.getTime() > authConfig.idleMs) {
+      await this.sessions.revoke(session.id);
+      throw new UnauthorizedException('Signed out after inactivity — sign in again');
+    }
+    if (now - session.lastSeenAt.getTime() > 60_000) await this.sessions.touch(session.id);
+    return this.toAuthUser(session.user, session.id);
+  }
+
+  logout(sid: string) {
+    return this.sessions.revoke(sid);
+  }
+
+  async changePassword(user: AuthUser, current: string, next: string) {
+    const row = await this.sessions.userById(user.sub);
+    if (!row || !(await verifyPassword(current, row.passwordHash))) {
+      throw new BadRequestException('Current password is incorrect');
+    }
+    if (next.length < authConfig.minPasswordLength) {
+      throw new BadRequestException(`New password must be at least ${authConfig.minPasswordLength} characters`);
+    }
+    if (next === current) throw new BadRequestException('New password must differ from the current one');
+    if (WEAK.has(next.toLowerCase()) || next.toLowerCase().includes(row.email.split('@')[0].toLowerCase())) {
+      throw new BadRequestException('New password is too easy to guess');
+    }
+    await this.sessions.setPassword(user.sub, await hashPassword(next));
+    await this.sessions.revokeAllFor(user.sub, user.sid); // sign out every other device
+    return { ...user, mustChangePassword: false };
+  }
+
+  sign(claims: TokenClaims): string {
+    const body = Buffer.from(JSON.stringify(claims)).toString('base64url');
+    const sig = createHmac('sha256', authConfig.secret).update(body).digest('base64url');
     return `${body}.${sig}`;
   }
 
-  verify(token: string): TokenPayload {
-    const [body, sig] = token.split('.');
-    if (!body || !sig) throw new UnauthorizedException('Malformed token');
-    const expected = createHmac('sha256', SECRET as string).update(body).digest();
+  verify(token: string): TokenClaims {
+    const [body, sig, extra] = token.split('.');
+    if (!body || !sig || extra !== undefined) throw new UnauthorizedException('Malformed token');
+    const expected = createHmac('sha256', authConfig.secret).update(body).digest();
     const given = Buffer.from(sig, 'base64url');
     if (expected.length !== given.length || !timingSafeEqual(expected, given)) {
       throw new UnauthorizedException('Bad signature');
     }
-    const payload: TokenPayload = JSON.parse(Buffer.from(body, 'base64url').toString());
-    if (payload.exp < Date.now()) throw new UnauthorizedException('Token expired');
-    return payload;
+    let claims: TokenClaims;
+    try {
+      claims = JSON.parse(Buffer.from(body, 'base64url').toString());
+    } catch {
+      throw new UnauthorizedException('Malformed token');
+    }
+    if (typeof claims.sid !== 'string' || typeof claims.exp !== 'number') throw new UnauthorizedException('Malformed token');
+    if (claims.exp <= Date.now()) throw new UnauthorizedException('Session expired — sign in again');
+    return claims;
+  }
+
+  private toAuthUser(
+    u: { id: string; name: string; email: string; role: string; branch: string; designation: string; mustChangePassword: boolean },
+    sid: string,
+  ): AuthUser {
+    return {
+      sub: u.id, sid, name: u.name, email: u.email, role: u.role as Role,
+      branch: toBranch(u.branch),
+      designation: u.designation, mustChangePassword: u.mustChangePassword,
+    };
   }
 }

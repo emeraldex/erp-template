@@ -177,7 +177,7 @@ export function StageRail<S extends string>({
             <div key={s} className="flex items-center">
               {i > 0 && (
                 <span
-                  className={`h-px w-6 ${state === "future" ? "bg-[var(--z-line)]" : "bg-brand"}`}
+                  className={`h-px w-6 ${state === "future" ? "bg-[var(--c-line)]" : "bg-brand"}`}
                 />
               )}
               <span

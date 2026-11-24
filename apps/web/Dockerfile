@@ -19,6 +19,8 @@ COPY apps/web apps/web
 # will call must be supplied here — not at container start.
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_DEMO_MODE=0
+ENV NEXT_PUBLIC_DEMO_MODE=$NEXT_PUBLIC_DEMO_MODE
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm --filter web exec next build
 

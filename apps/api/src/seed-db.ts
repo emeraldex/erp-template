@@ -78,15 +78,24 @@ async function main() {
   console.log('Workflow config seeded.');
 
   // ─── actors ─────────────────────────────────────────────────────────────────
+  // An empty SEED_PASSWORD (Compose passes one when unset) must fall back to the
+  // reference password, not seed blank passwords.
+  const seedPassword = process.env.SEED_PASSWORD?.trim() || undefined;
+  // Seeded passwords are shared knowledge, so in production every seeded user
+  // must pick their own at first sign-in. SEED_FORCE_PASSWORD_CHANGE overrides.
+  const forceChange = process.env.SEED_FORCE_PASSWORD_CHANGE
+    ? ['1', 'true', 'yes'].includes(process.env.SEED_FORCE_PASSWORD_CHANGE.toLowerCase())
+    : process.env.NODE_ENV === 'production';
   for (const u of USERS) {
-    const passwordHash = await hashPassword(process.env.SEED_PASSWORD ?? u.password);
+    const passwordHash = await hashPassword(seedPassword ?? u.password);
     const data = {
-      name: u.name, email: u.email, passwordHash, role: u.role as never,
+      name: u.name, email: u.email.toLowerCase(), passwordHash, role: u.role as never,
       designation: u.designation, branch: fromBranch(u.branch) as never,
+      mustChangePassword: forceChange,
     };
     await prisma.user.upsert({ where: { id: u.id }, create: { id: u.id, ...data }, update: data });
   }
-  console.log(`${USERS.length} users seeded (scrypt-hashed).`);
+  console.log(`${USERS.length} users seeded (scrypt-hashed${forceChange ? ', password change required at first sign-in' : ''}).`);
 
   // ─── jobs (parents first: demands, OV and invoices reference them) ──────────
   for (const [i, j] of JOBS.entries()) {

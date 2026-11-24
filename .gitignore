@@ -38,3 +38,9 @@ pnpm-debug.log*
 Thumbs.db
 .idea/
 .vscode/
+
+# Database dumps from the backup service
+backups/
+
+# Test coverage reports
+coverage/
