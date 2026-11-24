@@ -23,7 +23,7 @@ describe('Invoice documents (FR-13)', () => {
   beforeAll(async () => {
     ({ app } = await createApp());
     http = request(app.getHttpServer());
-    billing = await login(app, 'zara');
+    billing = await login(app, 'hafiz'); // MM may download billing documents; auth tests change zara's password
   });
   afterAll(() => app.close());
 
