@@ -65,6 +65,18 @@ export class ApiError extends Error {
   }
 }
 
+/** Where to go after signing in: a same-site path only, never another site. */
+export function safeNext(raw: string | null | undefined): string | null {
+  return raw && raw.startsWith("/") && !raw.startsWith("//") && !raw.startsWith("/login") ? raw : null;
+}
+
+/** /login, remembering the current page so a scanned link opens after sign-in. */
+export function loginPath(): string {
+  if (typeof window === "undefined") return "/login";
+  const here = window.location.pathname + window.location.search;
+  return safeNext(here) ? `/login?next=${encodeURIComponent(here)}` : "/login";
+}
+
 function redirect(path: string) {
   if (typeof window !== "undefined" && window.location.pathname !== path) window.location.assign(path);
 }
@@ -97,7 +109,7 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
     const isAuthCall = path.startsWith("/auth/login") || path.startsWith("/auth/change-password");
     if (res.status === 401 && !isAuthCall) {
       setSession(null);
-      redirect("/login");
+      redirect(loginPath());
     } else if (err.code === "PASSWORD_CHANGE_REQUIRED") {
       redirect("/change-password");
     }

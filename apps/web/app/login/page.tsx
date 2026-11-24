@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, API_BASE, ApiError, DEMO_MODE, setSession } from "@/lib/api";
+import { api, API_BASE, ApiError, DEMO_MODE, safeNext, setSession } from "@/lib/api";
 import { Button } from "@/components/ui";
 
 // Demo shortcuts are shown in development and demo builds only — a production
@@ -45,7 +45,7 @@ export default function LoginPage() {
     const q = new URLSearchParams(window.location.search);
     if (q.get("sso") === "ok") {
       // Back from the identity provider: the session cookie is set; load the profile.
-      api.me().then(({ user }) => { setSession({ user }); router.replace("/dashboard"); })
+      api.me().then(({ user }) => { setSession({ user }); router.replace(safeNext(sessionStorage.getItem("erp.next")) ?? "/dashboard"); sessionStorage.removeItem("erp.next"); })
         .catch(() => setError("Single sign-on finished but no session was created. Please try again."));
     } else if (q.get("sso_error")) {
       setError(SSO_ERRORS[q.get("sso_error")!] ?? "Single sign-on failed. Please try again or contact an administrator.");
@@ -64,7 +64,8 @@ export default function LoginPage() {
     try {
       const { user } = await api.login(email, password);
       setSession({ user });
-      router.replace(user.mustChangePassword ? "/change-password" : "/dashboard");
+      const next = safeNext(new URLSearchParams(window.location.search).get("next"));
+      router.replace(user.mustChangePassword ? "/change-password" : next ?? "/dashboard");
     } catch (e) {
       // Demo builds only: let the UI be explored with sample data when no API runs.
       if (DEMO_MODE && e instanceof ApiError && e.status === 0) {
@@ -97,6 +98,11 @@ export default function LoginPage() {
             <div className={passwordForm ? "mb-5 border-b hairline pb-5" : ""}>
               <a
                 href={`${API_BASE}/auth/sso/start`}
+                onClick={() => {
+                  // Survives the trip through the identity provider.
+                  const next = safeNext(new URLSearchParams(window.location.search).get("next"));
+                  try { if (next) sessionStorage.setItem("erp.next", next); } catch { /* storage off */ }
+                }}
                 className="display block w-full rounded-md bg-brand px-4 py-2.5 text-center text-sm font-semibold tracking-wider text-white transition-colors hover:bg-brand-bright"
               >
                 SIGN IN WITH {sso.label.toUpperCase()}

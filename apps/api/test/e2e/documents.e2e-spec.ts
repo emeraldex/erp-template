@@ -118,3 +118,25 @@ describe('Settings', () => {
     await send(admin)(http.patch(`${API}/settings/tax`)).send({ label: 'GST', ratePct: 6 }).expect(200);
   });
 });
+
+describe('Job cards', () => {
+  let app: INestApplication;
+  let http: ReturnType<typeof request>;
+  beforeAll(async () => {
+    ({ app } = await createApp());
+    http = request(app.getHttpServer());
+  });
+  afterAll(() => app.close());
+
+  it('prints A6 cards for any signed-in user, with the job details', async () => {
+    const stores = await login(app, 'rahim');
+    const res = await http.get(`${API}/job-cards?ids=PS-2026-0355,PS-2026-0412`).set('Cookie', stores).buffer(true).parse(binary).expect(200);
+    expect(res.headers['content-type']).toBe('application/pdf');
+    expect(pdfPageCount(res.body)).toBe(2);
+    const text = pdfLines(res.body).join('\n');
+    for (const s of ['PS-2026-0355', 'Secondary Surveillance Radar', 'ROA', 'STAGE SIGN-OFF', 'PS-2026-0412']) expect(text).toContain(s);
+    expect(res.body.toString('latin1')).toContain('/MediaBox [0 0 297.64 419.53]'); // A6
+    await http.get(`${API}/job-cards?ids=PS-404`).set('Cookie', stores).expect(404);
+    await http.get(`${API}/job-cards?ids=PS-2026-0355`).expect(401);
+  });
+});

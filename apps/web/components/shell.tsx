@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api, DEMO_MODE, getSession, onConnectionChange, setSession, Session } from "@/lib/api";
+import { api, DEMO_MODE, getSession, loginPath, onConnectionChange, setSession, Session } from "@/lib/api";
 import { DictKey, useLang } from "@/lib/i18n";
 import { NotificationBell } from "./notifications";
 
@@ -112,7 +112,7 @@ export function Topbar() {
   useEffect(() => {
     const s = getSession();
     if (!s) {
-      router.replace("/login");
+      router.replace(loginPath());
       return;
     }
     setLocal(s);

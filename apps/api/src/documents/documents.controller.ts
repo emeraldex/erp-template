@@ -4,6 +4,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { DocumentsService, InvoiceDocument } from './documents.service';
 
+
 @Controller('invoicing')
 @UseGuards(AuthGuard)
 export class DocumentsController {

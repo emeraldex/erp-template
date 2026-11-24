@@ -3,7 +3,7 @@
 import { useSession } from "@/lib/use-session";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, getWithFallback } from "@/lib/api";
+import { api, download, getWithFallback } from "@/lib/api";
 import { Branch, Job, JobStatus } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
 import { useLang } from "@/lib/i18n";
@@ -77,6 +77,11 @@ export default function JobsPage() {
         title={t("jobs")}
         actions={
           <>
+            {filtered.length > 0 && (
+              <Button variant="ghost" onClick={() => download(`/job-cards?ids=${filtered.slice(0, 100).map((j) => encodeURIComponent(j.id)).join(",")}`, "job-cards.pdf").catch((e) => setError((e as Error).message))}>
+                Print cards ({Math.min(filtered.length, 100)})
+              </Button>
+            )}
             <label className="mono flex cursor-pointer items-center gap-2 text-[10.5px] tracking-widest text-steel">
               <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="accent-[var(--c-red)]" />
               SHOW ARCHIVED
