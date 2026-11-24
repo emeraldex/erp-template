@@ -200,8 +200,24 @@ You may use this software for **non-commercial purposes only**, as defined in
 the licence (for example personal study, or use by a charity, school or
 government body). You may **not**
 modify it, create works based on it, distribute it, or use it in the course
-of running a business. Commercial use, deployment or customisation requires a
+of running a business, except as allowed under *Evaluation permission* below.
+Commercial use, deployment or customisation requires a
 separate written licence. Contact the copyright holder via
 [GitHub](https://github.com/emeraldex).
+
+### Evaluation permission
+
+In addition to the PolyForm Strict License, the licensor grants prospective
+clients a limited, non-exclusive, non-transferable permission to install and
+run the software for **up to 30 days** from first installation, solely to
+evaluate whether to obtain a commercial licence.
+
+During evaluation you may not use the software in production or with live
+operational data, modify it, distribute it, or make it available to anyone
+outside your organisation. Setting the configuration values needed to run it
+(such as environment variables) does not count as modifying it. When the 30
+days end, stop using the software and delete all copies unless you have
+obtained a commercial licence. The licensor may withdraw this permission at
+any time by written notice.
 
 Third-party dependencies remain under their own licences.
