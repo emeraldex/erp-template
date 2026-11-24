@@ -1,8 +1,9 @@
 "use client";
 
+import { useSession } from "@/lib/use-session";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { api, getSession, getWithFallback } from "@/lib/api";
+import { api, getWithFallback } from "@/lib/api";
 import { Job, PriorityType, RepairRoute } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
 import { useLang } from "@/lib/i18n";
@@ -24,7 +25,7 @@ export default function AogPage() {
   const [form, setForm] = useState({ type: "AOG" as PriorityType, quantity: "1", route: "COE_UNIT" as RepairRoute, suffixK: false, colRef: "", edd: "", remark: "" });
   const [edit, setEdit] = useState<{ route: RepairRoute; edd: string; remark: string } | null>(null);
 
-  const user = getSession()?.user;
+  const user = useSession()?.user;
   const canManage = ["PCE", "MM", "STORES", "ADMIN"].includes(user?.role ?? "");
   const canClose = ["PCE", "MM", "ADMIN"].includes(user?.role ?? "");
 

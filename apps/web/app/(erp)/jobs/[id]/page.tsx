@@ -1,13 +1,15 @@
 "use client";
 
+import { useSession } from "@/lib/use-session";
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, getSession, getWithFallback } from "@/lib/api";
+import { api, getWithFallback } from "@/lib/api";
 import { Job, JobStatus, PriorityType, RepairRoute } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
 import { useLang } from "@/lib/i18n";
 import { Button, MetaPill, OfflineNotice, Panel } from "@/components/ui";
 import { AuditTrail, RecordsList, StageRail, TransitionActions } from "@/components/workflow";
+import { AttachmentsPanel } from "@/components/attachments";
 
 const ROUTES: RepairRoute[] = ["COE_UNIT", "OV", "POOLEX", "AW_SPARE", "UNIT_PROCEED"];
 const PRIORITY_TYPES: PriorityType[] = ["AOG", "ROA", "CRITICAL"];
@@ -30,7 +32,7 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
   const [showPriority, setShowPriority] = useState(false);
   const [pForm, setPForm] = useState({ type: "AOG" as PriorityType, route: "COE_UNIT" as RepairRoute, quantity: "1", suffixK: false, colRef: "" });
 
-  const user = getSession()?.user;
+  const user = useSession()?.user;
   const canManagePriority = ["PCE", "MM", "STORES", "ADMIN"].includes(user?.role ?? "");
   const canClosePriority = ["PCE", "MM", "ADMIN"].includes(user?.role ?? "");
 
@@ -104,6 +106,12 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
           <MetaPill status={job.status} meta={cfg?.jobStatusMeta?.[job.status]} lang={lang} />
         </div>
       </div>
+
+      {job.archivedAt && (
+        <p className="fade-up mb-4 mono inline-block rounded border border-steel/40 bg-panel/60 px-3 py-1.5 text-[10.5px] tracking-widest text-steel">
+          ARCHIVED {job.archivedAt.slice(0, 10)} · READ-ONLY · RETAINED WITH FULL AUDIT TRAIL (FR-12)
+        </p>
+      )}
 
       {/* lifecycle rail */}
       {cfg && (
@@ -218,6 +226,15 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
 
           <div className="mt-6">
             <RecordsList records={job.records} />
+          </div>
+
+          <div className="mt-6 border-t hairline pt-4">
+            <AttachmentsPanel
+              entity="JOB"
+              entityId={job.id}
+              canUpload={job.status !== "CLOSED"}
+              formNos={["F116", "F117", "F119", "F135", "F174", "F218", "F219", "AM 75"]}
+            />
           </div>
 
           {(job.demandIds.length > 0 || job.ovId || (job.invoiceIds?.length ?? 0) > 0 || job.indentRef) && (

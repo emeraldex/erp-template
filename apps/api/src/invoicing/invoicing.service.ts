@@ -3,18 +3,19 @@ import { StoreService } from '../common/store.service';
 import { applyTransition } from '../common/transition.engine';
 import { Branch, Invoice, InvoiceStatus, InvoiceStream, Role } from '../common/types';
 import { computeTax } from '../common/money';
+import { SettingsService } from '../settings/settings.service';
 
 /**
  * QP.51 Invoicing & Revenue Billing (5.8) — FR-13 / FR-14.
  * Four parallel streams (PBC, branch-repaired, CoE/MRA, ACD) modelled as
  * configurable variants of ONE billing process: raise → certify + CTC →
- * Tax Invoice + 6% GST → correctness gate → submit to CPU (Finance) → payment.
- * GST is computed by the engine; the correctness gate and rejection/correction
+ * Tax Invoice + tax (rate from settings) → correctness gate → submit to CPU (Finance) → payment.
+ * Tax is computed by the engine; the correctness gate and rejection/correction
  * loop are enforced, and payment is recorded & monitored for outstanding amounts.
  */
 @Injectable()
 export class InvoicingService {
-  constructor(private readonly store: StoreService) {}
+  constructor(private readonly store: StoreService, private readonly settings: SettingsService) {}
 
   list(): Promise<Invoice[]> {
     return this.store.invoices();
@@ -48,7 +49,10 @@ export class InvoicingService {
     if (dto.jobId && !job) throw new NotFoundException(`Job ${dto.jobId} not found`);
 
     const amount = Number(dto.amountMYR ?? 0);
-    const { gstMYR, totalMYR } = this.gst(amount, 6);
+    // The rate in force when the invoice is drafted stays with it, so a later
+    // change of rate never alters invoices already raised.
+    const tax = this.settings.tax;
+    const { gstMYR, totalMYR } = this.gst(amount, tax.ratePct);
     const now = new Date().toISOString();
     const inv: Invoice = {
       id: await this.store.nextInvoiceId(),
@@ -57,7 +61,8 @@ export class InvoicingService {
       customer: dto.customer || def.customer,
       period: dto.period,
       amountMYR: amount,
-      gstRate: 6,
+      gstRate: tax.ratePct,
+      taxLabel: tax.label,
       gstMYR,
       totalMYR,
       status: 'DRAFTED',

@@ -101,7 +101,7 @@ describe('InvoicingService — GST and stream gates (FR-13 / FR-14)', () => {
 
   beforeEach(() => {
     store = new FakeStore();
-    svc = new InvoicingService(store.asStore());
+    svc = new InvoicingService(store.asStore(), { tax: { label: 'GST', ratePct: 6 } } as never);
     store.newJob(makeJob({ id: 'PS-1', status: 'SERVICEABLE' }));
   });
 
@@ -109,6 +109,17 @@ describe('InvoicingService — GST and stream gates (FR-13 / FR-14)', () => {
     const inv = await svc.create({ stream: 'BRANCH_REPAIR', jobId: 'PS-1', amountMYR: 23400 }, actor('PCE'));
     expect(inv).toEqual(expect.objectContaining({ amountMYR: 23400, gstRate: 6, gstMYR: 1404, totalMYR: 24804, status: 'DRAFTED' }));
     expect(store.jobsById.get('PS-1')!.invoiceIds).toEqual([inv.id]);
+  });
+
+  it('uses the configured tax label and rate, fixed at drafting', async () => {
+    const settings = { tax: { label: 'SST', ratePct: 8 } };
+    const sst = new InvoicingService(store.asStore(), settings as never);
+    const inv = await sst.create({ stream: 'BRANCH_REPAIR', jobId: 'PS-1', amountMYR: 1000 }, actor('PCE'));
+    expect(inv).toEqual(expect.objectContaining({ taxLabel: 'SST', gstRate: 8, gstMYR: 80, totalMYR: 1080 }));
+    settings.tax = { label: 'SST', ratePct: 10 };
+    await sst.transition(inv.id, 'CERTIFIED', { customerSignRef: 'S', ctcRef: 'C' }, actor('BILLING'));
+    const raised = await sst.transition(inv.id, 'TAX_RAISED', { f311Ref: 'F311', amountMYR: '1000' }, actor('BILLING'));
+    expect(raised.gstMYR).toBe(80);
   });
 
   it('requires a job for per-job streams', async () => {

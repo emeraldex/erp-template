@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { JobsService } from './jobs.service';
@@ -9,9 +9,13 @@ import { Branch, JobStatus, PriorityType, RepairRoute } from '../common/types';
 export class JobsController {
   constructor(private readonly svc: JobsService) {}
 
+  /** ?archived=include to add archived jobs, ?archived=only for just those. */
   @Get()
-  list() {
-    return this.svc.list();
+  list(@Query('archived') archived?: string) {
+    if (archived && !['exclude', 'include', 'only'].includes(archived)) {
+      throw new BadRequestException('archived must be exclude, include or only');
+    }
+    return this.svc.list((archived ?? 'exclude') as 'exclude' | 'include' | 'only');
   }
 
   @Get(':id')

@@ -20,7 +20,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     super({
       adapter: new PrismaPg({
         connectionString,
-        max: Number(process.env.PG_POOL_MAX ?? 10),
+        max: Number(process.env.PG_POOL_MAX || 10),
       }),
       log: process.env.PRISMA_LOG === 'query' ? ['query', 'warn', 'error'] : ['warn', 'error'],
     });

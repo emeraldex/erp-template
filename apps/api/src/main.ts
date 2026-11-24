@@ -43,7 +43,7 @@ async function bootstrap() {
   configureApp(app);
   // Run Prisma's onModuleDestroy on SIGTERM so the pool drains on `docker stop`.
   app.enableShutdownHooks();
-  const port = Number(process.env.PORT ?? 4000);
+  const port = Number(process.env.PORT || 4000);
   await app.listen(port, '0.0.0.0');
   new Logger('Bootstrap').log(`Maintenance ERP API ready on http://localhost:${port}/api/v1`);
 }

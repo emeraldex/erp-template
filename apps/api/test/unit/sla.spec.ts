@@ -1,4 +1,4 @@
-import { computeBreaches, daysSince } from '../../src/dashboard/sla';
+import { computeAlerts, computeBreaches, daysSince } from '../../src/dashboard/sla';
 import { SLA_RULES } from '../../src/common/workflow-config';
 
 const NOW = Date.parse('2026-07-20T12:00:00Z');
@@ -49,5 +49,31 @@ describe('computeBreaches', () => {
   it('follows a runtime change to the allowance (FR-02 configurability)', () => {
     const jobs = [{ id: 'J1', status: 'AWAITING_TDI', statusSince: ago(4), component: 'Gyro' }];
     expect(computeBreaches([{ ...tdi, days: 3 }], { ...empty, jobs }, NOW)).toHaveLength(1);
+  });
+});
+
+describe('computeAlerts', () => {
+  const tdi = SLA_RULES.find((r) => r.id === 'SLA-TDI')!; // 5 days
+  const rfq = SLA_RULES.find((r) => r.id === 'SLA-RFQ')!; // 2 days
+  const job = (days: number) => ({ id: 'J1', status: 'AWAITING_TDI', statusSince: ago(days), component: 'Gyro' });
+
+  it('warns within the warning window and flags breaches', () => {
+    expect(computeAlerts([tdi], { ...empty, jobs: [job(3)] }, NOW, 1)).toEqual([]);
+    expect(computeAlerts([tdi], { ...empty, jobs: [job(4)] }, NOW, 1)).toEqual([expect.objectContaining({ level: 'due-soon', days: 1 })]);
+    expect(computeAlerts([tdi], { ...empty, jobs: [job(5)] }, NOW, 1)).toEqual([expect.objectContaining({ level: 'due-soon', days: 0 })]);
+    expect(computeAlerts([tdi], { ...empty, jobs: [job(7)] }, NOW, 1)).toEqual([expect.objectContaining({ level: 'breached', days: 2, ruleId: 'SLA-TDI' })]);
+  });
+
+  it('carries what the notification needs', () => {
+    const [a] = computeAlerts([tdi], { ...empty, jobs: [job(6)] }, NOW);
+    expect(a).toEqual({
+      ref: 'J1', entity: 'JOB', ruleId: 'SLA-TDI', rule: tdi.rule, source: tdi.source,
+      status: 'AWAITING_TDI', statusSince: ago(6), detail: 'Gyro', level: 'breached', days: 1,
+    });
+  });
+
+  it('does not warn on rules no longer than the warning window', () => {
+    const demands = [{ id: 'D1', status: 'STOCK_CHECK', statusSince: ago(0), partDescription: 'Cap' }];
+    expect(computeAlerts([rfq], { ...empty, demands }, NOW, 2)).toEqual([]);
   });
 });

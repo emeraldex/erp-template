@@ -32,7 +32,9 @@ ENV NODE_ENV=production
 WORKDIR /app
 
 COPY --from=build --chown=node:node /prod/api ./
-RUN chmod +x ./docker-entrypoint.sh
+# Attachment files (STORAGE_DRIVER=local) live on a volume mounted here; create
+# it owned by the unprivileged user so a fresh named volume inherits that.
+RUN chmod +x ./docker-entrypoint.sh && mkdir -p /app/data/attachments && chown -R node:node /app/data
 
 USER node
 EXPOSE 4000

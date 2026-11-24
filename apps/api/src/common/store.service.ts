@@ -173,8 +173,10 @@ export class StoreService implements OnModuleInit {
     return r ? mapUser(r) : null;
   }
 
-  async jobs(): Promise<Job[]> {
-    const rows = await this.prisma.job.findMany({ include: JOB_INCLUDE, orderBy: { ordinal: 'desc' } });
+  /** Active jobs by default; archived ones (FR-12) only when asked for. */
+  async jobs(archived: 'exclude' | 'include' | 'only' = 'exclude'): Promise<Job[]> {
+    const where = archived === 'include' ? {} : archived === 'only' ? { archivedAt: { not: null } } : { archivedAt: null };
+    const rows = await this.prisma.job.findMany({ where, include: JOB_INCLUDE, orderBy: { ordinal: 'desc' } });
     return rows.map((r) => this.track(mapJob(r), 'job', r.version, {
       priorityAudit: r.priority?.audit.length ?? 0,
       hadPriority: !!r.priority,
@@ -436,6 +438,7 @@ export class StoreService implements OnModuleInit {
       data: {
         id: inv.id, stream: inv.stream, jobId: inv.jobId ?? null, customer: inv.customer,
         period: inv.period ?? null, amountMYR: inv.amountMYR, gstRate: inv.gstRate,
+        taxLabel: inv.taxLabel ?? 'GST',
         gstMYR: inv.gstMYR, totalMYR: inv.totalMYR, status: inv.status,
         statusSince: new Date(inv.statusSince), outstanding: inv.outstanding,
         raisedBy: inv.raisedBy, branch: fromBranch(inv.branch),

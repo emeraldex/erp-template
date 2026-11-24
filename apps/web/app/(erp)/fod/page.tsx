@@ -1,7 +1,8 @@
 "use client";
 
+import { useSession } from "@/lib/use-session";
 import { useEffect, useState } from "react";
-import { api, getSession, getWithFallback } from "@/lib/api";
+import { api, getWithFallback } from "@/lib/api";
 import { FodIncident, Tool, TrainingRecord } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
 import { Button, OfflineNotice, PageHeader, Panel, StatusPill, Table, Td, Tr } from "@/components/ui";
@@ -24,7 +25,7 @@ export default function FodPage() {
     area: "CONTROL" as FodIncident["area"], discovered: "",
   });
 
-  const user = getSession()?.user;
+  const user = useSession()?.user;
 
   useEffect(() => {
     getWithFallback<FodIncident[]>("/fod/incidents", "fodIncidents")

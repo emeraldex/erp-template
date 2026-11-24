@@ -1,8 +1,9 @@
 "use client";
 
+import { useSession } from "@/lib/use-session";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, getSession, getWithFallback } from "@/lib/api";
+import { api, getWithFallback } from "@/lib/api";
 import { Branch, Job, JobStatus } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
 import { useLang } from "@/lib/i18n";
@@ -26,14 +27,16 @@ export default function JobsPage() {
     originUnit: "", repairUnit: "CENTRAL" as Branch,
   });
 
-  const role = getSession()?.user.role;
+  const role = useSession()?.user.role;
   const canRegister = role === "STORES" || role === "ADMIN";
 
+  const [showArchived, setShowArchived] = useState(false);
+
   useEffect(() => {
-    getWithFallback<Job[]>("/jobs", "jobs")
+    getWithFallback<Job[]>(showArchived ? "/jobs?archived=include" : "/jobs", "jobs")
       .then((r) => { setRows(r.data); setOffline(r.offline); })
       .catch(console.error);
-  }, []);
+  }, [showArchived]);
 
   const statuses = (cfg ? (Object.keys(cfg.jobStatusMeta) as JobStatus[]) : []).filter((s) =>
     rows.some((j) => j.status === s),
@@ -73,11 +76,17 @@ export default function JobsPage() {
         eyebrow="QP.44 · Job Tracking System"
         title={t("jobs")}
         actions={
-          canRegister ? (
-            <Button onClick={() => setShowNew(!showNew)} variant={showNew ? "ghost" : "primary"}>
-              {showNew ? "Cancel" : "+ Register job"}
-            </Button>
-          ) : undefined
+          <>
+            <label className="mono flex cursor-pointer items-center gap-2 text-[10.5px] tracking-widest text-steel">
+              <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} className="accent-[var(--c-red)]" />
+              SHOW ARCHIVED
+            </label>
+            {canRegister && (
+              <Button onClick={() => setShowNew(!showNew)} variant={showNew ? "ghost" : "primary"}>
+                {showNew ? "Cancel" : "+ Register job"}
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -172,7 +181,10 @@ export default function JobsPage() {
           <Table head={["PS / Job", "Component", "Part / Serial", "Cat", "Origin unit", "Branch", t("status"), t("location"), "Days"]}>
             {filtered.map((j) => (
               <Tr key={j.id} onClick={() => router.push(`/jobs/${j.id}`)}>
-                <Td className="mono text-xs text-trace">{j.id}</Td>
+                <Td className="mono text-xs text-trace">
+                  {j.id}
+                  {j.archivedAt && <span className="ml-2 rounded border border-steel/40 px-1.5 py-0.5 text-[9px] tracking-widest text-steel">ARCHIVED</span>}
+                </Td>
                 <Td>
                   {j.component}
                   {j.priority?.state === "OPEN" && (

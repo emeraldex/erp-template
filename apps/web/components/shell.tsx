@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, DEMO_MODE, getSession, onConnectionChange, setSession, Session } from "@/lib/api";
 import { DictKey, useLang } from "@/lib/i18n";
+import { NotificationBell } from "./notifications";
 
 const NAV: { group: DictKey; items: { href: string; label: DictKey; code: string }[] }[] = [
   {
@@ -30,6 +31,13 @@ const NAV: { group: DictKey; items: { href: string; label: DictKey; code: string
   {
     group: "quality",
     items: [{ href: "/fod", label: "fod", code: "QP.46" }],
+  },
+  {
+    group: "administration",
+    items: [
+      { href: "/reports", label: "reports", code: "FR-14" },
+      { href: "/settings", label: "settings", code: "ADM" },
+    ],
   },
 ];
 
@@ -164,6 +172,7 @@ export function Topbar() {
                 {session.user.designation} · {session.user.role} · {session.user.branch}
               </p>
             </div>
+            <NotificationBell />
             <button
               onClick={() => router.push("/change-password")}
               className="mono hidden rounded border hairline px-2.5 py-1.5 text-[10.5px] tracking-widest text-steel transition-colors hover:border-steel/50 hover:text-fg sm:inline"

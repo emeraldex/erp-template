@@ -66,6 +66,7 @@ export interface FormRecord {
 }
 
 export interface Job {
+  archivedAt?: string;        // FR-12: out of active lists, read-only
   id: string;              // PS / Job number — FR-01
   psDate: string;
   component: string;
@@ -253,14 +254,14 @@ export interface TrainingRecord {
 
 // ─── QP.51 Invoicing & Revenue Billing (5.8) — FR-13 / FR-14 ───────────────────
 // Four parallel invoicing streams modelled as configurable variants of a single
-// billing process: each adds 6% GST, produces a Certified True Copy (CTC), passes
+// billing process: each adds tax (rate from settings), produces a Certified True Copy (CTC), passes
 // a correctness gate and routes the tax invoice to CPU (Finance) for payment.
 export type InvoiceStream = "PBC" | "BRANCH_REPAIR" | "COE_MRA" | "ACD";
 
 export type InvoiceStatus =
   | "DRAFTED"           // stream document set assembled
   | "CERTIFIED"         // Customer/CAO signatures obtained + CTC made
-  | "TAX_RAISED"        // Tax Invoice (F311) raised + 6% GST
+  | "TAX_RAISED"        // Tax Invoice (F311) raised with tax
   | "CORRECTNESS_CHECK" // HQ / CoE Invoicing correctness & completeness gate
   | "SUBMITTED"         // forwarded to CPU (Finance) / MRA
   | "REJECTED"          // incomplete / rejected — correct promptly
@@ -273,7 +274,8 @@ export interface Invoice {
   customer: string;           // CPU (Finance) / MRA / ACD
   period?: string;            // PBC billing month, e.g. "2026-07"
   amountMYR: number;
-  gstRate: number;            // 6% — configurable (FR-13, §7.2)
+  gstRate: number;            // tax %, fixed at drafting from settings (FR-13)
+  taxLabel?: string;          // GST / SST … printed on documents
   gstMYR: number;             // computed
   totalMYR: number;           // amount + GST
   status: InvoiceStatus;

@@ -204,6 +204,7 @@ model User {
   mustChangePassword Boolean   @default(false)
   passwordChangedAt  DateTime?
   sessions           Session[]
+  notifications      Notification[]
 
   @@map("users")
 }
@@ -242,6 +243,8 @@ model Job {
   statusSince DateTime
   indentRef   String?
   ovId        String?
+  /// FR-12: set when a long-closed job leaves the active lists. Read-only after.
+  archivedAt  DateTime?
   // Optimistic-concurrency guard: a transition that reads v=n writes v=n+1 and
   // fails if another actor already advanced the row (two Stores clerks
   // dispatching the same PS number must not silently overwrite each other).
@@ -259,6 +262,7 @@ model Job {
   @@index([status, statusSince])
   @@index([repairUnit])
   @@index([ordinal])
+  @@index([archivedAt])
   @@map("jobs")
 }
 
@@ -481,6 +485,8 @@ model Invoice {
   period          String?
   amountMYR       Decimal       @db.Decimal(14, 2)
   gstRate         Decimal       @db.Decimal(5, 2)
+  /// Tax name printed on documents (GST, SST…), fixed when the invoice is drafted.
+  taxLabel        String        @default("GST")
   gstMYR          Decimal       @db.Decimal(14, 2)
   totalMYR        Decimal       @db.Decimal(14, 2)
   status          InvoiceStatus
@@ -625,4 +631,72 @@ model WeeklyClosure {
   count Int
 
   @@map("weekly_closures")
+}
+
+// ─── Phase 2: settings, attachments, notifications ───────────────────────────
+
+/// Organisation-level settings edited by ADMIN (company profile, tax).
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("settings")
+}
+
+enum AttachmentEntity {
+  JOB
+  DEMAND
+  OV
+  INVOICE
+  PARTNER
+  FOD
+}
+
+/// A file attached to a record (signed forms, certificates, photos). The bytes
+/// live in object storage; the SHA-256 lets anyone verify they are unchanged.
+model Attachment {
+  id          String           @id
+  entity      AttachmentEntity
+  entityId    String
+  formNo      String?
+  filename    String
+  contentType String
+  sizeBytes   Int
+  sha256      String
+  storageKey  String           @unique
+  uploadedBy  String
+  uploadedAt  DateTime         @default(now())
+
+  @@index([entity, entityId])
+  @@map("attachments")
+}
+
+/// One in-app message for one user (SLA alerts today).
+model Notification {
+  id        String    @id
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String
+  title     String
+  body      String
+  ref       String?
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+/// Records that an SLA alert went out, so each (record, rule, level) is sent once.
+model SlaAlert {
+  id     String   @id
+  ref    String
+  ruleId String
+  level  String
+  sentAt DateTime @default(now())
+
+  @@unique([ref, ruleId, level])
+  @@map("sla_alerts")
 }

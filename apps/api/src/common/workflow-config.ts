@@ -295,7 +295,7 @@ export const OV_TRANSITIONS: TransitionRule<OvStatus>[] = [
 export const INVOICE_STATUS_META: Record<InvoiceStatus, StatusMeta> = {
   DRAFTED:           { en: "Drafted",             ms: "Dirangka",              tone: "neutral" },
   CERTIFIED:         { en: "Signed & CTC Made",   ms: "Ditandatangani & CTC",  tone: "info" },
-  TAX_RAISED:        { en: "Tax Invoice + 6% GST", ms: "Invois Cukai + 6% GST", tone: "info" },
+  TAX_RAISED:        { en: "Tax Invoice raised", ms: "Invois Cukai dikeluarkan", tone: "info" },
   CORRECTNESS_CHECK: { en: "Correctness Gate",    ms: "Semakan Ketepatan",     tone: "warn" },
   SUBMITTED:         { en: "Submitted to CPU",   ms: "Dihantar ke CPU",      tone: "warn" },
   REJECTED:          { en: "Rejected — Correct",  ms: "Ditolak — Perbetulkan", tone: "bad" },
@@ -315,11 +315,11 @@ export const INVOICE_TRANSITIONS: TransitionRule<InvoiceStatus>[] = [
   },
   {
     from: "CERTIFIED", to: "TAX_RAISED",
-    label: "Raise Tax Invoice + 6% GST", labelMs: "Keluarkan Invois Cukai + 6% GST",
+    label: "Raise Tax Invoice (tax applied)", labelMs: "Keluarkan Invois Cukai (cukai dikenakan)",
     roles: ["BILLING"],
     requires: [
       { key: "f311Ref", label: "Tax Invoice no", formNo: "F311" },
-      { key: "amountMYR", label: "Invoice amount before GST (MYR)" },
+      { key: "amountMYR", label: "Invoice amount before tax (MYR)" },
     ],
   },
   {
@@ -387,7 +387,7 @@ export const INVOICE_STREAMS: InvoiceStreamDef[] = [
     docSet: ["Analysis Report (F117)", "AM 75 (signed)", "Delivery Note (F218)", "Over-and-Above Approval (if any)", "Certificate of Release to Service (F174, avionics)"],
     deadlines: [
       { label: "Notify Billing ≤ 3 days", note: "Branch PCD informs Billing on job completion" },
-      { label: "Tax Invoice ≤ 3 working days", note: "Billing raises Tax Invoice + 6% GST" },
+      { label: "Tax Invoice ≤ 3 working days", note: "Billing raises Tax Invoice with tax" },
       { label: "Signed original ≤ 3 weeks", note: "Customer signs; CTC made" },
       { label: "3 sets to HQ ≤ 7 days", note: "Submit to HQ Invoicing" },
     ],
@@ -397,7 +397,7 @@ export const INVOICE_STREAMS: InvoiceStreamDef[] = [
     customer: "MRA → CPU (Finance)", perJob: true,
     docSet: ["Indent (AM 75)", "Analysis Report (F117)", "COC / ARC / Certificate of Release", "Serviceable / Unserviceable label", "Delivery Note (F218)", "Covering letter"],
     deadlines: [
-      { label: "7 sets via Central Store to MRA", note: "CoE raises Tax Invoice + 6% GST" },
+      { label: "7 sets via Central Store to MRA", note: "CoE raises Tax Invoice with tax" },
       { label: "Signed 4 sets to CPU (Finance)", note: "MRA returns signed tax invoice" },
     ],
   },

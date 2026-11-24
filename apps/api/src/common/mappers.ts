@@ -74,6 +74,7 @@ export function mapJob(r: any): Job {
   const demandIds: string[] = (r.demands ?? []).map((d: { id: string }) => d.id);
   const invoiceIds: string[] = (r.invoices ?? []).map((i: { id: string }) => i.id);
   return compact({
+    archivedAt: r.archivedAt ? iso(r.archivedAt) : undefined,
     id: r.id,
     psDate: r.psDate,
     component: r.component,
@@ -216,6 +217,7 @@ export function mapInvoice(r: any): Invoice {
     period: r.period ?? undefined,
     amountMYR: num(r.amountMYR),
     gstRate: num(r.gstRate),
+    taxLabel: r.taxLabel ?? 'GST',
     gstMYR: num(r.gstMYR),
     totalMYR: num(r.totalMYR),
     status: r.status,
