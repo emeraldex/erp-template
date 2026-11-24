@@ -1,6 +1,6 @@
 import { Controller, Get, HttpCode, ServiceUnavailableException } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
-import { PrismaService } from '../common/prisma.service';
+import { Database } from '../tenancy/database';
 
 /**
  * Liveness + readiness for load balancers, Docker and uptime monitors.
@@ -11,13 +11,13 @@ import { PrismaService } from '../common/prisma.service';
 export class HealthController {
   private readonly started = Date.now();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly db: Database) {}
 
   @Get()
   @HttpCode(200)
   async check() {
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
+      await this.db.pool.query('SELECT 1');
     } catch {
       throw new ServiceUnavailableException({ status: 'error', database: 'down' });
     }

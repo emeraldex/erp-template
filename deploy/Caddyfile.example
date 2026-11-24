@@ -1,0 +1,30 @@
+# Reverse proxy for the production stack: TLS certificates are obtained and
+# renewed automatically. Copy to deploy/Caddyfile and list every address your
+# organisations use (see `tenants-cli list`), then start with
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod --profile proxy up -d
+#
+# Each address serves the web app and, under /api, the API — same origin, so
+# the session cookie, single sign-on and per-organisation addresses just work.
+# Build the web image with NEXT_PUBLIC_API_URL=/api/v1 and run the API with
+# TRUST_PROXY=1 (the Compose default).
+
+{
+	email ops@example.com
+}
+
+erp.example.com, acme.erp.example.com, beta.erp.example.com {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+}

@@ -5,6 +5,7 @@ import { StoreService } from '../common/store.service';
 import type { AuditEntry, Role } from '../common/types';
 import { checkFileType, cleanFilename, decodeUploadName } from './file-types';
 import type { ObjectStorage } from './storage';
+import { currentTenant } from '../tenancy/tenant';
 
 export const STORAGE = Symbol('STORAGE');
 export const ENTITIES = ['JOB', 'DEMAND', 'OV', 'INVOICE', 'PARTNER', 'FOD'] as const;
@@ -87,7 +88,7 @@ export class AttachmentsService {
 
     const sha256 = createHash('sha256').update(file.buffer).digest('hex');
     const id = randomUUID();
-    const storageKey = `${e.toLowerCase()}/${sha256.slice(0, 2)}/${id}`;
+    const storageKey = `${currentTenant().id}/${e.toLowerCase()}/${sha256.slice(0, 2)}/${id}`;
     await this.storage.put(storageKey, file.buffer, file.mimetype);
 
     const row = await this.prisma.attachment.create({

@@ -8,6 +8,17 @@ Every module, status, form reference, role and timer below is traceable to the R
 Section 4 (actors), Section 5 (workflows), Section 6 (forms register), Section 7
 (functional requirements FR-01…FR-15) and Section 8 (mandatory demonstration scenario).
 
+## Documentation
+
+| For | Read |
+|---|---|
+| Installing and running client organisations | [Administrator guide](docs/guides/admin-guide.md) |
+| Daily use, by role | [User guide](docs/guides/user-guide.md) · [Panduan pengguna](docs/guides/panduan-pengguna.md) |
+| Integrations | [API guide](docs/api/README.md) and the generated reference at `/api/docs` |
+| Security reviews | [Security overview](docs/security-overview.md) |
+| Sales demos | [Running a demo](docs/demo-environment.md) |
+| Backups | [Backup and restore](docs/operations/backup-and-restore.md) |
+
 ## Monorepo layout
 
 ```
@@ -169,6 +180,13 @@ GET   /retention/report · POST /retention/archive (ADMIN)
 GET|POST /attachments/:entity/:id · GET /attachments/file/:id[/verify]
 GET   /notifications · POST /notifications/:id/read · /notifications/read-all · POST /alerts/run (ADMIN)
 GET   /settings · PATCH /settings/company · /settings/tax (ADMIN)
+GET   /tenant                          which organisation this address belongs to (no sign-in)
+GET   /auth/sso · /auth/sso/start · /auth/sso/callback · GET|PUT /auth/sso/settings (ADMIN)
+GET|POST /users · PATCH /users/:id · POST /users/:id/{reset-password,unlock,deactivate,reactivate} (ADMIN)
+GET   /workflow · /workflow/history · PUT /workflow/{transitions/:kind,sla,streams/:id} (ADMIN, QUALITY)
+GET   /job-cards?ids=…                 printable A6 job cards with QR codes
+
+The generated OpenAPI reference is served at /api/docs (API_DOCS).
 ```
 
 ## Design system
@@ -226,8 +244,26 @@ rather than silently overwriting it.
 Workflow rules (transitions, SLA timers, invoice streams) are rows too, so an
 FR-02 runtime change such as `PATCH /config/sla/:id` now survives a restart.
 
+### Client organisations (multi-tenancy)
+
+One installation can serve several client organisations, each in its own
+PostgreSQL schema, found by the address used to reach it. Create them with
+`node dist/tenants-cli.js create <id> --name … --host … --admin-email …`; see the
+[administrator guide](docs/guides/admin-guide.md). A single-client install
+needs none of this: everything lives in the default organisation
+(`DATABASE_URL`'s schema). For several organisations, serve each address
+through the reverse proxy (`--profile proxy`, `deploy/Caddyfile.example`) and
+build the web app with `NEXT_PUBLIC_API_URL=/api/v1`.
+
+Each organisation has its own users (Users screen), settings, single sign-on,
+workflow rules (Workflow editor) and alert schedule.
+
 ### Security
 
+- **Single sign-on.** Any OpenID Connect provider (Microsoft Entra ID, Google,
+  Okta, Keycloak), set up per organisation in Settings. Users are matched by
+  email; SSO can be required, with administrators keeping a password as a
+  break-glass.
 - **Sessions.** Signing in creates a server-side session and sets it in an
   `httpOnly`, `SameSite=Strict` cookie (`Secure` in production), so page scripts
   never see the credential. Sessions end on sign-out, after `AUTH_IDLE_MINUTES`

@@ -1,0 +1,126 @@
+# Administrator guide
+
+For the person who installs the ERP and sets up each client organisation.
+Day-to-day use is in the [user guide](user-guide.md).
+
+## 1. Install
+
+Follow *Production deployment* in the README: fill in `.env.prod`, then
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+```
+
+The API applies database migrations for every organisation on start-up. Put a
+TLS reverse proxy in front and serve the web app and the API from the **same
+address** (the API under `/api`) — single sign-on and per-organisation
+addresses rely on it.
+
+## 2. Organisations (tenants)
+
+One installation can serve several client organisations, each in its own
+PostgreSQL schema: their data, users, settings and workflows never mix. A
+single-client installation needs none of this — everything lives in the
+default organisation.
+
+Run these inside the API container (`docker compose exec api …`):
+
+```bash
+node dist/tenants-cli.js create acme --name "Acme Aero Services" --host acme.erp.example.com --admin-email it@acme.example --admin-name "Acme IT"
+```
+
+This creates the schema, applies migrations, loads the standard workflow and
+prints a **temporary password** for the first administrator — shown once.
+Add `--demo` instead of `--admin-email` for a demonstration organisation with
+sample data and ten demo users (password `demo123`).
+
+| Command | What it does |
+|---|---|
+| `list` | All organisations, their schema and addresses |
+| `set-hosts acme acme.erp.example.com erp.acme.example` | Change an organisation's addresses |
+| `suspend acme` / `activate acme` | Block / restore access (data kept) |
+| `migrate-all` | Apply migrations everywhere (runs automatically on start) |
+
+New organisations are picked up by running API servers within 30 seconds.
+With `TENANT_STRICT_HOSTS=true`, addresses that belong to no organisation are
+refused instead of reaching the default one — recommended for hosted
+multi-client installations.
+
+There is no delete command. To remove a client, take a backup, then drop its
+schema (`DROP SCHEMA t_acme CASCADE`) and delete its row from
+`erp_control.tenants`.
+
+## 3. First sign-in for a new organisation
+
+The first administrator signs in at the organisation's address with the
+temporary password and must choose a new one. Then, in order:
+
+1. **Settings → Company profile** — name, registration and tax numbers,
+   address and signatory. These print on every invoice and letter.
+2. **Settings → Tax** — the tax name and rate (the RFP specifies GST 6%;
+   current Malaysian contracts typically use SST). Invoices keep the rate they
+   were drafted with.
+3. **Users** — add each member of staff with their role and branch. Each gets a
+   temporary password to pass on securely; they must change it at first
+   sign-in. Deactivate leavers rather than deleting them: their history stays.
+4. **Workflow editor** — adjust who owns each step, mandatory fields, SLA
+   timers and invoicing document sets to match the client's procedures. Steps
+   marked SYSTEM drive automatic actions and cannot be removed. Every change is
+   logged with the full before and after.
+5. **Single sign-on** (optional) — below.
+
+## 4. Single sign-on
+
+Settings → Single sign-on shows the **redirect URI** to register with the
+client's identity provider. Users must already exist in the ERP; they are
+matched by email address.
+
+**Microsoft Entra ID**: Entra admin centre → App registrations → New
+registration. Platform *Web*, redirect URI as shown. Under *Certificates &
+secrets* create a client secret. The issuer is
+`https://login.microsoftonline.com/<directory-tenant-id>/v2.0`; the client ID
+is the *Application (client) ID*. Add the optional `email` claim to the ID
+token (Token configuration), or ensure users' UPN is their email.
+
+**Google Workspace**: Google Cloud console → APIs & Services → Credentials →
+OAuth client ID → *Web application*, redirect URI as shown. Issuer
+`https://accounts.google.com`.
+
+**Keycloak / Okta / others**: create a confidential OpenID Connect client with
+the authorization-code flow and the redirect URI as shown; the issuer is the
+realm or authorization-server URL.
+
+Save — the ERP checks it can reach the provider. Test in a private window
+before turning off *Also allow passwords for everyone*. With passwords off,
+**administrators can still sign in with a password**, so a provider outage
+cannot lock everyone out.
+
+The client secret is stored encrypted with a key derived from `AUTH_SECRET`.
+If you rotate `AUTH_SECRET`, re-enter each organisation's client secret.
+
+## 5. Alerts and email
+
+SLA alerts appear in each user's alerts bell. To email them as well, set
+`SMTP_URL` (for example `smtps://user:password@smtp.example.com:465`) and
+`MAIL_FROM`. Reports → *Check SLA alerts now* runs the check immediately.
+
+## 6. Everyday operations
+
+- **Health**: `GET /api/v1/health` for monitoring.
+- **Logs**: one JSON line per request in production.
+- **Backups**: see [backup and restore](../operations/backup-and-restore.md).
+  Each organisation is a schema in the same database dump; attachments need
+  their volume or bucket backed up too.
+- **Locked out users**: Users → *Unlock* or *Reset password*.
+- **Upgrades**: pull the new version and rebuild; migrations run on start.
+  Take a backup first.
+
+## 7. Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| Sign-in works but every page says *Session has ended* | Web app and API on different sites, so the cookie is not sent — serve them from the same address |
+| *No organisation is configured for this address* | `TENANT_STRICT_HOSTS=true` and the address is not registered — `set-hosts` |
+| SSO returns to the sign-in page with *no account* | The user's email in the identity provider does not match their ERP account |
+| SSO save fails | The issuer URL is wrong or not reachable from the server |
+| Alerts but no emails | `SMTP_URL` not set, or the mail server refused — see the API log |

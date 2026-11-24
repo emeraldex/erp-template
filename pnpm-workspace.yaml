@@ -4,6 +4,8 @@ packages:
 allowBuilds:
   '@parcel/watcher': false
   '@prisma/engines': true
+  # Download analytics pulled in by swagger-ui; never let it phone home.
+  '@scarf/scarf': false
   prisma: true
   sharp: true
   unrs-resolver: true

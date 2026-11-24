@@ -1,14 +1,18 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { dummyVerify, hashPassword, verifyPassword } from '../common/password';
 import { toBranch } from '../common/mappers';
 import { Branch, Role } from '../common/types';
 import { authConfig } from './auth.config';
 import { SessionStore } from './session.store';
+import { SsoConfigService } from './sso-config.service';
+import { currentTenant } from '../tenancy/tenant';
 
 /** What the signed token carries: only a session reference and its expiry. */
 interface TokenClaims {
   sid: string;
+  /** Tenant the session belongs to; a token is useless at another organisation's address. */
+  tid: string;
   exp: number;
 }
 
@@ -37,12 +41,12 @@ export function profile(u: AuthUser) {
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly sessions: SessionStore) {}
+  constructor(private readonly sessions: SessionStore, private readonly sso: SsoConfigService) {}
 
   async login(email: string, password: string, meta: { ip?: string; userAgent?: string }) {
     const user = await this.sessions.userByEmail(email);
-    if (!user) {
-      await dummyVerify(); // same work whether or not the account exists
+    if (!user || user.deactivatedAt) {
+      await dummyVerify(); // same work whether or not the account exists (or is active)
       throw new UnauthorizedException(INVALID);
     }
     if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
@@ -53,25 +57,48 @@ export class AuthService {
       const locked = await this.sessions.recordFailure(user.id, user.failedLogins);
       throw new UnauthorizedException(locked ? LOCKED : INVALID);
     }
+    // With SSO enforced, passwords only work for administrators (break-glass access
+    // if the identity provider is down or misconfigured).
+    const sso = await this.sso.get();
+    if (sso.enabled && !sso.allowPasswordLogin && user.role !== 'ADMIN') {
+      throw new ForbiddenException({ statusCode: 403, code: 'SSO_REQUIRED', message: `Sign in with ${sso.label} instead` });
+    }
     await this.sessions.recordSuccess(user.id);
-    const session = await this.sessions.create(user.id, meta);
-    const authUser = this.toAuthUser(user, session.id);
-    return { token: this.sign({ sid: session.id, exp: session.expiresAt.getTime() }), user: authUser, expiresAt: session.expiresAt };
+    return this.issue(user, meta, 'password');
+  }
+
+  /** After a verified single sign-on: start a session for the matching user, if any. */
+  async loginSso(email: string, meta: { ip?: string; userAgent?: string }) {
+    const user = await this.sessions.userByEmail(email);
+    if (!user || user.deactivatedAt) return null;
+    if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) return null;
+    return this.issue(user, meta, 'sso');
+  }
+
+  private async issue(
+    user: NonNullable<Awaited<ReturnType<SessionStore['userByEmail']>>>,
+    meta: { ip?: string; userAgent?: string },
+    method: 'password' | 'sso',
+  ) {
+    const session = await this.sessions.create(user.id, meta, method);
+    const authUser = this.toAuthUser(user, session.id, method);
+    return { token: this.sign({ sid: session.id, tid: currentTenant().id, exp: session.expiresAt.getTime() }), user: authUser, expiresAt: session.expiresAt };
   }
 
   /** Resolve a token to a live session, enforcing expiry, idle timeout and revocation. */
   async authenticate(token: string): Promise<AuthUser> {
     const claims = this.verify(token);
+    if (claims.tid !== currentTenant().id) throw new UnauthorizedException('Session belongs to another organisation');
     const session = await this.sessions.find(claims.sid);
     const now = Date.now();
-    if (!session || session.revokedAt) throw new UnauthorizedException('Session has ended — sign in again');
+    if (!session || session.revokedAt || session.user.deactivatedAt) throw new UnauthorizedException('Session has ended — sign in again');
     if (session.expiresAt.getTime() <= now) throw new UnauthorizedException('Session expired — sign in again');
     if (now - session.lastSeenAt.getTime() > authConfig.idleMs) {
       await this.sessions.revoke(session.id);
       throw new UnauthorizedException('Signed out after inactivity — sign in again');
     }
     if (now - session.lastSeenAt.getTime() > 60_000) await this.sessions.touch(session.id);
-    return this.toAuthUser(session.user, session.id);
+    return this.toAuthUser(session.user, session.id, session.method === 'sso' ? 'sso' : 'password');
   }
 
   logout(sid: string) {
@@ -115,7 +142,7 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('Malformed token');
     }
-    if (typeof claims.sid !== 'string' || typeof claims.exp !== 'number') throw new UnauthorizedException('Malformed token');
+    if (typeof claims.sid !== 'string' || typeof claims.tid !== 'string' || typeof claims.exp !== 'number') throw new UnauthorizedException('Malformed token');
     if (claims.exp <= Date.now()) throw new UnauthorizedException('Session expired — sign in again');
     return claims;
   }
@@ -123,11 +150,13 @@ export class AuthService {
   private toAuthUser(
     u: { id: string; name: string; email: string; role: string; branch: string; designation: string; mustChangePassword: boolean },
     sid: string,
+    method: 'password' | 'sso' = 'password',
   ): AuthUser {
     return {
       sub: u.id, sid, name: u.name, email: u.email, role: u.role as Role,
       branch: toBranch(u.branch),
-      designation: u.designation, mustChangePassword: u.mustChangePassword,
+      // Someone who signed in through their identity provider has no password to change here.
+      designation: u.designation, mustChangePassword: method === 'sso' ? false : u.mustChangePassword,
     };
   }
 }

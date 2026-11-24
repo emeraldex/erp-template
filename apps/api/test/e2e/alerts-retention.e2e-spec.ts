@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import request = require('supertest');
-import { PrismaService } from '../../src/common/prisma.service';
+import { PrismaClient } from '../../src/generated/prisma/client';
 import { Mailer } from '../../src/notifications/mailer';
 import { createApp, login } from './app';
 
@@ -9,7 +9,7 @@ const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000 - 3_600_000)
 
 describe('SLA alerts and notifications (FR-10)', () => {
   let app: INestApplication;
-  let prisma: PrismaService;
+  let prisma: PrismaClient;
   let http: ReturnType<typeof request>;
   let admin: string;
   const post = (path: string, cookie: string) => http.post(`${API}${path}`).set('Cookie', cookie).set('X-Requested-With', 'erp-web');
@@ -71,7 +71,7 @@ describe('SLA alerts and notifications (FR-10)', () => {
 
 describe('Archiving and retention (FR-12)', () => {
   let app: INestApplication;
-  let prisma: PrismaService;
+  let prisma: PrismaClient;
   let http: ReturnType<typeof request>;
 
   beforeAll(async () => {

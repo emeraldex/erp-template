@@ -31,9 +31,9 @@ export interface Marks {
 }
 
 /** Create a document; resolve its bytes once ended. Compression is off under test so text can be asserted. */
-export function newDoc(title: string): { doc: Doc; done: Promise<Buffer> } {
+export function newDoc(title: string, page: { size?: string; margin?: number } = {}): { doc: Doc; done: Promise<Buffer> } {
   const doc = new PDFDocument({
-    size: 'A4', margin: MARGIN, bufferPages: true,
+    size: page.size ?? 'A4', margin: page.margin ?? MARGIN, bufferPages: true,
     compress: process.env.NODE_ENV !== 'test',
     info: { Title: pdfText(title), Creator: 'Maintenance ERP' },
   });

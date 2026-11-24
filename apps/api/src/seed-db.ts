@@ -13,6 +13,7 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from './generated/prisma/client';
+import { parseDatabaseUrl } from './tenancy/database';
 import { hashPassword } from './common/password';
 import { fromBranch } from './common/mappers';
 import {
@@ -23,9 +24,7 @@ import {
 } from './common/workflow-config';
 import type { AuditEntry, FormRecord } from './common/types';
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error('DATABASE_URL is required to seed.');
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+type Db = PrismaClient;
 
 const auditRows = (a: AuditEntry[] = []) =>
   a.map((x, i) => ({ at: new Date(x.at), by: x.by, role: x.role as never, action: x.action, fields: x.fields ?? undefined, seq: i }));
@@ -35,14 +34,8 @@ const recordRows = (r: FormRecord[] = []) =>
 /** Higher ordinal sorts first, so seed order is preserved as written. */
 const ord = (total: number, i: number) => total - i;
 
-async function main() {
-  const existing = await prisma.user.count();
-  if (existing > 0 && process.env.SEED_FORCE !== '1') {
-    console.log(`Database already seeded (${existing} users) — nothing to do.`);
-    return;
-  }
-
-  // ─── workflow-as-data (FR-02) ───────────────────────────────────────────────
+/** Workflow rules, SLA timers and invoice streams (FR-02): every tenant needs these. */
+export async function seedWorkflow(prisma: Db): Promise<void> {
   const kinds = [
     ['JOB', JOB_TRANSITIONS], ['DEMAND', DEMAND_TRANSITIONS],
     ['OV', OV_TRANSITIONS], ['INVOICE', INVOICE_TRANSITIONS],
@@ -76,7 +69,10 @@ async function main() {
     await prisma.weeklyClosure.upsert({ where: { week }, create: { week, count }, update: { count } });
   }
   console.log('Workflow config seeded.');
+}
 
+/** The ten reference users and the sample jobs, demands, invoices… (demo data). */
+export async function seedReferenceData(prisma: Db): Promise<void> {
   // ─── actors ─────────────────────────────────────────────────────────────────
   // An empty SEED_PASSWORD (Compose passes one when unset) must fall back to the
   // reference password, not seed blank passwords.
@@ -233,10 +229,26 @@ async function main() {
   );
 }
 
-main()
-  .then(() => prisma.$disconnect())
-  .catch(async (e) => {
-    console.error(e);
+/** CLI: seed DATABASE_URL's schema (?schema=, default public) if it has no users yet. */
+async function main(): Promise<void> {
+  const { url, schema } = parseDatabaseUrl();
+  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }, { schema }) });
+  try {
+    const existing = await prisma.user.count();
+    if (existing > 0 && process.env.SEED_FORCE !== '1') {
+      console.log(`Database already seeded (${existing} users) — nothing to do.`);
+      return;
+    }
+    await seedWorkflow(prisma);
+    await seedReferenceData(prisma);
+  } finally {
     await prisma.$disconnect();
+  }
+}
+
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(e);
     process.exit(1);
   });
+}

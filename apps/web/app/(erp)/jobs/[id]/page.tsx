@@ -3,7 +3,7 @@
 import { useSession } from "@/lib/use-session";
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, getWithFallback } from "@/lib/api";
+import { api, download, getWithFallback } from "@/lib/api";
 import { Job, JobStatus, PriorityType, RepairRoute } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
 import { useLang } from "@/lib/i18n";
@@ -104,6 +104,9 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
             {t("location")}: {job.location}
           </span>
           <MetaPill status={job.status} meta={cfg?.jobStatusMeta?.[job.status]} lang={lang} />
+          <Button variant="ghost" onClick={() => download(`/job-cards?ids=${encodeURIComponent(job.id)}`, `${job.id}-job-card.pdf`).catch((e) => setError((e as Error).message))}>
+            Print job card
+          </Button>
         </div>
       </div>
 

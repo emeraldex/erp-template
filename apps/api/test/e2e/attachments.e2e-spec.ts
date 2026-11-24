@@ -3,7 +3,7 @@ import { createHash } from 'crypto';
 import { writeFileSync } from 'fs';
 import { join } from 'path';
 import request = require('supertest');
-import { PrismaService } from '../../src/common/prisma.service';
+import { PrismaClient } from '../../src/generated/prisma/client';
 import { createApp, login } from './app';
 
 const API = '/api/v1';
@@ -16,7 +16,7 @@ const binary = (res: request.Response, cb: (err: Error | null, body: Buffer) => 
 
 describe('Attachments (integration)', () => {
   let app: INestApplication;
-  let prisma: PrismaService;
+  let prisma: PrismaClient;
   let http: ReturnType<typeof request>;
   let cookie: string;
   const upload = (path: string, body: Buffer, filename: string, contentType: string, formNo?: string) => {
