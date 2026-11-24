@@ -15,3 +15,6 @@ process.env.LOGIN_RATE_LIMIT = '1000';
 process.env.API_RATE_LIMIT = '100000';
 process.env.SEED_PASSWORD = '';
 process.env.SEED_FORCE_PASSWORD_CHANGE = '0';
+process.env.STORAGE_DRIVER = 'local';
+process.env.ATTACHMENTS_DIR = require('path').join(require('os').tmpdir(), `erp-e2e-attachments-${process.pid}`);
+process.env.ATTACHMENT_MAX_MB = '1';
