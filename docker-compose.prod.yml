@@ -42,6 +42,14 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-erp}?schema=public
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env.prod}
       AUTH_TTL_HOURS: ${AUTH_TTL_HOURS:-8}
+      AUTH_IDLE_MINUTES: ${AUTH_IDLE_MINUTES:-60}
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-5}
+      LOGIN_LOCK_MINUTES: ${LOGIN_LOCK_MINUTES:-15}
+      LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10}
+      API_RATE_LIMIT: ${API_RATE_LIMIT:-600}
+      # Hops of reverse proxy in front of the API (1 for a single nginx/Caddy).
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       WEB_ORIGIN: ${WEB_ORIGIN:?set WEB_ORIGIN in .env.prod}
       PG_POOL_MAX: ${PG_POOL_MAX:-10}
       RUN_MIGRATIONS: "1"
@@ -49,6 +57,9 @@ services:
       # users already exist. Set to 0 once you load real data.
       RUN_SEED: ${RUN_SEED:-1}
       SEED_PASSWORD: ${SEED_PASSWORD:-}
+      # Seeded users must choose their own password at first sign-in. Set to 0
+      # only for a throwaway demo deployment.
+      SEED_FORCE_PASSWORD_CHANGE: ${SEED_FORCE_PASSWORD_CHANGE:-1}
     ports:
       - "${API_BIND:-127.0.0.1}:4000:4000"
     networks: [backend, frontend]
@@ -61,6 +72,8 @@ services:
         # Baked into the browser bundle at build time — must be the URL the
         # user's browser can reach, not the internal service name.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL in .env.prod}
+        # 1 = show bundled sample data when the API is down (sales demos only).
+        NEXT_PUBLIC_DEMO_MODE: ${NEXT_PUBLIC_DEMO_MODE:-0}
     restart: unless-stopped
     depends_on:
       api:
@@ -68,6 +81,27 @@ services:
     ports:
       - "${WEB_BIND:-127.0.0.1}:3000:3000"
     networks: [frontend]
+
+  # Nightly verified pg_dump into ./backups on the host (see
+  # docs/operations/backup-and-restore.md). Copy that directory off the server.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-erp}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./scripts/ops/backup.sh:/usr/local/bin/backup.sh:ro
+      - ${BACKUP_HOST_DIR:-./backups}:/backups
+    entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
+    networks: [backend]
 
 volumes:
   pgdata:

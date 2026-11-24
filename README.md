@@ -53,8 +53,30 @@ was set to when the database was first seeded (see *Before going live*):
 | farah@company.example | FINANCE | Finance | payment steps |
 | zara@company.example | BILLING | Billing | invoice (F311) + delivery note (F218) |
 
-The web app also runs without the API — screens fall back to bundled sample data with
-an `OFFLINE SAMPLE` notice. Write actions require the live API.
+**Demo mode.** Build the web app with `NEXT_PUBLIC_DEMO_MODE=1` and it can be shown
+without the API: screens fall back to bundled sample data with a `DEMO DATA` notice,
+and write actions are disabled. Without that flag (the default), an unreachable API
+shows a "cannot reach the server" banner instead of sample records.
+
+## Testing
+
+```bash
+pnpm --filter api test        # unit tests: workflow engine and business rules
+pnpm --filter api test:cov    # the same, with a coverage report
+```
+
+The integration tests boot the real API against PostgreSQL. Point
+`TEST_DATABASE_URL` at a **disposable** database whose name contains `test` — its
+schema is dropped and recreated on every run:
+
+```bash
+createdb erp_test
+TEST_DATABASE_URL=postgresql://erp:erp@localhost:5432/erp_test pnpm --filter api test:e2e
+```
+
+`scripts/section8-demo.py` runs the RFP's Section 8 scenario end to end against a
+running API. GitHub Actions runs all of these, plus type checks, the web build and a
+dependency audit, on every push and pull request.
 
 ## How the requirements are met
 
@@ -109,7 +131,9 @@ demo or staging database, not one holding live records.
 ## API surface (prefix `/api/v1`)
 
 ```
-POST  /auth/login
+GET   /health                          liveness + database check (no sign-in)
+POST  /auth/login                      sets the session cookie
+POST  /auth/logout · GET /auth/me · POST /auth/change-password
 GET   /config                          workflow-as-data (FR-02)
 PATCH /config/sla/:id                  runtime rule change (ADMIN/QUALITY)
 GET   /dashboard/kpis
@@ -141,7 +165,7 @@ cp .env.prod.example .env.prod        # fill in every blank; see the file's head
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 ```
 
-Three services: `db` (PostgreSQL 16), `api`, `web`. The API container applies
+Four services: `db` (PostgreSQL 16), `api`, `web` and `backup`. The API container applies
 migrations on start (`prisma migrate deploy`) and seeds the reference dataset
 only if the database is empty. Postgres sits on an `internal` network — the web
 container cannot reach it, and it is not published to the host. `api` and `web`
@@ -180,16 +204,54 @@ rather than silently overwriting it.
 Workflow rules (transitions, SLA timers, invoice streams) are rows too, so an
 FR-02 runtime change such as `PATCH /config/sla/:id` now survives a restart.
 
+### Security
+
+- **Sessions.** Signing in creates a server-side session and sets it in an
+  `httpOnly`, `SameSite=Strict` cookie (`Secure` in production), so page scripts
+  never see the credential. Sessions end on sign-out, after `AUTH_IDLE_MINUTES`
+  without activity, after `AUTH_TTL_HOURS` in total, and on every other device
+  when the user changes their password. Scripts can use a bearer token instead
+  (`POST /auth/login` with `"tokenInBody": true`).
+- **CSRF.** Cookie-authenticated writes must send an `X-Requested-With` header,
+  which a cross-site form or image cannot add.
+- **Sign-in protection.** After `LOGIN_MAX_ATTEMPTS` failures an account locks for
+  `LOGIN_LOCK_MINUTES`. Sign-in is rate-limited per IP (`LOGIN_RATE_LIMIT`), as is
+  the API as a whole (`API_RATE_LIMIT`). Failed sign-ins give the same message
+  whether or not the account exists.
+- **Passwords.** scrypt-hashed. New passwords need at least 12 characters and are
+  checked against the email name and common choices. With
+  `SEED_FORCE_PASSWORD_CHANGE=1` (the production default) every seeded user must
+  choose their own password at first sign-in.
+- **HTTP.** `helmet` security headers; credentialed CORS only from `WEB_ORIGIN`,
+  which the API requires in production.
+- **Behind a proxy.** Set `TRUST_PROXY` to the number of proxy hops so rate limits
+  and session records see real client IPs. Serve the web app and the API from the
+  same site (for example `erp.example.com` and `api.erp.example.com`, or one host
+  with the API under `/api`), or the `SameSite=Strict` cookie will not be sent.
+
+### Operations
+
+- **Health.** `GET /api/v1/health` returns `200` when the API can reach the
+  database and `503` when it cannot. Docker's health checks use it; point uptime
+  monitoring at it too.
+- **Logs.** In production the API writes one JSON object per line, including one
+  line per request (method, path, status, duration, user id). Request bodies,
+  query strings and headers are never logged.
+- **Backups.** The `backup` service takes a verified nightly dump. See
+  [docs/operations/backup-and-restore.md](docs/operations/backup-and-restore.md)
+  for checking, rehearsing and restoring, and copy the backup directory off the
+  server.
+
 ### Before going live
 
-- **Passwords.** The reference dataset ships `demo123` for all ten accounts.
-  They are scrypt-hashed at seed time (plaintext never reaches the database),
-  but they are still public knowledge — set `SEED_PASSWORD`, or rotate every
-  account immediately after first boot.
-- **Identity.** Tokens are HMAC-signed (`auth.service.ts`). To move to a
-  corporate IdP, replace `verify()` with the provider's token introspection;
-  the guard and role gates above it are unchanged.
-- **Backups.** Nothing here backs up the `pgdata` volume. Schedule `pg_dump`.
+- **Passwords.** The reference dataset ships `demo123` for all ten accounts. Keep
+  `SEED_FORCE_PASSWORD_CHANGE=1` so each user replaces it at first sign-in, and set
+  `SEED_PASSWORD` so the interim password is not public knowledge.
+- **HTTPS.** Terminate TLS in a reverse proxy and keep `COOKIE_SECURE=true`.
+- **Identity.** To move to a corporate identity provider, replace
+  `AuthService.authenticate()` (`apps/api/src/auth/auth.service.ts`) with the
+  provider's token validation; the guard and role gates above it are unchanged.
+- **Backups.** Rehearse a restore once, and confirm dumps are copied off the server.
 
 ## License
 
