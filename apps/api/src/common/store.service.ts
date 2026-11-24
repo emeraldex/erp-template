@@ -436,6 +436,7 @@ export class StoreService implements OnModuleInit {
       data: {
         id: inv.id, stream: inv.stream, jobId: inv.jobId ?? null, customer: inv.customer,
         period: inv.period ?? null, amountMYR: inv.amountMYR, gstRate: inv.gstRate,
+        taxLabel: inv.taxLabel ?? 'GST',
         gstMYR: inv.gstMYR, totalMYR: inv.totalMYR, status: inv.status,
         statusSince: new Date(inv.statusSince), outstanding: inv.outstanding,
         raisedBy: inv.raisedBy, branch: fromBranch(inv.branch),

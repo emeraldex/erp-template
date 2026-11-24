@@ -273,7 +273,8 @@ export interface Invoice {
   customer: string;           // CPU (Finance) / MRA / ACD
   period?: string;            // PBC billing month, e.g. "2026-07"
   amountMYR: number;
-  gstRate: number;            // 6% — configurable (FR-13, §7.2)
+  gstRate: number;            // tax %, fixed at drafting from settings (FR-13)
+  taxLabel?: string;          // GST / SST … printed on documents
   gstMYR: number;             // computed
   totalMYR: number;           // amount + GST
   status: InvoiceStatus;

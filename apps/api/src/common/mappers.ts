@@ -216,6 +216,7 @@ export function mapInvoice(r: any): Invoice {
     period: r.period ?? undefined,
     amountMYR: num(r.amountMYR),
     gstRate: num(r.gstRate),
+    taxLabel: r.taxLabel ?? 'GST',
     gstMYR: num(r.gstMYR),
     totalMYR: num(r.totalMYR),
     status: r.status,
