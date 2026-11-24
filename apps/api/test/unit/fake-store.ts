@@ -1,7 +1,7 @@
 import {
   DEMAND_TRANSITIONS, INVOICE_STREAMS, INVOICE_TRANSITIONS, JOB_TRANSITIONS, OV_TRANSITIONS, SLA_RULES,
 } from '../../src/common/workflow-config';
-import type { AuditEntry, Demand, Invoice, Job, OvRepair, Partner, Role } from '../../src/common/types';
+import type { AuditEntry, Demand, FodIncident, Invoice, Job, OvRepair, Partner, Role, Tool } from '../../src/common/types';
 import type { StoreService } from '../../src/common/store.service';
 
 /**
@@ -21,6 +21,8 @@ export class FakeStore {
   ovsById = new Map<string, OvRepair>();
   partnersById = new Map<string, Partner>();
   invoicesById = new Map<string, Invoice>();
+  fodById = new Map<string, FodIncident>();
+  toolsByTag = new Map<string, Tool>();
   saves = 0;
   private seq = 0;
 
@@ -35,10 +37,14 @@ export class FakeStore {
   async partners() { return [...this.partnersById.values()]; }
   async invoice(id: string) { return this.invoicesById.get(id) ?? null; }
   async invoices() { return [...this.invoicesById.values()]; }
+  async ovRepair(id: string) { return this.ovsById.get(id) ?? null; }
+  async fodIncident(id: string) { return this.fodById.get(id) ?? null; }
+  async tool(tag: string) { return this.toolsByTag.get(tag) ?? null; }
 
   async nextJobId() { return `PS-TEST-${++this.seq}`; }
   async nextOvId() { return `OV-TEST-${++this.seq}`; }
   async nextInvoiceId() { return `INV-TEST-${++this.seq}`; }
+  async nextFodId() { return `FOD-TEST-${++this.seq}`; }
   async nextPartnerId(type: string) { return `${type === 'SUPPLIER' ? 'SUP' : 'SUB'}-TEST-${++this.seq}`; }
 
   newJob(j: Job) { this.jobsById.set(j.id, j); return j; }
@@ -46,6 +52,7 @@ export class FakeStore {
   newOv(o: OvRepair) { this.ovsById.set(o.id, o); return o; }
   newPartner(p: Partner) { this.partnersById.set(p.id, p); return p; }
   newInvoice(i: Invoice) { this.invoicesById.set(i.id, i); return i; }
+  newFod(f: FodIncident) { this.fodById.set(f.id, f); return f; }
 
   async save() { this.saves++; }
 
