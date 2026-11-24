@@ -50,6 +50,11 @@ services:
       # Hops of reverse proxy in front of the API (1 for a single nginx/Caddy).
       TRUST_PROXY: ${TRUST_PROXY:-1}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      # Multi-client: refuse addresses that belong to no organisation.
+      TENANT_STRICT_HOSTS: ${TENANT_STRICT_HOSTS:-false}
+      DEFAULT_TENANT_NAME: ${DEFAULT_TENANT_NAME:-Default}
+      # The API reference at /api/docs is off in production unless enabled.
+      API_DOCS: ${API_DOCS:-false}
       # Attachments: local volume by default, or any S3-compatible bucket.
       STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
       ATTACHMENTS_DIR: /app/data/attachments
@@ -124,9 +129,24 @@ services:
     entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
     networks: [backend]
 
+  # Optional TLS reverse proxy (profile "proxy"): see deploy/Caddyfile.example.
+  proxy:
+    image: caddy:2-alpine
+    profiles: [proxy]
+    restart: unless-stopped
+    depends_on: [api, web]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    networks: [frontend]
+
 volumes:
   pgdata:
   attachments:
+  caddy-data:
 
 networks:
   # db is reachable only from api; web never touches it.

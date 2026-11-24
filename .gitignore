@@ -44,3 +44,6 @@ backups/
 
 # Test coverage reports
 coverage/
+
+# Local reverse proxy config (copy of deploy/Caddyfile.example)
+deploy/Caddyfile

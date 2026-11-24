@@ -5,6 +5,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser = require('cookie-parser');
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { mountOpenApi } from './openapi';
 import { hostOf, TenantRegistry } from './tenancy/tenant-registry';
 
 /** Browser origins allowed to call the API with credentials (from WEB_ORIGIN). */
@@ -49,6 +50,7 @@ async function bootstrap() {
     logger: new ConsoleLogger({ json: process.env.NODE_ENV === 'production', prefix: 'erp-api' }),
   });
   configureApp(app);
+  if (mountOpenApi(app)) new Logger('Bootstrap').log('API reference at /api/docs');
   // Run Prisma's onModuleDestroy on SIGTERM so the pool drains on `docker stop`.
   app.enableShutdownHooks();
   const port = Number(process.env.PORT || 4000);
