@@ -5,6 +5,7 @@ export type Kind = 'JOB' | 'DEMAND' | 'OV' | 'INVOICE';
 export const KINDS: Kind[] = ['JOB', 'DEMAND', 'OV', 'INVOICE'];
 
 export type Tone = 'neutral' | 'info' | 'warn' | 'good' | 'bad';
+export const TONES: Tone[] = ['neutral', 'info', 'warn', 'good', 'bad'];
 
 /**
  * What a status means, independent of its name. Dashboards, locking, archiving
@@ -75,6 +76,7 @@ export interface Modules {
   tools: boolean; training: boolean; invoicing: boolean; registers: boolean;
   assets: boolean; pm: boolean;
 }
+export type ModuleKey = keyof Modules;
 export const MODULE_KEYS: (keyof Modules)[] = ['procurement', 'vendorRepair', 'priority', 'incidents', 'tools', 'training', 'invoicing', 'registers', 'assets', 'pm'];
 
 /** Dictionary kinds a pack fills in (besides statuses and roles). */

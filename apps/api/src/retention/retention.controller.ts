@@ -1,7 +1,7 @@
 import { BadRequestException, Controller, Get, HttpCode, Post, Query, Res, StreamableFile, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
-import { Roles } from '../auth/roles.decorator';
+import { Requires } from '../auth/roles.decorator';
 import { toCsv, toXlsx } from '../reports/tabular';
 import { RetentionService } from './retention.service';
 
@@ -11,7 +11,7 @@ export class RetentionController {
   constructor(private readonly svc: RetentionService) {}
 
   @Get('report')
-  @Roles('QUALITY', 'MM')
+  @Requires('reports.audit')
   async report(@Query('format') format: string | undefined, @Res({ passthrough: true }) res: Response) {
     const fmt = format ?? 'xlsx';
     if (fmt !== 'xlsx' && fmt !== 'csv') throw new BadRequestException('format must be xlsx or csv');
@@ -26,7 +26,7 @@ export class RetentionController {
   /** Archive eligible jobs now instead of waiting for the schedule. */
   @Post('archive')
   @HttpCode(200)
-  @Roles('ADMIN')
+  @Requires('org.admin')
   archive() {
     return this.svc.archiveClosedJobs();
   }

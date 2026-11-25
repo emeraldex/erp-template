@@ -6,6 +6,7 @@ import { authConfig } from './auth.config';
 import { AllowPendingPassword } from './auth.decorators';
 import { AuthGuard } from './auth.guard';
 import { AuthService, AuthUser, profile } from './auth.service';
+import { StoreService } from '../common/store.service';
 
 class LoginDto {
   @IsEmail() @MaxLength(254) email: string;
@@ -30,7 +31,12 @@ type AuthedRequest = Request & { user: AuthUser };
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(private readonly auth: AuthService, private readonly store: StoreService) {}
+
+  /** The profile plus what this person may do, so the screen shows only their actions. */
+  private withCapabilities(user: AuthUser) {
+    return { ...profile(user), capabilities: this.store.capabilitiesOf(user.role) };
+  }
 
   @Post('login')
   @HttpCode(200)
@@ -40,7 +46,7 @@ export class AuthController {
       ip: req.ip, userAgent: req.headers['user-agent'],
     });
     res.cookie(authConfig.cookieName, token, { ...cookieOptions(), expires: expiresAt });
-    return { user: profile(user), expiresAt, ...(dto.tokenInBody ? { token } : {}) };
+    return { user: this.withCapabilities(user), expiresAt, ...(dto.tokenInBody ? { token } : {}) };
   }
 
   @Post('logout')
@@ -57,7 +63,7 @@ export class AuthController {
   @UseGuards(AuthGuard)
   @AllowPendingPassword()
   me(@Req() req: AuthedRequest) {
-    return { user: profile(req.user) };
+    return { user: this.withCapabilities(req.user) };
   }
 
   @Post('change-password')
@@ -67,6 +73,6 @@ export class AuthController {
   @Throttle({ default: { limit: authConfig.loginRateLimit, ttl: 60_000 } })
   async changePassword(@Body() dto: ChangePasswordDto, @Req() req: AuthedRequest) {
     const user = await this.auth.changePassword(req.user, dto.currentPassword, dto.newPassword);
-    return { user: profile(user) };
+    return { user: this.withCapabilities(user) };
   }
 }

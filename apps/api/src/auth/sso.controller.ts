@@ -6,7 +6,7 @@ import { TenantRegistry } from '../tenancy/tenant-registry';
 import { authConfig } from './auth.config';
 import { AuthGuard } from './auth.guard';
 import { AuthService, AuthUser } from './auth.service';
-import { Roles } from './roles.decorator';
+import { Requires } from './roles.decorator';
 import { SsoConfig, SsoConfigService } from './sso-config.service';
 import { SsoError, SsoService } from './sso.service';
 import { configuredOrigins, isAllowedWebOrigin } from './web-origin';
@@ -44,14 +44,14 @@ export class SsoController {
 
   @Get('settings')
   @UseGuards(AuthGuard)
-  @Roles('ADMIN')
+  @Requires('org.admin')
   async settings(@Req() req: Request) {
     return { ...(await this.config.getPublic()), callbackUrl: this.callbackUrl(req) };
   }
 
   @Put('settings')
   @UseGuards(AuthGuard)
-  @Roles('ADMIN')
+  @Requires('org.admin')
   async save(@Body() body: Partial<SsoConfig> & { clientSecret?: string | null }, @Req() req: Request & { user: AuthUser }) {
     const saved = await this.config.save(body ?? {}, req.user.name, async (issuer) => { await this.sso.discover(issuer); });
     return { ...saved, callbackUrl: this.callbackUrl(req) };

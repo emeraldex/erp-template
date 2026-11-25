@@ -5,7 +5,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { AuthUser } from '../auth/auth.service';
-import { Roles } from '../auth/roles.decorator';
+import { Requires } from '../auth/roles.decorator';
 import { AttachmentsService, maxBytes } from './attachments.service';
 
 /** RFC 6266/5987 Content-Disposition that survives non-ASCII names. */
@@ -35,7 +35,7 @@ export class AttachmentsController {
   }
 
   @Get('file/:id/verify')
-  @Roles('QUALITY', 'MM')
+  @Requires('reports.audit')
   verify(@Param('id') id: string) {
     return this.svc.verify(id);
   }

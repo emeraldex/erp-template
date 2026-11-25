@@ -1,10 +1,11 @@
 import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
-import { Roles } from '../auth/roles.decorator';
+import { InModule, Requires } from '../auth/roles.decorator';
 import { InvoicingService } from './invoicing.service';
 import { Branch, InvoiceStatus, InvoiceStream } from '../common/types';
 
 @Controller('invoicing')
+@InModule('invoicing')
 @UseGuards(AuthGuard)
 export class InvoicingController {
   constructor(private readonly svc: InvoicingService) {}
@@ -25,7 +26,7 @@ export class InvoicingController {
   }
 
   @Post()
-  @Roles('BILLING', 'PCE', 'FINANCE')
+  @Requires('invoices.create')
   create(
     @Body() dto: { stream: InvoiceStream; jobId?: string; customer?: string; period?: string; branch?: Branch; amountMYR?: number },
     @Req() req: any,

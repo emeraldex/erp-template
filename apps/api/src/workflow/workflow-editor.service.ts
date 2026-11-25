@@ -1,5 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { createHash, randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
+import { versionOf } from './version';
+import { DictionaryService } from './dictionary.service';
 import { PrismaService } from '../common/prisma.service';
 import { StoreService } from '../common/store.service';
 import type { Role } from '../common/types';
@@ -8,15 +10,14 @@ import { Kind, KINDS, validateTransitions, WorkflowContext } from './workflow-ru
 
 type Actor = { name: string; role: Role };
 
-/** Fingerprint of a config list, for optimistic concurrency between editors. */
-export const versionOf = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex').slice(0, 16);
+export { versionOf };
 
 const SLA_ENTITIES = ['JOB', 'DEMAND', 'OV', 'INVOICE'] as const;
 
 /** FR-02 made editable: workflow rules as data, changed by people with change control. */
 @Injectable()
 export class WorkflowEditorService {
-  constructor(private readonly prisma: PrismaService, private readonly store: StoreService) {}
+  constructor(private readonly prisma: PrismaService, private readonly store: StoreService, private readonly dictionaries: DictionaryService) {}
 
   private transitionsOf(kind: Kind) {
     return kind === 'JOB' ? this.store.jobTransitions : kind === 'DEMAND' ? this.store.demandTransitions
@@ -55,6 +56,7 @@ export class WorkflowEditorService {
       }),
       sla: { rules: this.store.slaRules, version: versionOf(this.store.slaRules) },
       streams: this.store.invoiceStreams.map((s) => ({ ...s, version: versionOf(s) })),
+      dictionaries: this.dictionaries.snapshot(),
     };
   }
 

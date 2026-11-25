@@ -6,8 +6,10 @@ import type { Request } from 'express';
 import { AuthService, AuthUser } from './auth.service';
 import { authConfig } from './auth.config';
 import { ALLOW_PENDING_PASSWORD_KEY } from './auth.decorators';
-import { ROLES_KEY } from './roles.decorator';
-import { Role } from '../common/types';
+import { CAPABILITIES_KEY, MODULE_KEY } from './roles.decorator';
+import { StoreService } from '../common/store.service';
+import { SettingsService } from '../settings/settings.service';
+import type { Capability, ModuleKey } from '../packs/types';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -21,7 +23,12 @@ export function readToken(req: Request): { token: string; via: 'cookie' | 'beare
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private readonly auth: AuthService, private readonly reflector: Reflector) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly reflector: Reflector,
+    private readonly store: StoreService,
+    private readonly settings: SettingsService,
+  ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<Request & { user?: AuthUser }>();
@@ -42,9 +49,15 @@ export class AuthGuard implements CanActivate {
       throw new ForbiddenException({ statusCode: 403, code: 'PASSWORD_CHANGE_REQUIRED', message: 'Change your password to continue' });
     }
 
-    const roles = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, [ctx.getHandler(), ctx.getClass()]);
-    if (roles?.length && !roles.includes(user.role) && user.role !== 'ADMIN') {
-      throw new ForbiddenException(`Requires role: ${roles.join(' | ')}`);
+    const module = this.reflector.getAllAndOverride<ModuleKey>(MODULE_KEY, [ctx.getHandler(), ctx.getClass()]);
+    if (module && !this.settings.modules[module]) {
+      throw new ForbiddenException({ statusCode: 403, code: 'MODULE_OFF', message: `The ${module} module is switched off for this organisation` });
+    }
+
+    const needed = this.reflector.getAllAndOverride<Capability[]>(CAPABILITIES_KEY, [ctx.getHandler(), ctx.getClass()]);
+    if (needed?.length) {
+      const held = this.store.capabilitiesOf(user.role);
+      if (!needed.some((c) => held.includes(c))) throw new ForbiddenException(`Requires permission: ${needed.join(' | ')}`);
     }
     return true;
   }

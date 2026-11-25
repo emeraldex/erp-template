@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
-import { Roles } from '../auth/roles.decorator';
+import { Requires } from '../auth/roles.decorator';
 import { DashboardService } from './dashboard.service';
 import { StoreService } from '../common/store.service';
 import { SettingsService } from '../settings/settings.service';
@@ -51,7 +51,7 @@ export class DashboardController {
   /** Change a rule at runtime — no redeploy. Now persisted, so it survives one. */
   @Patch('config/sla/:id')
   @UseGuards(AuthGuard)
-  @Roles('ADMIN', 'QUALITY')
+  @Requires('workflow.edit')
   patchSla(@Param('id') id: string, @Body() b: { days: number }) {
     return this.store.patchSla(id, b?.days);
   }
