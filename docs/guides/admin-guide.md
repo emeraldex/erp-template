@@ -29,14 +29,17 @@ Run these inside the API container (`docker compose exec api …`):
 node dist/tenants-cli.js create acme --name "Acme Aero Services" --host acme.erp.example.com --admin-email it@acme.example --admin-name "Acme IT"
 ```
 
-This creates the schema, applies migrations, loads the standard workflow and
-prints a **temporary password** for the first administrator — shown once.
-Add `--demo` instead of `--admin-email` for a demonstration organisation with
-sample data and ten demo users (password `demo123`).
+This creates the schema, applies migrations, loads a sector pack and prints a
+**temporary password** for the first administrator — shown once. Add
+`--pack general|facilities|fleet|industrial|medical` to start from another
+sector than aviation (see [Setting up for any sector](sectors.md)). Add
+`--demo` instead of `--admin-email` for a demonstration organisation with
+sample data and a demo user per role (password `demo123`).
 
 | Command | What it does |
 |---|---|
 | `list` | All organisations, their schema and addresses |
+| `packs` | The sector packs an organisation can start from |
 | `set-hosts acme acme.erp.example.com erp.acme.example` | Change an organisation's addresses |
 | `suspend acme` / `activate acme` | Block / restore access (data kept) |
 | `migrate-all` | Apply migrations everywhere (runs automatically on start) |
@@ -63,11 +66,18 @@ temporary password and must choose a new one. Then, in order:
 3. **Users** — add each member of staff with their role and branch. Each gets a
    temporary password to pass on securely; they must change it at first
    sign-in. Deactivate leavers rather than deleting them: their history stays.
-4. **Workflow editor** — adjust who owns each step, mandatory fields, SLA
-   timers and invoicing document sets to match the client's procedures. Steps
-   marked SYSTEM drive automatic actions and cannot be removed. Every change is
-   logged with the full before and after.
-5. **Single sign-on** (optional) — below.
+4. **Settings → Your sector** — the words the screens use, the modules the
+   client needs, and work-order numbering.
+5. **Workflow editor** — adjust statuses and lists, who owns each step,
+   mandatory fields, step actions, SLA timers and invoicing document sets to
+   match the client's procedures; administrators also set what each role may
+   do under *Roles & permissions*. Fields an action reads are marked NEEDED
+   and must stay mandatory. Every change is logged with the full before and
+   after.
+6. **Assets and preventive maintenance** (if the modules are on) — load the
+   asset register and its meters, then create schedules; work orders are
+   raised automatically as they fall due.
+7. **Single sign-on** (optional) — below.
 
 ## 4. Single sign-on
 

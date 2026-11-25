@@ -38,7 +38,12 @@ Browsers use the `erp_session` cookie instead and must send
 
 ## Worked examples
 
-Register a job (role STORES):
+Every organisation keeps its own statuses, lists and fields, so read
+`GET /config` first: it lists the statuses of each workflow (with their
+*phase*), every step and the fields it needs, and the organisation's lists
+(`dictionary.site`, `dictionary.category`, `dictionary.assetType`…).
+
+Register a job (needs the `jobs.register` permission — STORES in the aviation pack):
 
 ```bash
 curl -s https://acme.erp.example.com/api/v1/jobs -H "Authorization: Bearer $TOKEN" \
@@ -53,6 +58,22 @@ that step requires (`GET /config` lists every step and its fields):
 curl -s -X PATCH https://acme.erp.example.com/api/v1/jobs/PS-2026-0414/transition \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"to":"AWAITING_TDI","fields":{"f219Ref":"F219-2026-0414"}}'
+```
+
+In other sectors the same calls apply with that organisation's keys — for
+example a work order raised against an asset, which fills in what and where:
+
+```bash
+curl -s https://fleet.erp.example.com/api/v1/jobs -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"assetId":"AST-2026-0003","category":"SERVICE","originUnit":"Deliveries"}'
+```
+
+Record a meter reading (meter-based maintenance that falls due is raised at once; the
+response lists the work orders raised):
+
+```bash
+curl -s https://fleet.erp.example.com/api/v1/assets/AST-2026-0003/meters/ODOMETER/readings \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"value":58210}'
 ```
 
 Attach a signed form:
@@ -76,7 +97,7 @@ Errors are JSON: `{"statusCode": 400, "message": "…"}`. The ones to handle:
 |---|---|
 | 400 | The request breaks a rule; `message` says which (e.g. a missing mandatory field) |
 | 401 | Not signed in, session ended, or the token belongs to another organisation |
-| 403 | Your role does not own this step; or `code: "PASSWORD_CHANGE_REQUIRED"` / `"SSO_REQUIRED"` |
+| 403 | Your role does not own this step or lacks the permission; `code: "MODULE_OFF"` when the organisation switched that module off; or `"PASSWORD_CHANGE_REQUIRED"` / `"SSO_REQUIRED"` |
 | 404 | No such record in this organisation |
 | 409 | Someone changed the record first — reload and retry |
 | 429 | Too many requests from your address — back off and retry |
