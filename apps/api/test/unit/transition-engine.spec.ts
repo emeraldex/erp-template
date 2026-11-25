@@ -26,7 +26,7 @@ describe('applyTransition (FR-02 … FR-05)', () => {
   it('rejects a role that does not own the stage, naming the owners (FR-03)', () => {
     const job = makeJob();
     expect(() => applyTransition(job, rules, 'AWAITING_TDI', { f219Ref: 'F219-1' }, actor('WORKSHOP')))
-      .toThrow(new ForbiddenException('Stage owned by: STORES (QP process owner) — your role WORKSHOP may not set this status'));
+      .toThrow(new ForbiddenException('Stage owned by: STORES (process owner) — your role WORKSHOP may not set this status'));
     expect(job.status).toBe('REGISTERED');
     expect(job.audit).toHaveLength(0);
   });

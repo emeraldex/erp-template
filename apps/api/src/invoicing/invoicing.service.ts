@@ -77,7 +77,7 @@ export class InvoicingService {
 
     if (job) {
       job.invoiceIds = [...(job.invoiceIds ?? []), inv.id];
-      job.audit.push(this.store.audit(actor.name, actor.role, `Invoice ${inv.id} opened (${def.label}, QP.51)`));
+      job.audit.push(this.store.audit(actor.name, actor.role, `Invoice ${inv.id} opened (${def.label}${this.store.procedureRef(', QP.51')})`));
       await this.store.save(job, inv);
     } else {
       await this.store.save(inv);

@@ -40,10 +40,13 @@ export class DemandsService {
         const bypass = !!(p.bypassField && f[p.bypassField as string]);
         const min = Number(p.min ?? 3);
         if (!bypass && dm.quotations.length < min) {
-          throw new BadRequestException(
-            `QP.14 requires a minimum of ${min === 3 ? 'three' : min} quotations (${dm.quotations.length} received). ` +
-            'Record more quotations, or record a local-purchase approval (Borang Kelulusan Pembelian F241).',
-          );
+          const word = ['zero', 'one', 'two', 'three', 'four', 'five'][min] ?? String(min);
+          const bypassLabel = rule?.requires.find((r) => r.key === p.bypassField)?.label;
+          throw new BadRequestException(this.store.packId() === 'aviation'
+            ? `QP.14 requires a minimum of ${word} quotations (${dm.quotations.length} received). ` +
+              'Record more quotations, or record a local-purchase approval (Borang Kelulusan Pembelian F241).'
+            : `This purchase needs a minimum of ${word} quotations (${dm.quotations.length} received). Record more quotations` +
+              (p.bypassField ? `, or record a single-source approval${bypassLabel ? ` (${bypassLabel})` : ''}.` : '.'));
         }
         const selected = p.selectionField ? f[p.selectionField as string] : undefined;
         if (selected && !bypass && !dm.quotations.some((q) => q.supplierId === selected)) {

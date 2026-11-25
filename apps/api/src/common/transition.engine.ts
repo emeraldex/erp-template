@@ -29,7 +29,7 @@ export function applyTransition<S extends string>(
   }
   if (actor.role !== 'ADMIN' && !rule.roles.includes(actor.role)) {
     throw new ForbiddenException(
-      `Stage owned by: ${rule.roles.join(' | ')} (QP process owner) — your role ${actor.role} may not set this status`,
+      `Stage owned by: ${rule.roles.join(' | ')} (process owner) — your role ${actor.role} may not set this status`,
     );
   }
   const missing = rule.requires.filter((f) => !fields?.[f.key]?.toString().trim());

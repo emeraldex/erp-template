@@ -12,6 +12,11 @@ const str = (v: unknown) => (typeof v === 'string' ? v : v === undefined || v ==
 export class JobsService {
   constructor(private readonly store: StoreService, private readonly settings: SettingsService) {}
 
+  /** Aviation keeps its COL (AOG/ROA column) wording; other sectors get plain words. */
+  private get aviation(): boolean {
+    return this.store.packId() === 'aviation';
+  }
+
   list(archived: 'exclude' | 'include' | 'only' = 'exclude'): Promise<Job[]> {
     return this.store.jobs(archived);
   }
@@ -43,7 +48,7 @@ export class JobsService {
       statusSince: now,
       demandIds: [],
       records: [],
-      audit: [this.store.audit(actor.name, actor.role, 'Job registered — receiving inspection per QP.20', {
+      audit: [this.store.audit(actor.name, actor.role, `Job registered${this.store.procedureRef(' — receiving inspection per QP.20')}`, {
         partNo: dto.partNo, serialNo: dto.serialNo, originUnit: dto.originUnit,
       })],
     };
@@ -54,7 +59,7 @@ export class JobsService {
 
   private assertEditable(job: Job): void {
     if (job.archivedAt) throw new BadRequestException('Job is archived — read-only (FR-12)');
-    if (this.store.isFinal('JOB', job.status)) throw new BadRequestException('Job is closed — editing locked (QP.44 stage 10)');
+    if (this.store.isFinal('JOB', job.status)) throw new BadRequestException(`Job is closed — editing locked${this.store.procedureRef(' (QP.44 stage 10)')}`);
   }
 
   async transition(id: string, to: JobStatus, fields: Record<string, string>, actor: Actor): Promise<Job> {
@@ -116,9 +121,9 @@ export class JobsService {
     actor: Actor,
   ): Promise<Job> {
     const job = await this.get(id);
-    if (this.store.isFinal('JOB', job.status)) throw new BadRequestException('Job is closed — priority cannot be raised (QP.44 stage 10)');
-    if (job.priority?.state === 'OPEN') throw new BadRequestException(`Job already flagged ${job.priority.type} (COL ${job.priority.colRef})`);
-    if (!dto.colRef?.trim()) throw new BadRequestException('COL AOG/ROA column reference is required');
+    if (this.store.isFinal('JOB', job.status)) throw new BadRequestException(`Job is closed — priority cannot be raised${this.store.procedureRef(' (QP.44 stage 10)')}`);
+    if (job.priority?.state === 'OPEN') throw new BadRequestException(`Job already flagged ${job.priority.type} (${this.aviation ? 'COL ' : 'ref '}${job.priority.colRef})`);
+    if (!dto.colRef?.trim()) throw new BadRequestException(this.aviation ? 'COL AOG/ROA column reference is required' : 'A priority reference (call log / ticket no.) is required');
     if (!this.store.has('priority', dto.type)) throw new BadRequestException(`Unknown priority ${dto.type}`);
     if (this.store.dict('route', true).length && !this.store.has('route', dto.route)) throw new BadRequestException(`Unknown route ${dto.route}`);
 
@@ -134,12 +139,12 @@ export class JobsService {
       raisedBy: actor.name,
       edd: dto.edd,
       remark: dto.remark,
-      audit: [this.store.audit(actor.name, actor.role, `${dto.type} raised on COL — expedite ${dto.route} route`, {
+      audit: [this.store.audit(actor.name, actor.role, `${dto.type} raised${this.aviation ? ' on COL' : ''} — expedite ${dto.route} route`, {
         colRef: dto.colRef, type: dto.type, route: dto.route, quantity: String(dto.quantity ?? 1),
         ...(dto.suffixK ? { suffixK: 'K' } : {}),
       })],
     };
-    job.audit.push(this.store.audit(actor.name, actor.role, `Priority ${dto.type} raised (COL ${dto.colRef}) — QP.56 expedite ${dto.route}`));
+    job.audit.push(this.store.audit(actor.name, actor.role, this.aviation ? `Priority ${dto.type} raised (COL ${dto.colRef}) — QP.56 expedite ${dto.route}` : `Priority ${dto.type} raised (ref ${dto.colRef}) — expedite ${dto.route}`));
     await this.store.save(job);
     return job;
   }
@@ -150,7 +155,7 @@ export class JobsService {
     if (dto.route) job.priority.route = dto.route;
     if (dto.edd !== undefined) job.priority.edd = dto.edd;
     if (dto.remark !== undefined) job.priority.remark = dto.remark;
-    job.priority.audit.push(this.store.audit(actor.name, actor.role, 'COL AOG/ROA remark updated', {
+    job.priority.audit.push(this.store.audit(actor.name, actor.role, this.aviation ? 'COL AOG/ROA remark updated' : 'Priority updated', {
       ...(dto.route ? { route: dto.route } : {}), ...(dto.edd ? { edd: dto.edd } : {}), ...(dto.remark ? { remark: dto.remark } : {}),
     }));
     await this.store.save(job);
@@ -163,8 +168,8 @@ export class JobsService {
     job.priority.state = 'CLOSED';
     job.priority.closedAt = new Date().toISOString();
     job.priority.closeReason = dto.reason;
-    const label = dto.reason === 'DELIVERED' ? 'delivered' : 'downgraded to normal by CAO/CPU';
-    job.priority.audit.push(this.store.audit(actor.name, actor.role, `COL AOG/ROA column set to 'closed' — ${label}`, dto.note ? { note: dto.note } : undefined));
+    const label = dto.reason === 'DELIVERED' ? 'delivered' : `downgraded to normal${this.aviation ? ' by CAO/CPU' : ''}`;
+    job.priority.audit.push(this.store.audit(actor.name, actor.role, this.aviation ? `COL AOG/ROA column set to 'closed' — ${label}` : `Priority closed — ${label}`, dto.note ? { note: dto.note } : undefined));
     job.audit.push(this.store.audit(actor.name, actor.role, `Priority ${job.priority.type} closed (${label})`));
     await this.store.save(job);
     return job;

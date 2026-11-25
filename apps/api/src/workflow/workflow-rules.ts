@@ -12,6 +12,8 @@ export interface WorkflowContext {
   initial: string;
   roles: string[];
   locations: string[];
+  /** Final statuses, which need no way out. */
+  final?: string[];
 }
 
 const KEY = /^[a-zA-Z][a-zA-Z0-9]{0,40}$/;
@@ -88,8 +90,9 @@ export function validateTransitions(kind: Kind, input: unknown, ctx: WorkflowCon
   const unreachable = statuses.filter((s) => !reach.has(s));
   if (unreachable.length) warnings.push(`Not reachable from ${ctx.initial}: ${unreachable.join(', ')}`);
   const exits = new Set(rules.map((r) => r.from));
-  const deadEnds = [...reach].filter((s) => !exits.has(s));
-  if (deadEnds.length) warnings.push(`No way out of: ${deadEnds.join(', ')} (fine for final statuses)`);
+  // Final statuses are meant to be dead ends; anything else that is one strands records.
+  const deadEnds = [...reach].filter((s) => !exits.has(s) && !ctx.final?.includes(s));
+  if (deadEnds.length) warnings.push(`No way out of: ${deadEnds.join(', ')}${ctx.final ? '' : ' (fine for final statuses)'}`);
 
   return { rules, errors, warnings };
 }

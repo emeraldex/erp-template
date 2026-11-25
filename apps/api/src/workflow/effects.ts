@@ -40,7 +40,7 @@ export const EFFECTS: EffectDef[] = [
   {
     type: 'raiseDemand', kind: 'JOB', label: 'Raise a parts demand', description: 'Creates a parts demand linked to this work order, at the demand workflow’s first status.',
     params: [
-      { name: 'refField', label: 'Demand number field', type: 'field', required: true },
+      { name: 'refField', label: 'Demand number field (leave empty to number automatically)', type: 'field' },
       { name: 'descriptionField', label: 'Part description field', type: 'field' },
       { name: 'partNoField', label: 'Part number field', type: 'field' },
       { name: 'qtyField', label: 'Quantity field', type: 'field' },

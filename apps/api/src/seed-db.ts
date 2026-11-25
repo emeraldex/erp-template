@@ -20,6 +20,7 @@ import {
   DEMANDS, FOD_INCIDENTS, INVOICES, JOBS, OV_REPAIRS, PARTNERS, TOOLS, TRAINING, USERS, WEEKLY_CLOSURES,
 } from './common/seed';
 import { DEFAULT_PACK, getPack } from './packs';
+import { seedPackDemo } from './packs/demo';
 import { DICT_KINDS, KINDS, type Pack } from './packs/types';
 import type { AuditEntry, FormRecord } from './common/types';
 
@@ -255,7 +256,7 @@ export async function seedReferenceData(prisma: Db): Promise<void> {
   );
 }
 
-/** CLI: seed DATABASE_URL's schema (?schema=, default public) if it has no users yet. */
+/** CLI: seed DATABASE_URL's schema (?schema=, default public) if it has no users yet, from SEED_PACK. */
 async function main(): Promise<void> {
   const { url, schema } = parseDatabaseUrl();
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }, { schema }) });
@@ -265,8 +266,11 @@ async function main(): Promise<void> {
       console.log(`Database already seeded (${existing} users) — nothing to do.`);
       return;
     }
-    await seedWorkflow(prisma);
-    await seedReferenceData(prisma);
+    // SEED_PACK picks the sector the default organisation starts from (aviation if unset).
+    const pack = getPack(process.env.SEED_PACK?.trim() || DEFAULT_PACK);
+    await seedWorkflow(prisma, pack);
+    if (pack.id === 'aviation') await seedReferenceData(prisma);
+    else await seedPackDemo(prisma, pack);
   } finally {
     await prisma.$disconnect();
   }

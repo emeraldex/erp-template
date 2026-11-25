@@ -41,7 +41,7 @@ export class JobCardService {
     const qr = await QRCode.toBuffer(url, { type: 'png', margin: 0, width: 300, errorCorrectionLevel: 'M' });
 
     doc.font('Helvetica').fontSize(7).fillColor('#666666').text(pdfText(company), m, m, { width: width - 2 * m });
-    doc.font('Helvetica-Bold').fontSize(8).fillColor('#111111').text('JOB CARD · QP.44', m, doc.y + 1);
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#111111').text(`JOB CARD${this.store.procedureRef(' · QP.44')}`, m, doc.y + 1);
 
     const qrSize = 96;
     doc.image(qr, width - m - qrSize, m, { width: qrSize, height: qrSize });

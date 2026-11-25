@@ -31,6 +31,7 @@ export class WorkflowEditorService {
       initial: this.store.initialStatus(kind),
       roles: this.store.dict('role', true).map((r) => r.key),
       locations: this.store.dict('location', true).map((l) => l.key),
+      final: this.store.finalStatuses(kind),
     };
   }
 

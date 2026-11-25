@@ -55,7 +55,7 @@ export class RegistersService {
 
   async jtpApprove(id: string, fields: { minuteRef: string }, actor: { name: string; role: Role }): Promise<Partner> {
     const p = await this.find(id);
-    if (p.status !== 'UNDER_EVALUATION') throw new BadRequestException('JTP approves after evaluation (QP.13 §3)');
+    if (p.status !== 'UNDER_EVALUATION') throw new BadRequestException(`Approval comes after evaluation${this.store.procedureRef(' (JTP, QP.13 §3)')}`);
     p.status = 'JTP_APPROVED';
     p.audit.push(this.store.audit(actor.name, actor.role, 'JTP Committee selection & MD approval minuted', fields));
     await this.store.save(p);
@@ -66,7 +66,7 @@ export class RegistersService {
     const p = await this.find(id);
     if (p.status !== 'JTP_APPROVED') throw new BadRequestException('Registration follows JTP approval');
     p.status = 'REGISTERED';
-    p.lists = fields.lists?.length ? fields.lists : [p.type === 'SUPPLIER' ? 'F224' : 'F229'];
+    p.lists = fields.lists?.length ? fields.lists : [this.store.packId() === 'aviation' ? (p.type === 'SUPPLIER' ? 'F224' : 'F229') : (p.type === 'SUPPLIER' ? 'APPROVED_SUPPLIERS' : 'APPROVED_CONTRACTORS')];
     p.rating = p.rating ?? 2;
     const next = new Date();
     next.setFullYear(next.getFullYear() + 3);
@@ -105,7 +105,7 @@ export class RegistersService {
     if (p.cars.length >= 2 && p.rating === 1) {
       p.status = 'DROPPED';
       p.lists = [];
-      p.audit.push(this.store.audit(actor.name, actor.role, 'Second CAR on Not-Suitable rating — deregistered from all lists (QP.13 §5.4)'));
+      p.audit.push(this.store.audit(actor.name, actor.role, `Second CAR on Not-Suitable rating — deregistered from all lists${this.store.procedureRef(' (QP.13 §5.4)')}`));
     }
     await this.store.save(p);
     return p;

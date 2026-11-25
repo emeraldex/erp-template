@@ -8,7 +8,7 @@ import { dictionaryRows } from '../../src/seed-db';
 /** The vocabulary lookups are pure, so the fake borrows the real ones. */
 const BORROWED = [
   'dict', 'dictionaryAll', 'has', 'statusKeys', 'initialStatus', 'finalStatuses', 'statusesInPhase', 'status',
-  'phaseOf', 'isFinal', 'statusMeta', 'dictMeta', 'label', 'capabilitiesOf', 'rolesWith',
+  'phaseOf', 'isFinal', 'statusMeta', 'dictMeta', 'label', 'capabilitiesOf', 'rolesWith', 'packId', 'procedureRef', 'focalPoint',
 ] as const;
 
 /**
@@ -25,6 +25,7 @@ export class FakeStore {
   dictionary = new Map<string, DictRow[]>();
 
   constructor(pack: Pack = AVIATION) {
+    this.packIdValue = pack.id;
     this.jobTransitions = structuredClone(pack.transitions.JOB);
     this.demandTransitions = structuredClone(pack.transitions.DEMAND);
     this.ovTransitions = structuredClone(pack.transitions.OV);
@@ -39,7 +40,10 @@ export class FakeStore {
     for (const m of BORROWED) (this as Record<string, unknown>)[m] = (StoreService.prototype as unknown as Record<string, unknown>)[m];
   }
 
-  cfg() { return { dictionary: this.dictionary }; }
+  packIdValue: string;
+  users = [{ name: 'Aisyah Rahman', role: 'ADMIN' }, { name: 'Qistina Yusof', role: 'QUALITY' }];
+
+  cfg() { return { dictionary: this.dictionary, packId: this.packIdValue, users: this.users }; }
 
   jobsById = new Map<string, Job>();
   demandsById = new Map<string, Demand>();

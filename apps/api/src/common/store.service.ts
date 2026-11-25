@@ -65,6 +65,10 @@ interface WorkflowConfig {
   invoiceStreams: InvoiceStreamDef[];
   slaRules: SlaRule[];
   dictionary: Map<string, DictRow[]>;
+  /** The sector pack the organisation started from. */
+  packId: string;
+  /** Active people and their roles, for routing (e.g. the incident focal point). */
+  users: { name: string; role: string }[];
   loadedAt: number;
 }
 
@@ -160,6 +164,25 @@ export class StoreService {
     return this.dict(kind).find((r) => r.key === key)?.label ?? key;
   }
 
+  /** The sector pack the organisation started from (aviation for older ones). */
+  packId(): string {
+    return this.cfg().packId;
+  }
+
+  /**
+   * A citation of the aviation procedures (e.g. " (QP.44 stage 10)"). Other
+   * sectors have their own procedures, so messages leave it out for them.
+   */
+  procedureRef(text: string): string {
+    return this.cfg().packId === 'aviation' ? text : '';
+  }
+
+  /** Who incidents are routed to: the first active person (not IT) allowed to manage them. */
+  focalPoint(): string {
+    const roles = this.rolesWith('incidents.manage').filter((r) => r !== ADMIN_ROLE);
+    return this.cfg().users.find((u) => roles.includes(u.role))?.name ?? 'Safety focal point';
+  }
+
   /** What a role may do; ADMIN may do everything. */
   capabilitiesOf(role: string): Capability[] {
     if (role === ADMIN_ROLE) return Object.keys(CAPABILITIES) as Capability[];
@@ -184,11 +207,13 @@ export class StoreService {
       await this.prisma.dictionaryEntry.createMany({ data: dictionaryRows(AVIATION).map((r) => ({ ...r, meta: r.meta as never })), skipDuplicates: true });
     }
     await this.backfillAviationActions();
-    const [rules, streams, sla, entries] = await Promise.all([
+    const [rules, streams, sla, entries, pack, focal] = await Promise.all([
       this.prisma.transitionRuleRow.findMany({ orderBy: { seq: 'asc' } }),
       this.prisma.invoiceStreamDef.findMany({ orderBy: { seq: 'asc' } }),
       this.prisma.slaRule.findMany({ orderBy: { seq: 'asc' } }),
       this.prisma.dictionaryEntry.findMany({ orderBy: [{ kind: 'asc' }, { seq: 'asc' }, { id: 'asc' }] }),
+      this.prisma.setting.findUnique({ where: { key: 'pack' } }),
+      this.prisma.user.findMany({ where: { deactivatedAt: null }, select: { name: true, role: true }, orderBy: { createdAt: 'asc' } }),
     ]);
     const dictionary = new Map<string, DictRow[]>();
     for (const e of entries) {
@@ -205,6 +230,9 @@ export class StoreService {
       invoiceStreams: streams.map(mapStream),
       slaRules: sla.map(mapSla),
       dictionary,
+      // Organisations from before packs existed ran the aviation configuration.
+      packId: ((pack?.value ?? {}) as { id?: string }).id ?? 'aviation',
+      users: focal,
       loadedAt: Date.now(),
     });
   }
