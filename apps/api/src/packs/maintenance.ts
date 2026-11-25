@@ -52,6 +52,8 @@ export interface MaintenanceOptions {
   dictionaries: Partial<Record<DictKind, Entry[]>>;
   /** Extra mandatory fields when work starts (e.g. a permit to work). */
   startRequires?: Field[];
+  /** Actions when work starts (e.g. record the odometer on the vehicle). */
+  startEffects?: TransitionRule['effects'];
   /** Extra mandatory fields when work is completed (e.g. readings taken). */
   completeRequires?: Field[];
   /** A separate inspection / test step before completion, with its mandatory fields. */
@@ -94,7 +96,7 @@ function jobWorkflow(o: MaintenanceOptions, modules: Modules) {
   const transitions: TransitionRule[] = [
     step('OPEN', 'ASSIGNED', 'Assign', 'Tugaskan', [HELPDESK, SUPERVISOR], [field('assignee', 'Assigned to')]),
     step('OPEN', 'CANCELLED', 'Cancel', 'Batal', [HELPDESK, SUPERVISOR], reason),
-    step('ASSIGNED', 'IN_PROGRESS', 'Start work', 'Mula kerja', [TECHNICIAN, SUPERVISOR], o.startRequires ?? []),
+    step('ASSIGNED', 'IN_PROGRESS', 'Start work', 'Mula kerja', [TECHNICIAN, SUPERVISOR], o.startRequires ?? [], o.startEffects ? { effects: o.startEffects } : {}),
     step('ASSIGNED', 'CANCELLED', 'Cancel', 'Batal', [SUPERVISOR], reason),
   ];
   if (modules.procurement) {

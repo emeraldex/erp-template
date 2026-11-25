@@ -1,7 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { AssetsService } from '../assets/assets.service';
+import { PmService } from '../assets/pm.service';
 import { StoreService } from '../common/store.service';
 import { applyTransition } from '../common/transition.engine';
-import { Branch, Job, JobStatus, PriorityType, RepairRoute, Role } from '../common/types';
+import { Branch, ChecklistItem, Job, JobStatus, PriorityType, RepairRoute, Role } from '../common/types';
 import { SettingsService } from '../settings/settings.service';
 import type { Effect } from '../workflow/effects';
 
@@ -10,7 +12,12 @@ const str = (v: unknown) => (typeof v === 'string' ? v : v === undefined || v ==
 
 @Injectable()
 export class JobsService {
-  constructor(private readonly store: StoreService, private readonly settings: SettingsService) {}
+  constructor(
+    private readonly store: StoreService,
+    private readonly settings: SettingsService,
+    @Optional() private readonly assets?: AssetsService,
+    @Optional() private readonly pm?: PmService,
+  ) {}
 
   /** Aviation keeps its COL (AOG/ROA column) wording; other sectors get plain words. */
   private get aviation(): boolean {
@@ -28,10 +35,27 @@ export class JobsService {
   }
 
   /** Register a work order at the JOB workflow's first status (QP.44 stage 1 in the aviation pack). */
-  async register(dto: {
-    component: string; partNo: string; serialNo: string;
-    category: string; originUnit: string; repairUnit: Branch;
+  async register(input: {
+    component?: string; partNo?: string; serialNo?: string;
+    category: string; originUnit: string; repairUnit?: Branch;
+    assetId?: string; jobType?: string;
   }, actor: Actor): Promise<Job> {
+    const { assetId, jobType: requestedType, ...rest } = input;
+    // A registered asset fills in what the job is about and where.
+    const asset = assetId ? await this.assets?.brief(assetId) : undefined;
+    if (assetId && !asset) throw new BadRequestException(`Asset ${assetId} not found`);
+    if (asset?.status === 'RETIRED') throw new BadRequestException(`Asset ${asset.tag} is retired`);
+    const dto = {
+      ...rest,
+      component: rest.component?.trim() || asset?.name || '',
+      partNo: rest.partNo?.trim() || asset?.model || '-',
+      serialNo: rest.serialNo?.trim() || asset?.tag || '',
+      repairUnit: (rest.repairUnit || asset?.site || '') as Branch,
+    };
+    if (!dto.component || !dto.serialNo) throw new BadRequestException('Say what is to be worked on (component and serial / tag), or pick an asset');
+    const types = this.store.dict('jobType', true);
+    if (requestedType && types.length && !this.store.has('jobType', requestedType)) throw new BadRequestException(`Unknown job type ${requestedType}`);
+    const jobType = requestedType || (types.some((t) => t.key === 'CORRECTIVE') ? 'CORRECTIVE' : types[0]?.key ?? 'CORRECTIVE');
     if (!this.store.has('site', dto.repairUnit)) throw new BadRequestException(`Unknown site ${dto.repairUnit}`);
     if (this.store.dict('category', true).length && !this.store.has('category', dto.category)) {
       throw new BadRequestException(`Unknown category ${dto.category}`);
@@ -42,6 +66,8 @@ export class JobsService {
       id: await this.store.nextJobId(jobPrefix),
       psDate: now.slice(0, 10),
       ...dto,
+      jobType,
+      ...(asset ? { assetId: asset.id } : {}),
       status: this.store.initialStatus('JOB'),
       location: initialLocation,
       receivedAt: now,
@@ -65,6 +91,12 @@ export class JobsService {
   async transition(id: string, to: JobStatus, fields: Record<string, string>, actor: Actor): Promise<Job> {
     const job = await this.get(id);
     this.assertEditable(job);
+    const fromPhase = this.store.phaseOf('JOB', job.status);
+    const toPhase = this.store.phaseOf('JOB', to);
+    if (toPhase === 'done' && fromPhase !== 'done') {
+      const open = (job.checklist ?? []).filter((c) => c.required && !c.done);
+      if (open.length) throw new BadRequestException(`Checklist incomplete: ${open.map((c) => c.label).join('; ')}`);
+    }
     const rule = applyTransition(job, this.store.jobTransitions, to, fields ?? {}, actor);
     if (fields?.indentRef) job.indentRef = fields.indentRef;
 
@@ -73,6 +105,44 @@ export class JobsService {
     for (const effect of rule.effects ?? []) await this.runEffect(effect, job, fields ?? {}, actor, alsoSave);
 
     await this.store.save(job, ...alsoSave);
+
+    // Preventive maintenance rolls forward when its job is done; a job cancelled
+    // before the work was done leaves the cycle due.
+    if (this.pm && job.pmScheduleId) {
+      if (toPhase === 'done' && fromPhase !== 'done') await this.pm.completed(job);
+      else if (this.store.isFinal('JOB', to) && fromPhase !== 'done') await this.pm.cancelled(job);
+    }
+    return job;
+  }
+
+  /** Tick checklist items off (or add a check found on the job). Locked once the job is closed. */
+  async updateChecklist(id: string, body: { items?: { key: string; done?: boolean; note?: string }[]; add?: { label: string; required?: boolean }[] }, actor: Actor): Promise<Job> {
+    const job = await this.get(id);
+    this.assertEditable(job);
+    const list: ChecklistItem[] = [...(job.checklist ?? [])];
+    const now = new Date().toISOString();
+    for (const u of body.items ?? []) {
+      const item = list.find((c) => c.key === u?.key);
+      if (!item) throw new BadRequestException(`No checklist item ${u?.key}`);
+      if (u.done !== undefined) {
+        item.done = !!u.done;
+        if (item.done) Object.assign(item, { by: actor.name, at: now });
+        else { delete item.by; delete item.at; }
+      }
+      if (u.note !== undefined) item.note = String(u.note).trim().slice(0, 300) || undefined;
+    }
+    for (const a of body.add ?? []) {
+      const label = String(a?.label ?? '').trim().slice(0, 160);
+      if (!label) throw new BadRequestException('Describe the check to add');
+      if (list.length >= 60) throw new BadRequestException('At most 60 checklist items');
+      let n = list.length + 1;
+      while (list.some((c) => c.key === `c${n}`)) n++;
+      list.push({ key: `c${n}`, label, required: a.required !== false, done: false });
+    }
+    const done = list.filter((c) => c.done).length;
+    job.checklist = list;
+    job.audit.push(this.store.audit(actor.name, actor.role, `Checklist updated — ${done}/${list.length} done`));
+    await this.store.save(job);
     return job;
   }
 
@@ -96,6 +166,17 @@ export class JobsService {
           }));
         }
         if (!job.demandIds.includes(ref)) job.demandIds.push(ref);
+        return;
+      }
+      case 'recordMeter': {
+        // Jobs on registered assets with that meter only; a lower reading stops the step.
+        if (!job.assetId || !this.assets || !fields[p.field]) return;
+        try {
+          await this.assets.recordReading(job.assetId, p.meterKey, { value: fields[p.field] }, actor, `job:${job.id}`);
+        } catch (err) {
+          if (err instanceof NotFoundException) return;
+          throw err;
+        }
         return;
       }
       case 'openVendorRepair': {

@@ -92,6 +92,10 @@ export function mapJob(r: any): Job {
     invoiceIds: invoiceIds.length ? invoiceIds : undefined,
     priority: r.priority ? mapPriority(r.priority) : undefined,
     indentRef: r.indentRef ?? undefined,
+    jobType: r.jobType ?? undefined,
+    assetId: r.assetId ?? undefined,
+    pmScheduleId: r.pmScheduleId ?? undefined,
+    checklist: Array.isArray(r.checklist) && r.checklist.length ? r.checklist : undefined,
     records: mapRecords(r.records ?? []),
     audit: mapAudit(r.audit ?? []),
   }) as Job;

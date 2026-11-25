@@ -111,6 +111,7 @@ export const FLEET = maintenancePack({
     ],
   },
   startRequires: [field('odometer', 'Odometer reading')],
+  startEffects: [{ type: 'recordMeter', params: { field: 'odometer', meterKey: 'ODOMETER' } }],
   inspection: { label: 'Road test / inspection', labelMs: 'Uji jalan / pemeriksaan', requires: [field('roadTestBy', 'Road-tested by'), field('inspectionRef', 'Inspection checklist ref')] },
   minQuotations: 2,
   sla: [

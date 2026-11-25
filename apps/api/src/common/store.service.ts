@@ -548,6 +548,8 @@ export class StoreService {
         repairUnit: fromBranch(job.repairUnit), status: job.status, location: job.location,
         receivedAt: new Date(job.receivedAt), statusSince: new Date(job.statusSince),
         indentRef: job.indentRef ?? null, ovId: job.ovId ?? null,
+        jobType: job.jobType ?? 'CORRECTIVE', assetId: job.assetId ?? null, pmScheduleId: job.pmScheduleId ?? null,
+        checklist: (job.checklist ?? []) as never,
         ordinal: await this.ordinalIn(tx.job),
         records: { create: this.recordCreate(job.records) },
         audit: { create: this.auditCreate(job.audit) },
@@ -723,6 +725,7 @@ export class StoreService {
         statusSince: new Date(job.statusSince),
         indentRef: job.indentRef ?? null,
         ovId: job.ovId ?? null,
+        checklist: (job.checklist ?? []) as never,
         version: { increment: 1 },
       },
     });

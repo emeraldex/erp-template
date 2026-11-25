@@ -7,7 +7,7 @@ interface ParamDef {
   name: string;
   label: string;
   /** field: a field key the user enters on the step; number; location: a location key; status: a status key of the parent job */
-  type: 'field' | 'number' | 'location' | 'jobStatus';
+  type: 'field' | 'number' | 'location' | 'jobStatus' | 'text';
   required?: boolean;
 }
 
@@ -54,6 +54,14 @@ export const EFFECTS: EffectDef[] = [
       { name: 'workOrderField', label: 'Customer work order field', type: 'field' },
     ],
     needs: ['refField'],
+  },
+  {
+    type: 'recordMeter', kind: 'JOB', label: 'Record a meter reading', description: 'Records the entered value on the asset’s meter (e.g. odometer, run hours); meter-based maintenance that falls due is raised.',
+    params: [
+      { name: 'field', label: 'Reading field', type: 'field', required: true },
+      { name: 'meterKey', label: 'Meter (e.g. ODOMETER, HOURS)', type: 'text', required: true },
+    ],
+    needs: ['field'],
   },
   {
     type: 'recordStockCheck', kind: 'DEMAND', label: 'Record a stock check', description: 'Marks the stock check as done (nothing available yet).',
@@ -166,6 +174,7 @@ export function validateEffects(kind: Kind, effects: unknown, ctx: { fields: str
         if (p.type === 'number' && (!Number.isInteger(Number(v)) || Number(v) < 0)) errors.push(`${def.label}: ${p.label} must be a whole number`);
         if (p.type === 'location' && !ctx.locations.includes(String(v))) errors.push(`${def.label}: unknown location ${String(v)}`);
         if (p.type === 'field' && typeof v !== 'string') errors.push(`${def.label}: ${p.label} must be a field key`);
+        if (p.type === 'text' && (typeof v !== 'string' || !/^[A-Z][A-Z0-9_]{0,29}$/.test(v))) errors.push(`${def.label}: ${p.label} must be capital letters, digits or _`);
       }
       for (const name of Object.keys(params)) {
         if (!def.params.some((p) => p.name === name)) errors.push(`${def.label}: unknown setting ${name}`);

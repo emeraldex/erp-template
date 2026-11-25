@@ -26,10 +26,19 @@ export class JobsController {
   @Post()
   @Requires('jobs.register')
   register(
-    @Body() dto: { component: string; partNo: string; serialNo: string; category: 'MILITARY' | 'NAS'; originUnit: string; repairUnit: Branch },
+    @Body() dto: { component?: string; partNo?: string; serialNo?: string; category: string; originUnit: string; repairUnit?: Branch; assetId?: string; jobType?: string },
     @Req() req: any,
   ) {
     return this.svc.register(dto, { name: req.user.name, role: req.user.role });
+  }
+
+  @Patch(':id/checklist')
+  checklist(
+    @Param('id') id: string,
+    @Body() body: { items?: { key: string; done?: boolean; note?: string }[]; add?: { label: string; required?: boolean }[] },
+    @Req() req: any,
+  ) {
+    return this.svc.updateChecklist(id, body ?? {}, { name: req.user.name, role: req.user.role });
   }
 
   @Patch(':id/transition')

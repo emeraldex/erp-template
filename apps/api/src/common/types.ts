@@ -61,8 +61,26 @@ export interface Job {
   invoiceIds?: string[];   // QP.51 billing linkage (5.8)
   priority?: JobPriority;  // QP.56 AOG/ROA/Critical overlay (5.9) — FR-15
   indentRef?: string;
+  /** jobType dictionary key: CORRECTIVE, PREVENTIVE… */
+  jobType?: string;
+  /** The asset worked on, when it is registered. */
+  assetId?: string;
+  /** The preventive-maintenance schedule that raised this job. */
+  pmScheduleId?: string;
+  checklist?: ChecklistItem[];
   records: FormRecord[];   // Section 6 forms attached to the job
   audit: AuditEntry[];
+}
+
+/** One check on a job: ticked off by a technician, required ones gate completion. */
+export interface ChecklistItem {
+  key: string;
+  label: string;
+  required: boolean;
+  done: boolean;
+  by?: string;
+  at?: string;
+  note?: string;
 }
 
 // ─── QP.56 AOG / ROA / Critical priority overlay (5.9) — FR-15 ─────────────────

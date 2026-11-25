@@ -60,6 +60,27 @@ const ITEMS: Record<string, [string, string, string, string, string][]> = {
   ],
 };
 
+/** Asset type of each sample item above, and the meter it runs on (if any). */
+const ASSET_TYPES: Record<string, string[]> = {
+  general: ['EQUIPMENT', 'BUILDING', 'BUILDING', 'EQUIPMENT', 'BUILDING', 'VEHICLE'],
+  facilities: ['CHILLER', 'LIFT', 'PUMP', 'FIRE_PANEL', 'AHU', 'AHU'],
+  fleet: ['VAN', 'TRUCK', 'BUS', 'CAR', 'FORKLIFT', 'TRUCK'],
+  industrial: ['MOTOR', 'PUMP', 'COMPRESSOR', 'PLC', 'MOTOR', 'PLC'],
+  medical: ['INFUSION_PUMP', 'VENTILATOR', 'DEFIBRILLATOR', 'MONITOR', 'ULTRASOUND', 'INFUSION_PUMP'],
+};
+const METER: Record<string, { key: string; label: string; unit: string; start: number; every: number } | undefined> = {
+  fleet: { key: 'ODOMETER', label: 'Odometer', unit: 'km', start: 48_000, every: 10_000 },
+  industrial: { key: 'HOURS', label: 'Run hours', unit: 'h', start: 11_800, every: 2_000 },
+};
+/** A typical preventive task per pack: title, days between, checklist. */
+const PM_TASK: Record<string, [string, number, string[]]> = {
+  general: ['Quarterly inspection', 90, ['Visual inspection', 'Check fixings and guards', 'Test operation']],
+  facilities: ['Monthly PPM', 30, ['Clean filters', 'Check belts and bearings', 'Record supply / return temperatures', 'Check for leaks']],
+  fleet: ['Scheduled service', 180, ['Engine oil and filter', 'Brake inspection', 'Tyre pressures and tread', 'Lights and wipers']],
+  industrial: ['Preventive maintenance', 90, ['Vibration reading', 'Lubricate bearings', 'Check alignment', 'Inspect terminals and cabling']],
+  medical: ['Annual PPM & safety test', 365, ['Visual and functional check', 'Electrical safety test (IEC 62353)', 'Performance verification', 'Update service label']],
+};
+
 const SUPPLIERS: [name: string, type: 'SUPPLIER' | 'SUBCONTRACTOR'][] = [
   ['Prime Parts Sdn Bhd', 'SUPPLIER'], ['Delta Industrial Supply', 'SUPPLIER'], ['Metro Technical Services', 'SUBCONTRACTOR'],
 ];
@@ -93,6 +114,42 @@ export async function seedPackDemo(prisma: Db, pack: Pack): Promise<void> {
     });
   }
 
+  // The register: one asset per sample item, with its meter, and a preventive schedule each.
+  const types = ASSET_TYPES[pack.id] ?? ASSET_TYPES.general;
+  const meter = METER[pack.id];
+  const task = PM_TASK[pack.id] ?? PM_TASK.general;
+  const knownTypes = new Set(pack.dictionaries.assetType.map((t) => t.key));
+  const assetOf = new Map<number, string>();
+  for (const [i, [name, model, tag]] of (ITEMS[pack.id] ?? ITEMS.general).entries()) {
+    const type = knownTypes.has(types[i]) ? types[i] : pack.dictionaries.assetType[0]?.key;
+    if (!type) break;
+    const id = `AST-${new Date().getFullYear()}-${String(i + 1).padStart(4, '0')}`;
+    const [make, ...rest] = model.split(' ');
+    await prisma.asset.upsert({
+      where: { id },
+      create: {
+        id, tag, name, type, site, make, model: rest.join(' ') || model, serialNo: tag, criticality: i < 2 ? 'HIGH' : 'MEDIUM',
+        createdBy: 'seed', ordinal: i + 1,
+        ...(meter ? { meters: { create: [{ key: meter.key, label: meter.label, unit: meter.unit, value: meter.start + i * 1_500, readAt: new Date() }] } } : {}),
+      },
+      update: {},
+    });
+    assetOf.set(i, id);
+    const pmId = `PM-${new Date().getFullYear()}-${String(i + 1).padStart(4, '0')}`;
+    await prisma.pmSchedule.upsert({
+      where: { id: pmId },
+      create: {
+        id: pmId, assetId: id, title: task[0], intervalDays: task[1],
+        ...(meter ? { meterKey: meter.key, intervalMeter: meter.every, nextDueMeter: meter.start + i * 1_500 + meter.every - 500 * i } : {}),
+        // Stagger the due dates so the forecast shows a spread of upcoming work.
+        nextDueAt: new Date(Date.now() + (7 + i * 9) * 86_400_000), leadDays: 7,
+        category: pack.dictionaries.category[0]?.key ?? '',
+        checklist: task[2].map((label, n) => ({ key: `c${n + 1}`, label, required: true })) as never, createdBy: 'seed',
+      },
+      update: {},
+    });
+  }
+
   // Spread the samples over the first statuses so every screen has something in it.
   const statuses = pack.statuses.JOB.filter((s) => !s.meta?.final).map((s) => s.key);
   const items = ITEMS[pack.id] ?? ITEMS.general;
@@ -109,11 +166,12 @@ export async function seedPackDemo(prisma: Db, pack: Pack): Promise<void> {
         id, psDate: receivedAt.toISOString().slice(0, 10), component, partNo, serialNo,
         category: pack.dictionaries.category.some((c) => c.key === category) ? category : (pack.dictionaries.category[0]?.key ?? 'GENERAL'),
         originUnit, repairUnit: site, status, location: pack.defaults.initialLocation,
+        jobType: 'CORRECTIVE', assetId: assetOf.get(i) ?? null,
         receivedAt, statusSince: new Date(Date.now() - Math.ceil(days / 2) * 86_400_000), ordinal: items.length - i,
         audit: { create: [{ at: receivedAt, by: supervisor[2], role: supervisor[0], action: `${pack.terms.job} raised`, seq: 0 }] },
       },
       update: {},
     });
   }
-  console.log(`Demo data for the ${pack.name} pack: ${PEOPLE.length} users (password ${process.env.SEED_PASSWORD ? 'from SEED_PASSWORD' : 'demo123'}), ${SUPPLIERS.length} partners, ${items.length} ${pack.terms.jobs.toLowerCase()}.`);
+  console.log(`Demo data for the ${pack.name} pack: ${PEOPLE.length} users (password ${process.env.SEED_PASSWORD ? 'from SEED_PASSWORD' : 'demo123'}), ${SUPPLIERS.length} partners, ${assetOf.size} assets with preventive schedules, ${items.length} ${pack.terms.jobs.toLowerCase()}.`);
 }

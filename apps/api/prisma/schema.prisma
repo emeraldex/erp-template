@@ -84,9 +84,9 @@ model User {
   createdAt    DateTime @default(now())
 
   // Account protection (Phase 1 hardening)
-  failedLogins       Int       @default(0)
+  failedLogins       Int            @default(0)
   lockedUntil        DateTime?
-  mustChangePassword Boolean   @default(false)
+  mustChangePassword Boolean        @default(false)
   passwordChangedAt  DateTime?
   /// Set when an administrator deactivates the account; history stays attributed.
   deactivatedAt      DateTime?
@@ -118,27 +118,36 @@ model Session {
 // ─── QP.44 job lifecycle (FR-01) ──────────────────────────────────────────────
 
 model Job {
-  id          String       @id
-  psDate      String
-  component   String
-  partNo      String
-  serialNo    String
-  category    String
-  originUnit  String
-  repairUnit  String
-  status      String
-  location    String
-  receivedAt  DateTime
-  statusSince DateTime
-  indentRef   String?
-  ovId        String?
+  id           String    @id
+  psDate       String
+  component    String
+  partNo       String
+  serialNo     String
+  category     String
+  originUnit   String
+  repairUnit   String
+  status       String
+  location     String
+  receivedAt   DateTime
+  statusSince  DateTime
+  indentRef    String?
+  ovId         String?
+  /// Corrective, preventive, inspection… (jobType dictionary).
+  jobType      String    @default("CORRECTIVE")
+  /// The asset worked on, when it is in the asset register.
+  assetId      String?
+  asset        Asset?    @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  /// Set when a preventive-maintenance schedule raised the job.
+  pmScheduleId String?
+  /// Checklist items: [{ key, label, required, done, by, at, note }].
+  checklist    Json      @default("[]")
   /// FR-12: set when a long-closed job leaves the active lists. Read-only after.
-  archivedAt  DateTime?
+  archivedAt   DateTime?
   // Optimistic-concurrency guard: a transition that reads v=n writes v=n+1 and
   // fails if another actor already advanced the row (two Stores clerks
   // dispatching the same PS number must not silently overwrite each other).
-  version     Int          @default(0)
-  ordinal     Int          @default(0)
+  version      Int       @default(0)
+  ordinal      Int       @default(0)
 
   priority JobPriority?
   demands  Demand[]
@@ -152,7 +161,111 @@ model Job {
   @@index([repairUnit])
   @@index([ordinal])
   @@index([archivedAt])
+  @@index([assetId])
   @@map("jobs")
+}
+
+/// Anything maintained: a chiller, a van, a pump, an infusion pump, a building.
+model Asset {
+  id             String   @id
+  /// The organisation's own tag, registration or asset number.
+  tag            String   @unique
+  name           String
+  /// assetType dictionary key.
+  type           String
+  /// site dictionary key.
+  site           String
+  /// Where on the site: room, bay, line…
+  location       String   @default("")
+  parentId       String?
+  parent         Asset?   @relation("AssetTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children       Asset[]  @relation("AssetTree")
+  make           String   @default("")
+  model          String   @default("")
+  serialNo       String   @default("")
+  /// IN_SERVICE, OUT_OF_SERVICE or RETIRED.
+  status         String   @default("IN_SERVICE")
+  /// HIGH, MEDIUM or LOW: how much its failure matters.
+  criticality    String   @default("MEDIUM")
+  commissionedOn String?
+  /// Sector-specific details (e.g. VIN, refrigerant, device class).
+  attributes     Json     @default("{}")
+  createdAt      DateTime @default(now())
+  createdBy      String   @default("")
+  ordinal        Int      @default(0)
+  version        Int      @default(0)
+
+  meters    Meter[]
+  schedules PmSchedule[]
+  jobs      Job[]
+
+  @@index([site])
+  @@index([type])
+  @@index([parentId])
+  @@map("assets")
+}
+
+/// A running counter on an asset: odometer, engine or run hours, cycles…
+model Meter {
+  id       Int            @id @default(autoincrement())
+  assetId  String
+  asset    Asset          @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  key      String
+  label    String
+  unit     String
+  value    Float          @default(0)
+  readAt   DateTime?
+  readings MeterReading[]
+
+  @@unique([assetId, key])
+  @@map("meters")
+}
+
+model MeterReading {
+  id      BigInt   @id @default(autoincrement())
+  meterId Int
+  meter   Meter    @relation(fields: [meterId], references: [id], onDelete: Cascade)
+  value   Float
+  at      DateTime @default(now())
+  by      String
+  /// "manual", "job:<id>" or "reset".
+  source  String   @default("manual")
+
+  @@index([meterId, at])
+  @@map("meter_readings")
+}
+
+/// Preventive maintenance: raise a job every N days and/or every N meter units.
+model PmSchedule {
+  id            String    @id
+  assetId       String
+  asset         Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  title         String
+  active        Boolean   @default(true)
+  intervalDays  Int?
+  meterKey      String?
+  intervalMeter Float?
+  /// Raise the job this many days before it falls due…
+  leadDays      Int       @default(7)
+  /// …or this many meter units before.
+  leadMeter     Float     @default(0)
+  jobType       String    @default("PREVENTIVE")
+  category      String    @default("")
+  instructions  String    @default("")
+  /// [{ key, label, required }]
+  checklist     Json      @default("[]")
+  lastDoneAt    DateTime?
+  lastDoneMeter Float?
+  nextDueAt     DateTime?
+  nextDueMeter  Float?
+  /// The job raised for the current cycle, until it is done.
+  openJobId     String?
+  createdAt     DateTime  @default(now())
+  createdBy     String    @default("")
+
+  @@index([active])
+  @@index([assetId])
+  @@map("pm_schedules")
 }
 
 // QP.56 AOG / ROA / Critical overlay (5.9) — FR-15
@@ -182,8 +295,8 @@ model JobPriority {
 // ─── QP.14 spares demand / procurement (FR-08) ────────────────────────────────
 
 model Demand {
-  id              String       @id
-  job             Job          @relation(fields: [jobId], references: [id])
+  id              String   @id
+  job             Job      @relation(fields: [jobId], references: [id])
   jobId           String
   partDescription String
   partNo          String
@@ -192,8 +305,8 @@ model Demand {
   statusSince     DateTime
   raisedBy        String
   branch          String
-  version         Int          @default(0)
-  ordinal     Int          @default(0)
+  version         Int      @default(0)
+  ordinal         Int      @default(0)
 
   // stockCheck (F244)
   stockF244Ref      String?
@@ -257,7 +370,7 @@ model OvRepair {
   status          String
   statusSince     DateTime
   version         Int      @default(0)
-  ordinal     Int          @default(0)
+  ordinal         Int      @default(0)
 
   records FormRecord[]
   audit   AuditEntry[]
@@ -286,7 +399,7 @@ model Partner {
   nonConformances  Int           @default(0)
   factorsEvaluated Int           @default(0)
   version          Int           @default(0)
-  ordinal     Int          @default(0)
+  ordinal          Int           @default(0)
 
   cars  Car[]
   audit AuditEntry[]
@@ -327,7 +440,7 @@ model FodIncident {
   focalPoint       String
   status           FodStatus
   version          Int       @default(0)
-  ordinal     Int          @default(0)
+  ordinal          Int       @default(0)
 
   audit AuditEntry[]
 
@@ -337,13 +450,13 @@ model FodIncident {
 }
 
 model Tool {
-  tag    String     @id
-  name   String
-  board  String
-  holder String?
-  status ToolStatus
-  since  DateTime
-  ordinal Int      @default(0)
+  tag     String     @id
+  name    String
+  board   String
+  holder  String?
+  status  ToolStatus
+  since   DateTime
+  ordinal Int        @default(0)
 
   @@index([status])
   @@index([ordinal])
@@ -351,7 +464,7 @@ model Tool {
 }
 
 model TrainingRecord {
-  id      Int            @id @default(autoincrement())
+  id      Int    @id @default(autoincrement())
   person  String
   course  String
   date    String
@@ -366,18 +479,18 @@ model TrainingRecord {
 // ─── QP.51 invoicing & revenue billing (FR-13 / FR-14) ────────────────────────
 
 model Invoice {
-  id              String        @id
+  id              String   @id
   stream          String
-  job             Job?          @relation(fields: [jobId], references: [id])
+  job             Job?     @relation(fields: [jobId], references: [id])
   jobId           String?
   customer        String
   period          String?
-  amountMYR       Decimal       @db.Decimal(14, 2)
-  gstRate         Decimal       @db.Decimal(5, 2)
+  amountMYR       Decimal  @db.Decimal(14, 2)
+  gstRate         Decimal  @db.Decimal(5, 2)
   /// Tax name printed on documents (GST, SST…), fixed when the invoice is drafted.
-  taxLabel        String        @default("GST")
-  gstMYR          Decimal       @db.Decimal(14, 2)
-  totalMYR        Decimal       @db.Decimal(14, 2)
+  taxLabel        String   @default("GST")
+  gstMYR          Decimal  @db.Decimal(14, 2)
+  totalMYR        Decimal  @db.Decimal(14, 2)
   status          String
   statusSince     DateTime
   f311Ref         String?
@@ -387,11 +500,11 @@ model Invoice {
   salesPerfRef    String?
   paymentRef      String?
   paidAt          String?
-  outstanding     Boolean       @default(true)
+  outstanding     Boolean  @default(true)
   raisedBy        String
   branch          String
-  version         Int           @default(0)
-  ordinal     Int          @default(0)
+  version         Int      @default(0)
+  ordinal         Int      @default(0)
 
   records FormRecord[]
   audit   AuditEntry[]
@@ -505,16 +618,16 @@ model SlaRule {
 }
 
 model InvoiceStreamDef {
-  id        String @id
-  label     String
-  labelMs   String
-  customer  String
-  perJob    Boolean
-  docSet    String[]
-  deadlines Json
+  id             String   @id
+  label          String
+  labelMs        String
+  customer       String
+  perJob         Boolean
+  docSet         String[]
+  deadlines      Json
   /// Extra fields this stream needs before a status, e.g. {"SUBMITTED": ["salesPerfRef"]}
-  requiredFields Json   @default("{}")
-  seq       Int
+  requiredFields Json     @default("{}")
+  seq            Int
 
   @@map("invoice_streams")
 }
@@ -541,7 +654,7 @@ model Setting {
 /// A file attached to a record (signed forms, certificates, photos). The bytes
 /// live in object storage; the SHA-256 lets anyone verify they are unchanged.
 model Attachment {
-  id          String           @id
+  id          String   @id
   entity      String
   entityId    String
   formNo      String?
@@ -549,9 +662,9 @@ model Attachment {
   contentType String
   sizeBytes   Int
   sha256      String
-  storageKey  String           @unique
+  storageKey  String   @unique
   uploadedBy  String
-  uploadedAt  DateTime         @default(now())
+  uploadedAt  DateTime @default(now())
 
   @@index([entity, entityId])
   @@map("attachments")

@@ -2,15 +2,18 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RetentionService } from '../retention/retention.service';
+import { PmService } from '../assets/pm.service';
 import { StoreService } from '../common/store.service';
 import { runWithTenant } from '../tenancy/tenant';
 import { TenantRegistry } from '../tenancy/tenant-registry';
 
 /**
- * Background jobs: SLA alerts every ALERT_INTERVAL_MINUTES (default 15) and
- * archiving every ARCHIVE_INTERVAL_HOURS (default 24). Set either to 0 to turn
- * it off, or SCHEDULER_ENABLED=false for all. Both jobs are safe to run on
- * several replicas: alerts de-duplicate in the database, archiving is idempotent.
+ * Background jobs: SLA alerts every ALERT_INTERVAL_MINUTES (default 15),
+ * preventive maintenance every PM_INTERVAL_MINUTES (default 60) and archiving
+ * every ARCHIVE_INTERVAL_HOURS (default 24). Set any to 0 to turn it off, or
+ * SCHEDULER_ENABLED=false for all. All are safe to run on several replicas:
+ * alerts de-duplicate in the database, each PM cycle is claimed once, and
+ * archiving is idempotent.
  */
 @Injectable()
 export class SchedulerService implements OnApplicationBootstrap {
@@ -22,6 +25,7 @@ export class SchedulerService implements OnApplicationBootstrap {
     private readonly retention: RetentionService,
     private readonly tenants: TenantRegistry,
     private readonly store: StoreService,
+    private readonly pm: PmService,
   ) {}
 
   /** Run a job for every active tenant in turn; one tenant's failure doesn't stop the rest. */
@@ -44,6 +48,7 @@ export class SchedulerService implements OnApplicationBootstrap {
       return;
     }
     this.every('sla-alerts', Number(process.env.ALERT_INTERVAL_MINUTES || 15) * 60_000, () => this.forEachTenant('sla-alerts', () => this.notifications.runAlerts()));
+    this.every('pm', Number(process.env.PM_INTERVAL_MINUTES || 60) * 60_000, () => this.forEachTenant('pm', () => this.pm.generateDue()));
     this.every('archive', Number(process.env.ARCHIVE_INTERVAL_HOURS || 24) * 3_600_000, () => this.forEachTenant('archive', () => this.retention.archiveClosedJobs()));
   }
 
