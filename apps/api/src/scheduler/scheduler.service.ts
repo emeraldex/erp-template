@@ -4,6 +4,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { RetentionService } from '../retention/retention.service';
 import { PmService } from '../assets/pm.service';
 import { StoreService } from '../common/store.service';
+import { SettingsService } from '../settings/settings.service';
 import { runWithTenant } from '../tenancy/tenant';
 import { TenantRegistry } from '../tenancy/tenant-registry';
 
@@ -26,6 +27,7 @@ export class SchedulerService implements OnApplicationBootstrap {
     private readonly tenants: TenantRegistry,
     private readonly store: StoreService,
     private readonly pm: PmService,
+    private readonly settings: SettingsService,
   ) {}
 
   /** Run a job for every active tenant in turn; one tenant's failure doesn't stop the rest. */
@@ -33,7 +35,8 @@ export class SchedulerService implements OnApplicationBootstrap {
     for (const tenant of this.tenants.all().filter((t) => t.status === 'active')) {
       try {
         await runWithTenant(tenant, async () => {
-          await this.store.ensureConfig();
+          // The same per-organisation state a web request would have loaded.
+          await Promise.all([this.store.ensureConfig(), this.settings.ensureLoaded()]);
           await job();
         });
       } catch (err) {

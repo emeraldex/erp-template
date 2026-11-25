@@ -34,19 +34,19 @@ export const AVIATION: Pack = {
   statuses: {
     JOB: statuses(JOB_STATUS_META, {
       REGISTERED: 'new', AWAITING_TDI: 'new', TDI: 'active', AWAITING_SPARE: 'waiting_parts', AWAITING_INDENT: 'waiting_customer',
-      WIP: 'active', REC_OV: 'external', BER: 'waiting_customer', SOR: 'waiting_customer', SERVICEABLE: 'done', DELIVERED: 'done', CLOSED: 'closed',
+      WIP: 'active', REC_OV: ['external', { branch: true }], BER: ['waiting_customer', { branch: true }], SOR: ['waiting_customer', { branch: true }], SERVICEABLE: 'done', DELIVERED: 'done', CLOSED: 'closed',
     }),
     DEMAND: statuses(DEMAND_STATUS_META, {
       RAISED: 'new', APPROVED: 'active', STOCK_CHECK: 'active', ISSUED_FROM_STOCK: 'active', RFQ_ISSUED: ['waiting_parts', { acceptsQuotations: true }],
       EVALUATED: 'active', PO_ISSUED: 'waiting_parts', RECEIVED: 'active', ISSUED: 'closed',
     }),
     OV: statuses(OV_STATUS_META, {
-      RECEIVED_HQ: 'new', VENDOR_IDENTIFIED: 'active', F134_SUBMITTED: 'waiting_customer', APPROVED: 'active', REJECTED: 'closed',
+      RECEIVED_HQ: 'new', VENDOR_IDENTIFIED: 'active', F134_SUBMITTED: 'waiting_customer', APPROVED: 'active', REJECTED: ['closed', { branch: true }],
       PO_ISSUED: 'active', AT_VENDOR: 'external', COST_ADVISED: 'waiting_customer', QUOTE_APPROVED: 'external', RECEIVED_BACK: 'active', RETURNED: 'closed',
     }),
     INVOICE: statuses(INVOICE_STATUS_META, {
       DRAFTED: ['new', { draftDocuments: true }], CERTIFIED: ['active', { draftDocuments: true }], TAX_RAISED: 'active',
-      CORRECTNESS_CHECK: 'active', SUBMITTED: 'waiting_customer', REJECTED: 'active', PAID: 'closed',
+      CORRECTNESS_CHECK: 'active', SUBMITTED: 'waiting_customer', REJECTED: ['active', { branch: true }], PAID: 'closed',
     }),
   },
   transitions: { JOB: JOB_TRANSITIONS, DEMAND: DEMAND_TRANSITIONS, OV: OV_TRANSITIONS, INVOICE: INVOICE_TRANSITIONS },

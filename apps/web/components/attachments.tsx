@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useVocab } from "@/lib/vocab";
 import { api, download } from "@/lib/api";
 import { Attachment } from "@/lib/types";
 import { Button } from "./ui";
@@ -17,6 +18,7 @@ const size = (b: number) => (b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).t
 export function AttachmentsPanel({
   entity, entityId, canUpload = true, formNos = [],
 }: { entity: Attachment["entity"]; entityId: string; canUpload?: boolean; formNos?: string[] }) {
+  const { aviation } = useVocab();
   const [items, setItems] = useState<Attachment[] | null>(null);
   const [formNo, setFormNo] = useState("");
   const [busy, setBusy] = useState(false);
@@ -80,7 +82,7 @@ export function AttachmentsPanel({
               list={`forms-${entity}-${entityId}`}
               value={formNo}
               onChange={(e) => setFormNo(e.target.value)}
-              placeholder="e.g. F174"
+              placeholder={aviation ? "e.g. F174" : "e.g. report no."}
               className="mono w-32 rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace"
             />
             <datalist id={`forms-${entity}-${entityId}`}>

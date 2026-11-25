@@ -81,7 +81,7 @@ export function RadarScope({ jobs, cfg }: { jobs: Job[]; cfg: WorkflowConfig | n
 
 export function RadarLegend() {
   const items: [string, string][] = [
-    ["BER / SOR", "var(--c-red-bright)"],
+    ["PROBLEM", "var(--c-red-bright)"],
     ["WAITING", "var(--c-amber)"],
     ["WORKING", "var(--c-phosphor)"],
   ];

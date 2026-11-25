@@ -4,16 +4,16 @@ import { useSession } from "@/lib/use-session";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, download, getWithFallback } from "@/lib/api";
-import { Branch, Job, JobStatus } from "@/lib/types";
-import { useConfig } from "@/lib/use-config";
+import { Asset, Job, JobStatus } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
+import { useVocab } from "@/lib/vocab";
 import { Button, EmptyState, MetaPill, OfflineNotice, PageHeader, Table, Td, Tr } from "@/components/ui";
 
-const BRANCHES: Branch[] = ["HQ", "CENTRAL", "EAST", "NORTH", "NORTHEAST", "OFFSHORE"];
+const input = "mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace";
 
 export default function JobsPage() {
   const router = useRouter();
-  const cfg = useConfig();
+  const { cfg, terms, modules, dict, label, can, ref, aviation } = useVocab();
   const { lang, t } = useLang();
   const [rows, setRows] = useState<Job[]>([]);
   const [offline, setOffline] = useState(false);
@@ -22,13 +22,20 @@ export default function JobsPage() {
   const [showNew, setShowNew] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
-    component: "", partNo: "", serialNo: "",
-    category: "MILITARY" as "MILITARY" | "NAS",
-    originUnit: "", repairUnit: "CENTRAL" as Branch,
+    component: "", partNo: "", serialNo: "", category: "", originUnit: "", repairUnit: "", assetId: "", jobType: "",
   });
+  const [assets, setAssets] = useState<Asset[]>([]);
 
-  const role = useSession()?.user.role;
-  const canRegister = role === "STORES" || role === "ADMIN";
+  useSession();
+  const canRegister = can("jobs.register");
+  // The organisation's lists, with sensible first choices.
+  const categories = dict("category");
+  const sites = dict("site");
+  const jobTypes = dict("jobType");
+  const asset = assets.find((a) => a.id === form.assetId);
+  useEffect(() => {
+    if (showNew && modules.assets && !assets.length) api.get<Asset[]>("/assets").then(setAssets).catch(() => { /* register without an asset */ });
+  }, [showNew, modules.assets, assets.length]);
 
   const [showArchived, setShowArchived] = useState(false);
 
@@ -58,7 +65,12 @@ export default function JobsPage() {
   async function register() {
     setError(null);
     try {
-      const job = await api.post<Job>("/jobs", form);
+      const body = Object.fromEntries(Object.entries({
+        ...form,
+        category: form.category || categories[0]?.key || "",
+        repairUnit: form.repairUnit || asset?.site || sites[0]?.key || "",
+      }).filter(([, v]) => v !== ""));
+      const job = await api.post<Job>("/jobs", body);
       setRows([job, ...rows]);
       setShowNew(false);
       router.push(`/jobs/${job.id}`);
@@ -73,8 +85,8 @@ export default function JobsPage() {
     <div>
       <OfflineNotice show={offline} />
       <PageHeader
-        eyebrow="QP.44 · Job Tracking System"
-        title={t("jobs")}
+        eyebrow={aviation ? "QP.44 · Job Tracking System" : `${terms.jobs} · ${cfg?.pack?.name ?? ""}`}
+        title={aviation ? t("jobs") : terms.jobRegister}
         actions={
           <>
             {filtered.length > 0 && (
@@ -88,7 +100,7 @@ export default function JobsPage() {
             </label>
             {canRegister && (
               <Button onClick={() => setShowNew(!showNew)} variant={showNew ? "ghost" : "primary"}>
-                {showNew ? "Cancel" : "+ Register job"}
+                {showNew ? "Cancel" : `+ Register ${terms.job.toLowerCase()}`}
               </Button>
             )}
           </>
@@ -99,53 +111,65 @@ export default function JobsPage() {
 
       {showNew && (
         <div className="panel ticked fade-up mb-6 p-5">
-          <p className="eyebrow mb-3">Stage 1 — register job · receiving inspection per QP.20 · owner: Logistic (StS/StP)</p>
+          <p className="eyebrow mb-3">{aviation ? "Stage 1 — register job · receiving inspection per QP.20 · owner: Logistic (StS/StP)" : `New ${terms.job.toLowerCase()} — starts at ${cfg ? label("status:JOB", Object.keys(cfg.jobStatusMeta)[0]) : "the first status"}`}</p>
           <div className="grid gap-3 sm:grid-cols-3">
+            {modules.assets && (
+              <label className="block sm:col-span-3">
+                <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">{terms.asset} (optional — fills in the details below)</span>
+                <select value={form.assetId} onChange={(e) => setForm({ ...form, assetId: e.target.value })} className={input}>
+                  <option value="">— not in the register —</option>
+                  {assets.filter((a) => a.status !== "RETIRED").map((a) => <option key={a.id} value={a.id}>{a.tag} · {a.name} · {label("site", a.site)}</option>)}
+                </select>
+              </label>
+            )}
             {(
               [
-                ["component", "Component description"],
-                ["partNo", "Part number"],
-                ["serialNo", "Serial number"],
-                ["originUnit", "Origin unit (Customer)"],
+                ["component", terms.component, asset?.name],
+                ["partNo", aviation ? "Part number" : "Make / model", asset?.model],
+                ["serialNo", aviation ? "Serial number" : "Serial / tag", asset?.tag],
+                ["originUnit", terms.originUnit, undefined],
               ] as const
-            ).map(([k, label]) => (
+            ).map(([k, text, fromAsset]) => (
               <label key={k} className="block">
-                <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">{label} *</span>
+                <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">{text}{fromAsset === undefined ? " *" : ""}</span>
                 <input
                   value={form[k]}
+                  placeholder={fromAsset ?? ""}
                   onChange={(e) => setForm({ ...form, [k]: e.target.value })}
-                  className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace"
+                  className={input}
                 />
               </label>
             ))}
+            {categories.length > 0 && (
+              <label className="block">
+                <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Category{ref(" (QP.17 / QP.17A)")}</span>
+                <select value={form.category || categories[0].key} onChange={(e) => setForm({ ...form, category: e.target.value })} className={input}>
+                  {categories.map((c) => <option key={c.key} value={c.key}>{lang === "ms" && c.labelMs ? c.labelMs : c.label}</option>)}
+                </select>
+              </label>
+            )}
+            {jobTypes.length > 0 && (
+              <label className="block">
+                <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Type of work</span>
+                <select value={form.jobType} onChange={(e) => setForm({ ...form, jobType: e.target.value })} className={input}>
+                  <option value="">{label("jobType", "CORRECTIVE")}</option>
+                  {jobTypes.filter((j) => j.key !== "CORRECTIVE").map((j) => <option key={j.key} value={j.key}>{lang === "ms" && j.labelMs ? j.labelMs : j.label}</option>)}
+                </select>
+              </label>
+            )}
             <label className="block">
-              <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Item category (QP.17 / QP.17A)</span>
-              <select
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value as "MILITARY" | "NAS" })}
-                className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace"
-              >
-                <option value="MILITARY">MILITARY</option>
-                <option value="NAS">NON-AIRBORNE (NAS)</option>
-              </select>
-            </label>
-            <label className="block">
-              <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Repair unit / branch</span>
-              <select
-                value={form.repairUnit}
-                onChange={(e) => setForm({ ...form, repairUnit: e.target.value as Branch })}
-                className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace"
-              >
-                {BRANCHES.map((b) => <option key={b}>{b}</option>)}
+              <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">{aviation ? "Repair unit / branch" : terms.site}</span>
+              <select value={form.repairUnit || asset?.site || sites[0]?.key || ""} onChange={(e) => setForm({ ...form, repairUnit: e.target.value })} className={input}>
+                {sites.map((b) => <option key={b.key} value={b.key}>{aviation ? b.key : b.label}</option>)}
               </select>
             </label>
           </div>
           <div className="mt-4">
             <Button
-              disabled={!form.component || !form.partNo || !form.serialNo || !form.originUnit}
+              disabled={!form.originUnit || (!asset && (!form.component || !form.partNo || !form.serialNo))}
               onClick={register}
             >
-              Register — assign PS number
+              Register — assign {terms.jobNo.replace(/\.$/, "")}
             </Button>
           </div>
         </div>
@@ -180,10 +204,10 @@ export default function JobsPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <EmptyState title="No jobs match" hint="Adjust the status filter or clear the search." />
+        <EmptyState title={`No ${terms.jobs.toLowerCase()} match`} hint="Adjust the status filter or clear the search." />
       ) : (
         <div className="panel fade-up d2">
-          <Table head={["PS / Job", "Component", "Part / Serial", "Cat", "Origin unit", "Branch", t("status"), t("location"), "Days"]}>
+          <Table head={[aviation ? "PS / Job" : terms.jobNo, terms.component, aviation ? "Part / Serial" : "Model / Tag", "Cat", terms.originUnit, terms.site, t("status"), t("location"), "Days"]}>
             {filtered.map((j) => (
               <Tr key={j.id} onClick={() => router.push(`/jobs/${j.id}`)}>
                 <Td className="mono text-xs text-trace">
@@ -199,11 +223,11 @@ export default function JobsPage() {
                   )}
                 </Td>
                 <Td className="mono text-xs text-steel">{j.partNo} · {j.serialNo}</Td>
-                <Td className="mono text-xs text-steel">{j.category === "MILITARY" ? "MIL" : "NAS"}</Td>
+                <Td className="mono text-xs text-steel">{aviation ? (j.category === "MILITARY" ? "MIL" : j.category) : label("category", j.category)}</Td>
                 <Td className="mono text-xs text-steel">{j.originUnit}</Td>
-                <Td className="mono text-xs text-steel">{j.repairUnit}</Td>
+                <Td className="mono text-xs text-steel">{aviation ? j.repairUnit : label("site", j.repairUnit)}</Td>
                 <Td><MetaPill status={j.status} meta={cfg?.jobStatusMeta?.[j.status]} lang={lang} /></Td>
-                <Td className="mono text-xs text-steel">{j.location}</Td>
+                <Td className="mono text-xs text-steel">{aviation ? j.location : label("location", j.location)}</Td>
                 <Td className="mono text-xs tabular-nums text-steel">{daysIn(j.statusSince)}</Td>
               </Tr>
             ))}

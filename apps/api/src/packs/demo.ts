@@ -29,10 +29,10 @@ const ITEMS: Record<string, [string, string, string, string, string][]> = {
   facilities: [
     ['Chiller 2', 'York YK', 'CH-02', 'HVAC', 'Level 12 tenant'],
     ['Passenger lift A', 'KONE MonoSpace', 'LIFT-A', 'LIFTS', 'Lobby reception'],
-    ['Toilet leak, level 5', 'Basin mixer', 'WC-5M', 'PLUMBING', 'HR department'],
+    ['Domestic water pump 5', 'Grundfos CR10', 'PMP-05', 'PLUMBING', 'HR department'],
     ['Fire alarm panel', 'Notifier NFS2', 'FAP-01', 'FIRE', 'Security'],
-    ['AHU 7 belt noise', 'Trane M-Series', 'AHU-07', 'HVAC', 'Level 7 tenant'],
-    ['Ceiling tile stain', 'Armstrong', 'CL-3-14', 'CIVIL', 'Finance department'],
+    ['AHU 7', 'Trane M-Series', 'AHU-07', 'HVAC', 'Level 7 tenant'],
+    ['AHU 3', 'Trane M-Series', 'AHU-03', 'HVAC', 'Finance department'],
   ],
   fleet: [
     ['Van WXY 2231', 'Toyota Hiace', 'WXY2231', 'SERVICE', 'Deliveries'],
@@ -120,7 +120,7 @@ export async function seedPackDemo(prisma: Db, pack: Pack): Promise<void> {
   const task = PM_TASK[pack.id] ?? PM_TASK.general;
   const knownTypes = new Set(pack.dictionaries.assetType.map((t) => t.key));
   const assetOf = new Map<number, string>();
-  for (const [i, [name, model, tag]] of (ITEMS[pack.id] ?? ITEMS.general).entries()) {
+  for (const [i, [name, model, tag, itemCategory]] of (ITEMS[pack.id] ?? ITEMS.general).entries()) {
     const type = knownTypes.has(types[i]) ? types[i] : pack.dictionaries.assetType[0]?.key;
     if (!type) break;
     const id = `AST-${new Date().getFullYear()}-${String(i + 1).padStart(4, '0')}`;
@@ -143,7 +143,7 @@ export async function seedPackDemo(prisma: Db, pack: Pack): Promise<void> {
         ...(meter ? { meterKey: meter.key, intervalMeter: meter.every, nextDueMeter: meter.start + i * 1_500 + meter.every - 500 * i } : {}),
         // Stagger the due dates so the forecast shows a spread of upcoming work.
         nextDueAt: new Date(Date.now() + (7 + i * 9) * 86_400_000), leadDays: 7,
-        category: pack.dictionaries.category[0]?.key ?? '',
+        category: pack.dictionaries.category.some((c) => c.key === itemCategory) ? itemCategory : (pack.dictionaries.category[0]?.key ?? ''),
         checklist: task[2].map((label, n) => ({ key: `c${n + 1}`, label, required: true })) as never, createdBy: 'seed',
       },
       update: {},

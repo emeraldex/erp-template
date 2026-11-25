@@ -5,45 +5,65 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, DEMO_MODE, getSession, loginPath, onConnectionChange, setSession, Session } from "@/lib/api";
 import { DictKey, useLang } from "@/lib/i18n";
+import type { Modules } from "@/lib/types";
+import { DEFAULT_TERMS, useVocab } from "@/lib/vocab";
 import { NotificationBell } from "./notifications";
 
-const NAV: { group: DictKey; items: { href: string; label: DictKey; code: string }[] }[] = [
+type TermKey = keyof typeof DEFAULT_TERMS;
+interface NavItem {
+  href: string;
+  label: DictKey;
+  /** The organisation's own word for it, when it has one. */
+  term?: TermKey;
+  /** Procedure reference, shown for the aviation configuration. */
+  code: string;
+  /** Short tag shown otherwise. */
+  tag: string;
+  module?: keyof Modules;
+  /** Hidden from people without this permission. */
+  capability?: string;
+}
+
+const NAV: { group: DictKey; items: NavItem[] }[] = [
   {
     group: "operations",
     items: [
-      { href: "/dashboard", label: "command", code: "OPS" },
-      { href: "/jobs", label: "jobs", code: "JTS" },
-      { href: "/aog", label: "aogRoa", code: "QP.56" },
-      { href: "/ov", label: "ov", code: "QP.33" },
+      { href: "/dashboard", label: "command", code: "OPS", tag: "OPS" },
+      { href: "/jobs", label: "jobs", term: "jobRegister", code: "JTS", tag: "WO" },
+      { href: "/assets", label: "assets", term: "assets", code: "AST", tag: "AST", module: "assets" },
+      { href: "/pm", label: "pm", term: "pm", code: "PM", tag: "PM", module: "pm" },
+      { href: "/aog", label: "aogRoa", term: "priority", code: "QP.56", tag: "PRI", module: "priority" },
+      { href: "/ov", label: "ov", term: "vendorRepairs", code: "QP.33", tag: "VR", module: "vendorRepair" },
     ],
   },
   {
     group: "supplyChain",
     items: [
-      { href: "/demands", label: "procurement", code: "QP.14" },
-      { href: "/registers", label: "registers", code: "QP.13" },
+      { href: "/demands", label: "procurement", term: "demands", code: "QP.14", tag: "PO", module: "procurement" },
+      { href: "/registers", label: "registers", term: "registers", code: "QP.13", tag: "SUP", module: "registers" },
     ],
   },
   {
     group: "finance",
-    items: [{ href: "/invoicing", label: "invoicing", code: "QP.51" }],
+    items: [{ href: "/invoicing", label: "invoicing", code: "QP.51", tag: "INV", module: "invoicing" }],
   },
   {
     group: "quality",
-    items: [{ href: "/fod", label: "fod", code: "QP.46" }],
+    items: [{ href: "/fod", label: "fod", term: "incidents", code: "QP.46", tag: "HSE", module: "incidents" }],
   },
   {
     group: "administration",
     items: [
-      { href: "/reports", label: "reports", code: "FR-14" },
-      { href: "/users", label: "users", code: "IAM" },
-      { href: "/workflow", label: "workflow", code: "FR-02" },
-      { href: "/settings", label: "settings", code: "ADM" },
+      { href: "/reports", label: "reports", code: "FR-14", tag: "RPT" },
+      { href: "/users", label: "users", code: "IAM", tag: "IAM", capability: "org.admin" },
+      { href: "/workflow", label: "workflow", code: "FR-02", tag: "WF", capability: "workflow.edit" },
+      { href: "/settings", label: "settings", code: "ADM", tag: "ADM" },
     ],
   },
 ];
 
 function CompanyMark() {
+  const { aviation, cfg } = useVocab();
   return (
     <Link href="/dashboard" className="flex items-center gap-3 px-5 py-5">
       <svg viewBox="0 0 32 32" className="h-8 w-8" aria-hidden>
@@ -52,7 +72,7 @@ function CompanyMark() {
       </svg>
       <div>
         <p className="display text-lg font-bold leading-none text-fg">COMPANY</p>
-        <p className="eyebrow leading-none">SERVICES · AMO</p>
+        <p className="eyebrow leading-none">{aviation ? "SERVICES · AMO" : (cfg?.pack?.name ?? "MAINTENANCE").toUpperCase()}</p>
       </div>
     </Link>
   );
@@ -61,11 +81,19 @@ function CompanyMark() {
 export function Sidebar() {
   const pathname = usePathname();
   const { t } = useLang();
+  const { aviation, terms, modules, can, session } = useVocab();
+  // Unchanged aviation words keep their Bahasa Melayu translation; an
+  // organisation's own words are shown as it wrote them.
+  const labelOf = (item: NavItem) => (item.term && terms[item.term] !== DEFAULT_TERMS[item.term] ? terms[item.term] : t(item.label));
+  const nav = NAV.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => (!i.module || modules[i.module]) && (!i.capability || !session || can(i.capability))),
+  })).filter((g) => g.items.length);
   return (
     <aside className="fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r hairline bg-ink-deep/80 backdrop-blur md:flex">
       <CompanyMark />
       <nav className="mt-2 flex-1 space-y-6 px-3">
-        {NAV.map((g) => (
+        {nav.map((g) => (
           <div key={g.group}>
             <p className="eyebrow mb-2 px-2">{t(g.group)}</p>
             <ul className="space-y-0.5">
@@ -81,13 +109,13 @@ export function Sidebar() {
                           : "text-steel hover:bg-panel/70 hover:text-fg"
                       }`}
                     >
-                      <span>{t(item.label)}</span>
+                      <span>{labelOf(item)}</span>
                       <span
                         className={`mono text-[10px] tracking-widest transition-colors ${
                           active ? "text-brand-bright" : "text-dim group-hover:text-steel"
                         }`}
                       >
-                        {item.code}
+                        {aviation ? item.code : item.tag}
                       </span>
                     </Link>
                   </li>
@@ -97,7 +125,7 @@ export function Sidebar() {
           </div>
         ))}
       </nav>
-      <p className="eyebrow px-5 py-4">CO-RFP-IT-001 · Prototype</p>
+      <p className="eyebrow px-5 py-4">{aviation ? "CO-RFP-IT-001 · Prototype" : "Maintenance ERP"}</p>
     </aside>
   );
 }

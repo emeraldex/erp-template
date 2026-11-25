@@ -4,21 +4,13 @@ import { useSession } from "@/lib/use-session";
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, download, getWithFallback } from "@/lib/api";
-import { Job, JobStatus, PriorityType, RepairRoute } from "@/lib/types";
+import { ChecklistItem, Job, JobStatus } from "@/lib/types";
+import { railOf, useVocab } from "@/lib/vocab";
 import { useConfig } from "@/lib/use-config";
 import { useLang } from "@/lib/i18n";
 import { Button, MetaPill, OfflineNotice, Panel } from "@/components/ui";
 import { AuditTrail, RecordsList, StageRail, TransitionActions } from "@/components/workflow";
 import { AttachmentsPanel } from "@/components/attachments";
-
-const ROUTES: RepairRoute[] = ["COE_UNIT", "OV", "POOLEX", "AW_SPARE", "UNIT_PROCEED"];
-const PRIORITY_TYPES: PriorityType[] = ["AOG", "ROA", "CRITICAL"];
-
-// QP.44 main-line stages; BER / SOR / REC_OV render as branches off the rail
-const RAIL: JobStatus[] = [
-  "REGISTERED", "AWAITING_TDI", "TDI", "AWAITING_SPARE", "AWAITING_INDENT",
-  "WIP", "SERVICEABLE", "DELIVERED", "CLOSED",
-];
 
 export default function JobDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -30,11 +22,15 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
   const [busy, setBusy] = useState(false);
 
   const [showPriority, setShowPriority] = useState(false);
-  const [pForm, setPForm] = useState({ type: "AOG" as PriorityType, route: "COE_UNIT" as RepairRoute, quantity: "1", suffixK: false, colRef: "" });
+  const [pForm, setPForm] = useState({ type: "", route: "", quantity: "1", suffixK: false, colRef: "" });
+  const [newCheck, setNewCheck] = useState("");
 
   const user = useSession()?.user;
-  const canManagePriority = ["PCE", "MM", "STORES", "ADMIN"].includes(user?.role ?? "");
-  const canClosePriority = ["PCE", "MM", "ADMIN"].includes(user?.role ?? "");
+  const { terms, modules, dict, label, can, ref, aviation, isFinal } = useVocab();
+  const priorities = dict("priority");
+  const routes = dict("route");
+  const canManagePriority = modules.priority && can("priority.raise");
+  const canClosePriority = can("priority.close");
 
   useEffect(() => {
     getWithFallback<Job[]>("/jobs", "jobs")
@@ -59,6 +55,17 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
     }
   }
 
+  async function checklist(body: { items?: { key: string; done?: boolean }[]; add?: { label: string }[] }) {
+    if (!job) return;
+    setBusy(true); setError(null);
+    try {
+      setJob(await api.patch<Job>(`/jobs/${job.id}/checklist`, body));
+      setNewCheck("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally { setBusy(false); }
+  }
+
   async function priorityAction(method: "post" | "patch", path: string, body: object) {
     if (!job) return;
     setBusy(true); setError(null);
@@ -74,13 +81,16 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
   if (job === null)
     return (
       <p className="eyebrow py-20 text-center">
-        JOB NOT FOUND — <Link href="/jobs" className="text-trace">back to register</Link>
+        {terms.job.toUpperCase()} NOT FOUND — <Link href="/jobs" className="text-trace">back to register</Link>
       </p>
     );
 
   const daysIn = Math.floor((Date.now() - new Date(job.statusSince).getTime()) / 86_400_000);
   const sla = cfg?.slaRules.find((r) => r.entity === "JOB" && r.status === job.status);
   const overdue = sla && daysIn > sla.days;
+  const closed = isFinal("JOB", job.status);
+  const rail = railOf(cfg?.jobStatusMeta);
+  const checks: ChecklistItem[] = job.checklist ?? [];
 
   return (
     <div>
@@ -89,23 +99,26 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
       <div className="fade-up mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow mb-1">
-            <Link href="/jobs" className="hover:text-trace">{t("jobs")}</Link> · {job.category} · {job.originUnit} → {job.repairUnit}
+            <Link href="/jobs" className="hover:text-trace">{aviation ? t("jobs") : terms.jobRegister}</Link> · {aviation ? job.category : label("category", job.category)}
+            {job.jobType && !aviation && <> · {label("jobType", job.jobType)}</>} · {job.originUnit} → {aviation ? job.repairUnit : label("site", job.repairUnit)}
           </p>
           <h1 className="display text-2xl font-bold">
             <span className="mono mr-3 text-lg text-trace">{job.id}</span>
             {job.component}
           </h1>
           <p className="mono mt-1 text-xs text-steel">
-            P/N {job.partNo} · S/N {job.serialNo} · received {job.psDate}
+            {aviation ? `P/N ${job.partNo} · S/N ${job.serialNo}` : `${job.partNo} · ${job.serialNo}`} · received {job.psDate}
+            {job.assetId && <> · <Link href={`/assets?id=${encodeURIComponent(job.assetId)}`} className="text-trace hover:underline">{terms.asset.toUpperCase()} {job.assetId}</Link></>}
+            {job.pmScheduleId && <> · <Link href="/pm" className="text-trace hover:underline">{job.pmScheduleId}</Link></>}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <span className="mono rounded border hairline px-2.5 py-1 text-[10.5px] tracking-widest text-steel">
-            {t("location")}: {job.location}
+            {t("location")}: {aviation ? job.location : label("location", job.location)}
           </span>
           <MetaPill status={job.status} meta={cfg?.jobStatusMeta?.[job.status]} lang={lang} />
           <Button variant="ghost" onClick={() => download(`/job-cards?ids=${encodeURIComponent(job.id)}`, `${job.id}-job-card.pdf`).catch((e) => setError((e as Error).message))}>
-            Print job card
+            Print {aviation ? "job" : terms.job.toLowerCase()} card
           </Button>
         </div>
       </div>
@@ -119,7 +132,7 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
       {/* lifecycle rail */}
       {cfg && (
         <div className="panel fade-up d1 mb-4 px-4 py-3.5">
-          <StageRail order={RAIL} current={job.status} meta={cfg.jobStatusMeta} branches={["BER", "SOR", "REC_OV"]} />
+          <StageRail order={rail.order} current={job.status} meta={cfg.jobStatusMeta} branches={rail.branches} />
         </div>
       )}
 
@@ -130,12 +143,12 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
             <div className="flex flex-wrap items-center gap-3">
               <MetaPill status={job.priority.type} meta={cfg?.priorityMeta?.[job.priority.type]} lang={lang} />
               <span className="mono text-[10.5px] tracking-widest text-brand-bright">
-                COL {job.priority.colRef} · QTY {job.priority.quantity} · ROUTE {cfg?.repairRouteMeta?.[job.priority.route]?.[lang] ?? job.priority.route}
+                {aviation ? "COL" : "REF"} {job.priority.colRef} · QTY {job.priority.quantity} · ROUTE {cfg?.repairRouteMeta?.[job.priority.route]?.[lang] ?? job.priority.route}
                 {job.priority.suffixK && " · SUFFIX K"}{job.priority.edd && ` · EDD ${job.priority.edd}`}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <Link href="/aog" className="mono text-[10.5px] tracking-widest text-steel hover:text-trace">MANAGE ON COL →</Link>
+              <Link href="/aog" className="mono text-[10.5px] tracking-widest text-steel hover:text-trace">{aviation ? "MANAGE ON COL →" : "MANAGE →"}</Link>
               {canClosePriority && (
                 <>
                   <Button disabled={busy} onClick={() => priorityAction("post", `/jobs/${job.id}/priority/close`, { reason: "DELIVERED" })}>Close — delivered</Button>
@@ -144,7 +157,7 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
               )}
             </div>
           </div>
-          {job.priority.remark && <p className="mono mt-1.5 text-[10.5px] text-steel/90">COL REMARK · {job.priority.remark}</p>}
+          {job.priority.remark && <p className="mono mt-1.5 text-[10.5px] text-steel/90">{aviation ? "COL REMARK" : "REMARK"} · {job.priority.remark}</p>}
         </div>
       )}
       {job.priority?.state === "CLOSED" && (
@@ -152,26 +165,26 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
           {job.priority.type} PRIORITY CLOSED · {job.priority.closedAt?.slice(0, 10)} · {job.priority.closeReason === "DELIVERED" ? "DELIVERED" : "DOWNGRADED TO NORMAL"}
         </p>
       )}
-      {!job.priority?.state && canManagePriority && job.status !== "CLOSED" && (
+      {!job.priority?.state && canManagePriority && !closed && priorities.length > 0 && (
         <div className="fade-up mb-4">
           {!showPriority ? (
             <button onClick={() => setShowPriority(true)} className="mono rounded border border-brand-bright/40 px-3 py-1.5 text-[10.5px] tracking-widest text-brand-bright transition-colors hover:bg-brand-bright/10">
-              ⚠ RAISE AOG / ROA / CRITICAL PRIORITY (QP.56)
+              ⚠ {aviation ? "RAISE AOG / ROA / CRITICAL PRIORITY (QP.56)" : `RAISE ${terms.priority.toUpperCase()}`}
             </button>
           ) : (
             <div className="panel ticked p-4">
-              <p className="eyebrow mb-3">Upgrade to priority — insert into the COL AOG/ROA column</p>
+              <p className="eyebrow mb-3">{aviation ? "Upgrade to priority — insert into the COL AOG/ROA column" : "Raise the priority — expedite this work"}</p>
               <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
                 <label className="block">
                   <span className="mono mb-1 block text-[10px] tracking-widest text-steel">Status</span>
-                  <select value={pForm.type} onChange={(e) => setPForm({ ...pForm, type: e.target.value as PriorityType })} className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace">
-                    {PRIORITY_TYPES.map((tp) => <option key={tp} value={tp}>{tp}</option>)}
+                  <select value={pForm.type || priorities[0]?.key} onChange={(e) => setPForm({ ...pForm, type: e.target.value })} className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace">
+                    {priorities.map((tp) => <option key={tp.key} value={tp.key}>{aviation ? tp.key : tp.label}</option>)}
                   </select>
                 </label>
                 <label className="block lg:col-span-2">
-                  <span className="mono mb-1 block text-[10px] tracking-widest text-steel">Repair route</span>
-                  <select value={pForm.route} onChange={(e) => setPForm({ ...pForm, route: e.target.value as RepairRoute })} className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace">
-                    {ROUTES.map((r) => <option key={r} value={r}>{cfg?.repairRouteMeta?.[r]?.en ?? r}</option>)}
+                  <span className="mono mb-1 block text-[10px] tracking-widest text-steel">{aviation ? "Repair route" : "How it is expedited"}</span>
+                  <select value={pForm.route || routes[0]?.key} onChange={(e) => setPForm({ ...pForm, route: e.target.value })} className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace">
+                    {routes.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
                   </select>
                 </label>
                 <label className="block">
@@ -179,15 +192,17 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
                   <input value={pForm.quantity} onChange={(e) => setPForm({ ...pForm, quantity: e.target.value })} className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
                 </label>
                 <label className="block">
-                  <span className="mono mb-1 block text-[10px] tracking-widest text-steel">COL ref *</span>
-                  <input value={pForm.colRef} onChange={(e) => setPForm({ ...pForm, colRef: e.target.value })} placeholder="COL-AOG-2026-0xx" className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
+                  <span className="mono mb-1 block text-[10px] tracking-widest text-steel">{aviation ? "COL ref *" : "Reference (call log / ticket) *"}</span>
+                  <input value={pForm.colRef} onChange={(e) => setPForm({ ...pForm, colRef: e.target.value })} placeholder={aviation ? "COL-AOG-2026-0xx" : ""} className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
                 </label>
               </div>
               <div className="mt-3 flex items-center gap-3">
-                <label className="mono flex items-center gap-2 text-[10.5px] tracking-widest text-steel">
-                  <input type="checkbox" checked={pForm.suffixK} onChange={(e) => setPForm({ ...pForm, suffixK: e.target.checked })} /> SUFFIX K
-                </label>
-                <Button variant="danger" disabled={busy || !pForm.colRef} onClick={() => priorityAction("post", `/jobs/${job.id}/priority`, { type: pForm.type, route: pForm.route, quantity: Number(pForm.quantity), suffixK: pForm.suffixK, colRef: pForm.colRef })}>
+                {aviation && (
+                  <label className="mono flex items-center gap-2 text-[10.5px] tracking-widest text-steel">
+                    <input type="checkbox" checked={pForm.suffixK} onChange={(e) => setPForm({ ...pForm, suffixK: e.target.checked })} /> SUFFIX K
+                  </label>
+                )}
+                <Button variant="danger" disabled={busy || !pForm.colRef} onClick={() => priorityAction("post", `/jobs/${job.id}/priority`, { type: pForm.type || priorities[0]?.key, route: pForm.route || routes[0]?.key, quantity: Number(pForm.quantity), suffixK: pForm.suffixK, colRef: pForm.colRef })}>
                   Raise priority
                 </Button>
                 <button onClick={() => setShowPriority(false)} className="mono text-[10.5px] tracking-widest text-dim hover:text-steel">CANCEL</button>
@@ -202,7 +217,7 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel ticked className="fade-up d2 p-5 lg:col-span-2">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <p className="eyebrow">Stage control · process-owner gated (FR-03)</p>
+            <p className="eyebrow">Stage control · process-owner gated{ref(" (FR-03)")}</p>
             <span className={`mono text-[10.5px] tracking-widest ${overdue ? "text-brand-bright" : "text-steel"}`}>
               {daysIn} {t("daysInStatus")}
               {sla && ` · SLA ${sla.days}D (${sla.source})`}
@@ -221,10 +236,48 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
             />
           )}
 
-          {job.status === "CLOSED" && (
+          {closed && (
             <p className="mt-4 rounded border hairline bg-ink-deep/40 px-3 py-2 text-sm text-dim">
-              Job closed — editing locked (QP.44 stage 10). Records retained 5 years.
+              {aviation ? "Job" : terms.job} closed — editing locked{ref(" (QP.44 stage 10)")}. Records retained 5 years.
             </p>
+          )}
+
+          {(checks.length > 0 || (!closed && !job.archivedAt)) && (
+            <div className="mt-6 border-t hairline pt-4">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="eyebrow">{t("checklist")}</p>
+                {checks.length > 0 && (
+                  <span className="mono text-[10.5px] tracking-widest text-steel">
+                    {checks.filter((c) => c.done).length}/{checks.length} DONE · REQUIRED ITEMS GATE COMPLETION
+                  </span>
+                )}
+              </div>
+              <ul className="space-y-1.5">
+                {checks.map((c) => (
+                  <li key={c.key} className="flex items-start gap-3 rounded-md border hairline bg-ink-deep/40 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={c.done}
+                      disabled={busy || closed || !!job.archivedAt}
+                      onChange={(e) => checklist({ items: [{ key: c.key, done: e.target.checked }] })}
+                      className="mt-0.5 accent-[var(--c-red)]"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-sm ${c.done ? "text-steel line-through" : "text-fg"}`}>
+                        {c.label}{c.required && !c.done && <span className="ml-1 text-brand-bright">*</span>}
+                      </p>
+                      {c.done && <p className="mono text-[10px] tracking-widest text-dim">{c.by} · {c.at?.slice(0, 16).replace("T", " ")}</p>}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {!closed && !job.archivedAt && (
+                <div className="mt-2 flex gap-2">
+                  <input value={newCheck} onChange={(e) => setNewCheck(e.target.value)} placeholder="Add a check…" className="mono flex-1 rounded-md border hairline bg-ink-deep px-3 py-1.5 text-xs text-fg outline-none focus:border-trace" />
+                  <Button variant="ghost" disabled={busy || !newCheck.trim()} onClick={() => checklist({ add: [{ label: newCheck.trim() }] })}>Add</Button>
+                </div>
+              )}
+            </div>
           )}
 
           <div className="mt-6">
@@ -235,8 +288,8 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
             <AttachmentsPanel
               entity="JOB"
               entityId={job.id}
-              canUpload={job.status !== "CLOSED"}
-              formNos={["F116", "F117", "F119", "F135", "F174", "F218", "F219", "AM 75"]}
+              canUpload={!closed}
+              formNos={aviation ? ["F116", "F117", "F119", "F135", "F174", "F218", "F219", "AM 75"] : []}
             />
           </div>
 
@@ -246,22 +299,22 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
               <div className="flex flex-wrap gap-2">
                 {job.demandIds.map((d) => (
                   <Link key={d} href="/demands" className="mono rounded border border-trace/40 px-2.5 py-1 text-[10.5px] tracking-widest text-trace hover:bg-trace/10">
-                    DEMAND {d} · QP.14
+                    {aviation ? "DEMAND" : terms.demand.toUpperCase()} {d}{ref(" · QP.14")}
                   </Link>
                 ))}
                 {job.ovId && (
                   <Link href="/ov" className="mono rounded border border-amber/40 px-2.5 py-1 text-[10.5px] tracking-widest text-amber hover:bg-amber/10">
-                    OV {job.ovId} · QP.33
+                    {aviation ? "OV" : terms.vendorRepair.toUpperCase()} {job.ovId}{ref(" · QP.33")}
                   </Link>
                 )}
                 {(job.invoiceIds ?? []).map((inv) => (
                   <Link key={inv} href="/invoicing" className="mono rounded border border-phosphor/40 px-2.5 py-1 text-[10.5px] tracking-widest text-phosphor hover:bg-phosphor/10">
-                    INVOICE {inv} · QP.51
+                    INVOICE {inv}{ref(" · QP.51")}
                   </Link>
                 ))}
                 {job.indentRef && (
                   <span className="mono rounded border hairline px-2.5 py-1 text-[10.5px] tracking-widest text-steel">
-                    CUSTOMER INDENT {job.indentRef}
+                    {aviation ? "CUSTOMER INDENT" : "APPROVAL / PO"} {job.indentRef}
                   </span>
                 )}
               </div>

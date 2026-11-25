@@ -7,18 +7,13 @@ import { api, download, getWithFallback } from "@/lib/api";
 import { AttachmentsPanel } from "@/components/attachments";
 import { Invoice, InvoiceStatus, InvoiceStream, Job } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
+import { railOf, useVocab } from "@/lib/vocab";
 import { useLang } from "@/lib/i18n";
 import { fmtMYR } from "@/lib/format";
 import { Button, MetaPill, OfflineNotice, PageHeader, Panel, StatusPill } from "@/components/ui";
 import { AuditTrail, RecordsList, StageRail, TransitionActions } from "@/components/workflow";
 
-const INV_RAIL: InvoiceStatus[] = [
-  "DRAFTED", "CERTIFIED", "TAX_RAISED", "CORRECTNESS_CHECK", "SUBMITTED", "PAID",
-];
-
-const STREAM_TONE: Record<InvoiceStream, "info" | "warn" | "good" | "neutral"> = {
-  PBC: "warn", BRANCH_REPAIR: "info", COE_MRA: "neutral", ACD: "good",
-};
+const STREAM_TONES = ["warn", "info", "neutral", "good"] as const;
 
 export default function InvoicingPage() {
   const cfg = useConfig();
@@ -33,7 +28,11 @@ export default function InvoicingPage() {
   const [form, setForm] = useState({ stream: "BRANCH_REPAIR" as InvoiceStream, jobId: "", period: "", amountMYR: "" });
 
   const user = useSession()?.user;
-  const canRaise = ["BILLING", "PCE", "FINANCE", "ADMIN"].includes(user?.role ?? "");
+  const { aviation, can, phaseOf } = useVocab();
+  const canRaise = can("invoices.create");
+  const canDocs = can("invoices.documents");
+  const rail = railOf(cfg?.invoiceStatusMeta);
+  const streamTone = (id: InvoiceStream) => STREAM_TONES[Math.max(0, cfg?.invoiceStreams.findIndex((s) => s.id === id) ?? 0) % STREAM_TONES.length];
 
   useEffect(() => {
     getWithFallback<Invoice[]>("/invoicing", "invoices")
@@ -79,7 +78,7 @@ export default function InvoicingPage() {
     <div>
       <OfflineNotice show={offline} />
       <PageHeader
-        eyebrow="QP.51 · Multi-stream billing · tax per settings · correctness gate → CPU (Finance) · FR-13 / FR-14"
+        eyebrow={aviation ? "QP.51 · Multi-stream billing · tax per settings · correctness gate → CPU (Finance) · FR-13 / FR-14" : "Billing streams · tax per settings · payment tracking"}
         title={t("invoicing")}
         actions={canRaise ? (
           <Button onClick={() => setShowNew(!showNew)} variant={showNew ? "ghost" : "primary"}>
@@ -112,14 +111,14 @@ export default function InvoicingPage() {
                   className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace"
                 >
                   <option value="">— select —</option>
-                  {jobs.filter((j) => j.status === "SERVICEABLE" || j.status === "DELIVERED").map((j) => (
+                  {jobs.filter((j) => phaseOf("JOB", j.status) === "done").map((j) => (
                     <option key={j.id} value={j.id}>{j.id} · {j.component}</option>
                   ))}
                 </select>
               </label>
             ) : (
               <label className="block">
-                <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">PBC period (YYYY-MM)</span>
+                <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">{aviation ? "PBC period (YYYY-MM)" : "Billing period (YYYY-MM)"}</span>
                 <input value={form.period} onChange={(e) => setForm({ ...form, period: e.target.value })} placeholder="2026-07"
                   className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
               </label>
@@ -176,7 +175,7 @@ export default function InvoicingPage() {
                     {inv.period && <span className="ml-3 text-steel">· {inv.period}</span>}
                   </p>
                   <p className="mt-0.5 text-sm">
-                    <StatusPill value={def?.label ?? inv.stream} tone={STREAM_TONE[inv.stream]} />
+                    <StatusPill value={def?.label ?? inv.stream} tone={streamTone(inv.stream)} />
                     <span className="mono ml-2 text-xs text-steel">→ {inv.customer}</span>
                   </p>
                 </div>
@@ -194,7 +193,7 @@ export default function InvoicingPage() {
                 <div className="fade-up mt-4 border-t hairline pt-4">
                   {cfg && (
                     <div className="mb-4">
-                      <StageRail order={INV_RAIL} current={inv.status} meta={cfg.invoiceStatusMeta} branches={["REJECTED"]} />
+                      <StageRail order={rail.order} current={inv.status} meta={cfg.invoiceStatusMeta} branches={rail.branches} />
                     </div>
                   )}
 
@@ -248,7 +247,7 @@ export default function InvoicingPage() {
                     />
                   )}
 
-                  {user && DOC_ROLES.includes(user.role) && (
+                  {user && canDocs && (
                     <InvoiceDocuments inv={inv} onError={setError} />
                   )}
 
@@ -270,7 +269,6 @@ export default function InvoicingPage() {
   );
 }
 
-const DOC_ROLES = ["BILLING", "FINANCE", "PCE", "MM", "ADMIN"];
 
 /** FR-13 — generated billing documents; CTC stamping once a CTC reference exists. */
 function InvoiceDocuments({ inv, onError }: { inv: Invoice; onError: (m: string) => void }) {

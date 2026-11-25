@@ -4,21 +4,26 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { useSession } from "@/lib/use-session";
+import { useVocab } from "@/lib/vocab";
 import { Button, PageHeader, Panel } from "@/components/ui";
 
 type User = {
   id: string; name: string; email: string; role: string; designation: string; branch: string; createdAt: string;
   deactivatedAt: string | null; lockedUntil: string | null; mustChangePassword: boolean; lastSignIn: string | null;
 };
-const ROLES = ["ADMIN", "STORES", "WORKSHOP", "MIS", "MM", "PURCHASING", "PCE", "QUALITY", "FINANCE", "BILLING"];
-const BRANCHES = ["HQ", "CENTRAL", "EAST", "NORTH", "NORTHEAST", "OFFSHORE"];
 const input = "mono w-full rounded-md border hairline bg-ink-deep px-2.5 py-1.5 text-xs text-fg outline-none focus:border-trace";
 
 export default function UsersPage() {
   const { t } = useLang();
   const session = useSession();
+  const { dict, can, terms, aviation } = useVocab();
+  // The organisation's own roles and sites.
+  const ROLES = dict("role").map((r) => r.key);
+  const BRANCHES = dict("site").map((s) => s.key);
+  const roleLabel = (k: string) => dict("role", false).find((r) => r.key === k)?.label ?? k;
+  const blank = () => ({ name: "", email: "", role: ROLES.find((r) => r !== "ADMIN") ?? "ADMIN", designation: "", branch: BRANCHES[0] ?? "" });
   const [users, setUsers] = useState<User[] | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", role: "STORES", designation: "", branch: "HQ" });
+  const [form, setForm] = useState({ name: "", email: "", role: "", designation: "", branch: "" });
   const [adding, setAdding] = useState(false);
   const [secret, setSecret] = useState<{ who: string; password: string } | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -35,9 +40,10 @@ export default function UsersPage() {
   async function add() {
     setMsg(null);
     try {
-      const res = await api.post<{ user: User; temporaryPassword: string }>("/users", form);
+      const d = blank();
+      const res = await api.post<{ user: User; temporaryPassword: string }>("/users", { ...form, role: form.role || d.role, branch: form.branch || d.branch });
       setSecret({ who: `${res.user.name} <${res.user.email}>`, password: res.temporaryPassword });
-      setForm({ name: "", email: "", role: "STORES", designation: "", branch: "HQ" });
+      setForm({ name: "", email: "", role: "", designation: "", branch: "" });
       setAdding(false);
       load();
     } catch (e) {
@@ -45,7 +51,7 @@ export default function UsersPage() {
     }
   }
 
-  if (session && session.user.role !== "ADMIN") return <p className="py-20 text-center text-sm text-dim">User management is for administrators.</p>;
+  if (session && !can("org.admin")) return <p className="py-20 text-center text-sm text-dim">User management is for administrators.</p>;
   const shown = (users ?? []).filter((u) => showInactive || !u.deactivatedAt);
   const now = Date.now();
 
@@ -71,8 +77,8 @@ export default function UsersPage() {
           <div className="grid gap-2 sm:grid-cols-5">
             <label className="block"><span className="eyebrow mb-1 block">Name</span><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={input} /></label>
             <label className="block sm:col-span-2"><span className="eyebrow mb-1 block">Email</span><input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={input} /></label>
-            <label className="block"><span className="eyebrow mb-1 block">Role</span><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className={input}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select></label>
-            <label className="block"><span className="eyebrow mb-1 block">Branch</span><select value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })} className={input}>{BRANCHES.map((b) => <option key={b}>{b}</option>)}</select></label>
+            <label className="block"><span className="eyebrow mb-1 block">Role</span><select value={form.role || blank().role} onChange={(e) => setForm({ ...form, role: e.target.value })} className={input}>{ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}</select></label>
+            <label className="block"><span className="eyebrow mb-1 block">{aviation ? "Branch" : terms.site}</span><select value={form.branch || blank().branch} onChange={(e) => setForm({ ...form, branch: e.target.value })} className={input}>{BRANCHES.map((b) => <option key={b}>{b}</option>)}</select></label>
             <label className="block"><span className="eyebrow mb-1 block">Designation</span><input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} className={input} /></label>
           </div>
           <div className="mt-3"><Button disabled={!form.name || !form.email} onClick={add}>Create account</Button></div>
@@ -96,7 +102,7 @@ export default function UsersPage() {
                   <td className="px-4 py-2.5"><p className="text-fg">{u.name}{self && <span className="mono ml-2 text-[10px] text-dim">YOU</span>}</p><p className="mono text-[10.5px] text-dim">{u.email}{u.designation && ` · ${u.designation}`}</p></td>
                   <td className="px-4 py-2.5">
                     <select value={u.role} disabled={self || !!u.deactivatedAt} onChange={(e) => act(() => api.patch(`/users/${u.id}`, { role: e.target.value }), `${u.name} is now ${e.target.value}`)} className={`${input} w-32`}>
-                      {ROLES.map((r) => <option key={r}>{r}</option>)}
+                      {ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
                     </select>
                   </td>
                   <td className="px-4 py-2.5">

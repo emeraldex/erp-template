@@ -23,6 +23,8 @@ export interface StatusMeta {
   draftDocuments?: boolean;
   /** Demands: supplier quotations can be recorded in this status. */
   acceptsQuotations?: boolean;
+  /** Shown off the main progress line (e.g. scrapped, cancelled, at a contractor). */
+  branch?: boolean;
 }
 
 export interface Entry<M = Record<string, unknown>> {

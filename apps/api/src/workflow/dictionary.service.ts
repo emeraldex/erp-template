@@ -72,6 +72,7 @@ export class DictionaryService {
           if (status !== 'INVOICE') errors.push(`${at}: only invoice statuses can mark documents as drafts`);
           meta.draftDocuments = true;
         }
+        if (m.branch === true) meta.branch = true;
         if (m.acceptsQuotations === true) {
           if (status !== 'DEMAND') errors.push(`${at}: only demand statuses can accept quotations`);
           meta.acceptsQuotations = true;

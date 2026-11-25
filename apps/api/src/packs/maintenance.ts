@@ -86,11 +86,11 @@ function jobWorkflow(o: MaintenanceOptions, modules: Modules) {
     st('IN_PROGRESS', 'In progress', 'Dalam tindakan', 'info', 'active'),
     st('ON_HOLD_PARTS', 'On hold — parts', 'Tunggu alat ganti', 'warn', 'waiting_parts'),
     st('AWAITING_APPROVAL', 'Awaiting approval', 'Menunggu kelulusan', 'warn', 'waiting_customer'),
-    st('WITH_CONTRACTOR', modules.vendorRepair ? 'At vendor / contractor' : 'With contractor', 'Di kontraktor', 'warn', 'external'),
+    st('WITH_CONTRACTOR', modules.vendorRepair ? 'At vendor / contractor' : 'With contractor', 'Di kontraktor', 'warn', 'external', { branch: true }),
     ...(o.inspection ? [st('INSPECTION', o.inspection.label, o.inspection.labelMs, 'info', 'active')] : []),
     st('COMPLETED', 'Completed', 'Selesai', 'good', 'done'),
     st('CLOSED', 'Closed', 'Ditutup', 'good', 'closed'),
-    st('CANCELLED', 'Cancelled', 'Dibatalkan', 'neutral', 'closed'),
+    st('CANCELLED', 'Cancelled', 'Dibatalkan', 'neutral', 'closed', { branch: true }),
   ];
   const reason = [field('reason', 'Reason')];
   const transitions: TransitionRule[] = [
@@ -143,7 +143,7 @@ function demandWorkflow(o: MaintenanceOptions) {
     st('ORDERED', 'Ordered', 'Dipesan', 'warn', 'waiting_parts'),
     st('RECEIVED', 'Received', 'Diterima', 'info', 'active'),
     st('ISSUED', 'Issued', 'Dikeluarkan', 'good', 'closed'),
-    st('REJECTED', 'Rejected', 'Ditolak', 'bad', 'closed'),
+    st('REJECTED', 'Rejected', 'Ditolak', 'bad', 'closed', { branch: true }),
   ];
   const transitions = [
     step('RAISED', 'APPROVED', 'Approve', 'Lulus', [SUPERVISOR, MANAGER]),
@@ -172,7 +172,7 @@ function vendorWorkflow() {
     st('APPROVED', 'Approved', 'Diluluskan', 'info', 'active'),
     st('AT_VENDOR', 'At vendor', 'Di vendor', 'warn', 'external'),
     st('RETURNED', 'Returned', 'Dipulangkan', 'good', 'closed'),
-    st('DECLINED', 'Declined', 'Ditolak', 'bad', 'closed'),
+    st('DECLINED', 'Declined', 'Ditolak', 'bad', 'closed', { branch: true }),
   ];
   const transitions = [
     step('REQUESTED', 'QUOTED', 'Record vendor quotation', 'Rekod sebut harga vendor', [PURCHASING, SUPERVISOR],
@@ -194,9 +194,9 @@ function invoiceWorkflow() {
     st('DRAFTED', 'Draft', 'Draf', 'neutral', 'new', { draftDocuments: true }),
     st('ISSUED', 'Issued', 'Dikeluarkan', 'info', 'active'),
     st('SENT', 'Sent to customer', 'Dihantar kepada pelanggan', 'warn', 'waiting_customer'),
-    st('DISPUTED', 'Disputed', 'Dipertikai', 'bad', 'active'),
+    st('DISPUTED', 'Disputed', 'Dipertikai', 'bad', 'active', { branch: true }),
     st('PAID', 'Paid', 'Dibayar', 'good', 'closed'),
-    st('VOID', 'Void', 'Dibatalkan', 'neutral', 'closed'),
+    st('VOID', 'Void', 'Dibatalkan', 'neutral', 'closed', { branch: true }),
   ];
   const transitions = [
     step('DRAFTED', 'ISSUED', 'Issue tax invoice', 'Keluarkan invois cukai', [FINANCE], [field('invoiceNo', 'Tax invoice no.')],

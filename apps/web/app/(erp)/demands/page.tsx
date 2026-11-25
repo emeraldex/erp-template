@@ -6,6 +6,7 @@ import Link from "next/link";
 import { api, getWithFallback } from "@/lib/api";
 import { Demand, DemandStatus, Partner, Quotation } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
+import { useVocab } from "@/lib/vocab";
 import { useLang } from "@/lib/i18n";
 import { fmtMYR } from "@/lib/format";
 import { Button, MetaPill, OfflineNotice, PageHeader, Panel } from "@/components/ui";
@@ -13,6 +14,9 @@ import { AuditTrail, RecordsList, TransitionActions } from "@/components/workflo
 
 export default function DemandsPage() {
   const cfg = useConfig();
+  const { aviation, terms, can, ref } = useVocab();
+  // Quotations can be recorded in the statuses the organisation marked for it.
+  const quoting = (status: string) => !!cfg?.demandStatusMeta?.[status]?.acceptsQuotations;
   const { lang, t } = useLang();
   const [rows, setRows] = useState<Demand[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -63,7 +67,7 @@ export default function DemandsPage() {
   return (
     <div>
       <OfflineNotice show={offline} />
-      <PageHeader eyebrow="QP.14 · Parts Procurement & Verification" title={t("procurement")} />
+      <PageHeader eyebrow={aviation ? "QP.14 · Parts Procurement & Verification" : "Parts requests, quotations and purchase orders"} title={aviation ? t("procurement") : terms.demands} />
       {error && <p className="mb-4 rounded border border-brand-bright/40 bg-brand-bright/10 px-3 py-2 text-sm text-brand-bright">{error}</p>}
 
       <div className="space-y-4">
@@ -71,7 +75,7 @@ export default function DemandsPage() {
           const open = openId === dm.id;
           const meta = cfg?.demandStatusMeta;
           return (
-            <Panel key={dm.id} ticked={dm.status === "RFQ_ISSUED"} className={`fade-up d${Math.min(i + 1, 5)} p-5`}>
+            <Panel key={dm.id} ticked={quoting(dm.status)} className={`fade-up d${Math.min(i + 1, 5)} p-5`}>
               <button className="flex w-full flex-wrap items-center justify-between gap-3 text-left" onClick={() => setOpenId(open ? null : dm.id)}>
                 <div>
                   <p className="mono text-xs text-trace">
@@ -98,9 +102,9 @@ export default function DemandsPage() {
               {open && (
                 <div className="fade-up mt-4 border-t hairline pt-4">
                   {/* quotation board */}
-                  {(dm.quotations.length > 0 || dm.status === "RFQ_ISSUED") && (
+                  {(dm.quotations.length > 0 || quoting(dm.status)) && (
                     <div className="mb-4">
-                      <p className="eyebrow mb-2">Quotation comparison · min. 3 before F221 evaluation</p>
+                      <p className="eyebrow mb-2">{aviation ? "Quotation comparison · min. 3 before F221 evaluation" : "Quotation comparison"}</p>
                       {dm.quotations.length > 0 && (
                         <div className="mb-3 grid gap-2 sm:grid-cols-3">
                           {dm.quotations.map((q) => {
@@ -118,10 +122,10 @@ export default function DemandsPage() {
                           })}
                         </div>
                       )}
-                      {dm.status === "RFQ_ISSUED" && user && (user.role === "PURCHASING" || user.role === "ADMIN") && (
+                      {quoting(dm.status) && user && can("procurement.quote") && (
                         <div className="flex flex-wrap items-end gap-2 rounded-md border hairline bg-ink-deep/40 p-3">
                           <label className="block">
-                            <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Approved supplier (F224)</span>
+                            <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Approved supplier{ref(" (F224)")}</span>
                             <select value={quote.supplierId} onChange={(e) => setQuote({ ...quote, supplierId: e.target.value })} className="mono rounded-md border hairline bg-panel px-3 py-2 text-xs text-fg outline-none focus:border-trace">
                               <option value="">Select…</option>
                               {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -145,9 +149,9 @@ export default function DemandsPage() {
 
                   {dm.stockCheck && (
                     <p className="mono mb-4 text-[10.5px] tracking-widest text-steel">
-                      F244 {dm.stockCheck.f244Ref} · {dm.stockCheck.available ? `STOCK AT ${dm.stockCheck.holdingUnit}` : "NIL STOCK"}
+                      {aviation ? `F244 ${dm.stockCheck.f244Ref} · ` : ""}{dm.stockCheck.available ? `STOCK AT ${dm.stockCheck.holdingUnit}` : "NIL STOCK"}
                       {dm.poRef && ` · PO ${dm.poRef}`}
-                      {dm.discrepancy && <span className="text-amber"> · F217 {dm.discrepancy.f217Ref}</span>}
+                      {dm.discrepancy && <span className="text-amber"> · {aviation ? "F217" : "DISCREPANCY"} {dm.discrepancy.f217Ref}</span>}
                     </p>
                   )}
 

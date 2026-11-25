@@ -27,6 +27,23 @@ describe('Any sector: a fleet operator on the fleet pack (integration)', () => {
   });
   afterAll(() => app.close());
 
+  // First, before any request has loaded an organisation's settings.
+  it('runs preventive maintenance from the timer for every organisation', async () => {
+    const { SchedulerService } = await import('../../src/scheduler/scheduler.service');
+    const { PmService } = await import('../../src/assets/pm.service');
+    const failures: string[] = [];
+    const scheduler = app.get(SchedulerService);
+    const log = (scheduler as unknown as { log: { error: (m: string) => void } }).log;
+    const original = log.error.bind(log);
+    log.error = (m: string) => { failures.push(m); };
+    try {
+      await scheduler.forEachTenant('pm', () => app.get(PmService).generateDue());
+    } finally {
+      log.error = original;
+    }
+    expect(failures).toEqual([]);
+  });
+
   it('serves the fleet vocabulary, statuses and modules', async () => {
     const cfg = (await get('/config').then(st(200))).body;
     expect(cfg.pack).toEqual({ id: 'fleet', name: 'Fleet & vehicles' });
