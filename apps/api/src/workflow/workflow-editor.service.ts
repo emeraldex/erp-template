@@ -3,8 +3,8 @@ import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../common/prisma.service';
 import { StoreService } from '../common/store.service';
 import type { Role } from '../common/types';
-import { INVOICE_STATUS_META, DEMAND_STATUS_META, JOB_STATUS_META, OV_STATUS_META } from '../common/workflow-config';
-import { INITIAL, Kind, KINDS, LOCATIONS, protectedRules, ROLES, STATUSES, validateTransitions } from './workflow-rules';
+import { EFFECTS, neededFields } from './effects';
+import { Kind, KINDS, validateTransitions, WorkflowContext } from './workflow-rules';
 
 type Actor = { name: string; role: Role };
 
@@ -23,18 +23,34 @@ export class WorkflowEditorService {
       : kind === 'OV' ? this.store.ovTransitions : this.store.invoiceTransitions;
   }
 
+  /** The organisation's own statuses, roles and locations, which every workflow is checked against. */
+  private context(kind: Kind): WorkflowContext {
+    return {
+      statuses: this.store.statusKeys(kind),
+      initial: this.store.initialStatus(kind),
+      roles: this.store.dict('role', true).map((r) => r.key),
+      locations: this.store.dict('location', true).map((l) => l.key),
+    };
+  }
+
   /** Everything the editor screen needs, with a version per list. */
   async snapshot() {
     await this.store.reloadConfig();
-    const meta = { JOB: JOB_STATUS_META, DEMAND: DEMAND_STATUS_META, OV: OV_STATUS_META, INVOICE: INVOICE_STATUS_META };
+    const ctx = this.context('JOB');
     return {
-      roles: ROLES,
-      locations: LOCATIONS,
+      roles: ctx.roles,
+      locations: ctx.locations,
       kinds: KINDS.map((kind) => {
         const transitions = this.transitionsOf(kind);
+        const c = this.context(kind);
         return {
-          kind, initial: INITIAL[kind], statuses: STATUSES[kind], statusMeta: meta[kind],
-          transitions, version: versionOf(transitions), protected: protectedRules(kind),
+          kind, initial: c.initial, statuses: c.statuses, statusMeta: this.store.statusMeta(kind),
+          transitions, version: versionOf(transitions),
+          // Fields that must stay mandatory because a step's action reads them.
+          protected: transitions
+            .map((t) => ({ from: t.from, to: t.to, fields: neededFields(kind, t.effects) }))
+            .filter((p) => p.fields.length),
+          actions: EFFECTS.filter((e) => e.kind === kind),
         };
       }),
       sla: { rules: this.store.slaRules, version: versionOf(this.store.slaRules) },
@@ -58,7 +74,7 @@ export class WorkflowEditorService {
   /** Validate without saving, so the screen can show errors and warnings as you edit. */
   preview(kind: string, transitions: unknown) {
     const k = this.kind(kind);
-    const { errors, warnings } = validateTransitions(k, transitions);
+    const { errors, warnings } = validateTransitions(k, transitions, this.context(k));
     return { ok: !errors.length, errors, warnings };
   }
 
@@ -73,7 +89,7 @@ export class WorkflowEditorService {
     await this.store.reloadConfig();
     const before = this.transitionsOf(k);
     this.check(body.version, before);
-    const { rules, errors, warnings } = validateTransitions(k, body.transitions);
+    const { rules, errors, warnings } = validateTransitions(k, body.transitions, this.context(k));
     if (errors.length) throw new BadRequestException({ statusCode: 400, message: 'The workflow has problems', errors, warnings });
 
     await this.prisma.$transaction(async (tx) => {
@@ -81,7 +97,7 @@ export class WorkflowEditorService {
       await tx.transitionRuleRow.createMany({
         data: rules.map((r, seq) => ({
           kind: k, from: r.from, to: r.to, label: r.label, labelMs: r.labelMs, roles: r.roles as never,
-          requires: r.requires as never, setLocation: (r.setLocation ?? null) as never, seq,
+          requires: r.requires as never, setLocation: (r.setLocation ?? null) as never, effects: (r.effects ?? []) as never, seq,
         })),
       });
     });
@@ -110,7 +126,7 @@ export class WorkflowEditorService {
       if (ids.has(id)) errors.push(`${at}: id ${id} is used twice`);
       ids.add(id);
       if (!SLA_ENTITIES.includes(entity)) errors.push(`${at}: unknown record type ${entity}`);
-      else if (!STATUSES[entity].includes(status)) errors.push(`${at}: ${entity} has no status ${status}`);
+      else if (!this.store.statusKeys(entity).includes(status)) errors.push(`${at}: ${entity} has no status ${status}`);
       if (!Number.isInteger(days) || days < 1 || days > 3650) errors.push(`${at}: days must be a whole number from 1 to 3650`);
       const rule = String(r.rule ?? '').trim().slice(0, 160);
       const source = String(r.source ?? '').trim().slice(0, 60);

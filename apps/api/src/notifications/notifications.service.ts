@@ -30,7 +30,7 @@ export class NotificationsService {
       alert.entity === 'DEMAND' ? this.store.demandTransitions :
       alert.entity === 'OV' ? this.store.ovTransitions : this.store.invoiceTransitions;
     const roles = new Set<Role>(rules.filter((r) => r.from === alert.status).flatMap((r) => r.roles));
-    if (alert.level === 'breached') roles.add('MM'); // escalate breaches to management
+    if (alert.level === 'breached') for (const r of this.store.rolesWith('alerts.escalation')) roles.add(r); // escalate breaches
     if (!roles.size) roles.add('ADMIN');
     return [...roles];
   }

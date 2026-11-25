@@ -19,9 +19,8 @@ import { fromBranch } from './common/mappers';
 import {
   DEMANDS, FOD_INCIDENTS, INVOICES, JOBS, OV_REPAIRS, PARTNERS, TOOLS, TRAINING, USERS, WEEKLY_CLOSURES,
 } from './common/seed';
-import {
-  DEMAND_TRANSITIONS, INVOICE_STREAMS, INVOICE_TRANSITIONS, JOB_TRANSITIONS, OV_TRANSITIONS, SLA_RULES,
-} from './common/workflow-config';
+import { DEFAULT_PACK, getPack } from './packs';
+import { DICT_KINDS, KINDS, type Pack } from './packs/types';
 import type { AuditEntry, FormRecord } from './common/types';
 
 type Db = PrismaClient;
@@ -34,18 +33,36 @@ const recordRows = (r: FormRecord[] = []) =>
 /** Higher ordinal sorts first, so seed order is preserved as written. */
 const ord = (total: number, i: number) => total - i;
 
-/** Workflow rules, SLA timers and invoice streams (FR-02): every tenant needs these. */
-export async function seedWorkflow(prisma: Db): Promise<void> {
-  const kinds = [
-    ['JOB', JOB_TRANSITIONS], ['DEMAND', DEMAND_TRANSITIONS],
-    ['OV', OV_TRANSITIONS], ['INVOICE', INVOICE_TRANSITIONS],
-  ] as const;
-  for (const [kind, rules] of kinds) {
-    for (const [i, r] of rules.entries()) {
+/** Dictionary rows for a pack: statuses per workflow, roles, sites, locations… */
+export function dictionaryRows(pack: Pack) {
+  const rows: { kind: string; key: string; label: string; labelMs: string; meta: object; seq: number }[] = [];
+  for (const kind of KINDS) {
+    pack.statuses[kind].forEach((e, seq) => rows.push({ kind: `status:${kind}`, key: e.key, label: e.label, labelMs: e.labelMs ?? '', meta: e.meta ?? {}, seq }));
+  }
+  pack.roles.forEach((e, seq) => rows.push({ kind: 'role', key: e.key, label: e.label, labelMs: e.labelMs ?? '', meta: e.meta ?? { capabilities: [] }, seq }));
+  for (const kind of DICT_KINDS) {
+    pack.dictionaries[kind].forEach((e, seq) => rows.push({ kind, key: e.key, label: e.label, labelMs: e.labelMs ?? '', meta: e.meta ?? {}, seq }));
+  }
+  return rows;
+}
+
+/** Load a pack's vocabulary into an organisation (idempotent; keeps what exists). */
+export async function seedDictionary(prisma: Db, pack: Pack): Promise<void> {
+  await prisma.dictionaryEntry.createMany({ data: dictionaryRows(pack).map((r) => ({ ...r, meta: r.meta as never })), skipDuplicates: true });
+}
+
+/**
+ * Everything an organisation needs to start from a sector pack: vocabulary,
+ * workflows, SLA timers, invoicing streams, terminology, modules and defaults.
+ */
+export async function seedWorkflow(prisma: Db, pack: Pack = getPack(DEFAULT_PACK)): Promise<void> {
+  await seedDictionary(prisma, pack);
+  for (const kind of KINDS) {
+    for (const [i, r] of pack.transitions[kind].entries()) {
       const data = {
         kind: kind as never, from: r.from, to: r.to, label: r.label, labelMs: r.labelMs,
-        roles: r.roles as never, requires: r.requires as never,
-        setLocation: (r.setLocation ?? null) as never, seq: i,
+        roles: r.roles, requires: r.requires as never, setLocation: r.setLocation ?? null,
+        effects: (r.effects ?? []) as never, seq: i,
       };
       await prisma.transitionRuleRow.upsert({
         where: { kind_from_to: { kind: kind as never, from: r.from, to: r.to } },
@@ -54,21 +71,30 @@ export async function seedWorkflow(prisma: Db): Promise<void> {
       });
     }
   }
-  for (const [i, s] of SLA_RULES.entries()) {
+  for (const [i, s] of pack.slaRules.entries()) {
     const data = { entity: s.entity as never, status: s.status, days: s.days, rule: s.rule, source: s.source, seq: i };
     await prisma.slaRule.upsert({ where: { id: s.id }, create: { id: s.id, ...data }, update: data });
   }
-  for (const [i, s] of INVOICE_STREAMS.entries()) {
+  for (const [i, s] of pack.invoiceStreams.entries()) {
     const data = {
       label: s.label, labelMs: s.labelMs, customer: s.customer, perJob: s.perJob,
-      docSet: s.docSet, deadlines: s.deadlines as never, seq: i,
+      docSet: s.docSet, deadlines: s.deadlines as never, requiredFields: (s.requiredFields ?? {}) as never, seq: i,
     };
-    await prisma.invoiceStreamDef.upsert({ where: { id: s.id as never }, create: { id: s.id as never, ...data }, update: data });
+    await prisma.invoiceStreamDef.upsert({ where: { id: s.id }, create: { id: s.id, ...data }, update: data });
   }
-  for (const [week, count] of WEEKLY_CLOSURES.entries()) {
-    await prisma.weeklyClosure.upsert({ where: { week }, create: { week, count }, update: { count } });
+  const settings: [string, object][] = [
+    ['pack', { id: pack.id, name: pack.name }], ['terms', pack.terms], ['modules', pack.modules],
+    ['defaults', { jobPrefix: pack.defaults.jobPrefix, initialLocation: pack.defaults.initialLocation }], ['tax', pack.defaults.tax],
+  ];
+  for (const [key, value] of settings) {
+    await prisma.setting.upsert({ where: { key }, create: { key, value: value as never, updatedBy: 'seed' }, update: {} });
   }
-  console.log('Workflow config seeded.');
+  if (pack.id === 'aviation') {
+    for (const [week, count] of WEEKLY_CLOSURES.entries()) {
+      await prisma.weeklyClosure.upsert({ where: { week }, create: { week, count }, update: { count } });
+    }
+  }
+  console.log(`Workflow config seeded from the ${pack.name} pack.`);
 }
 
 /** The ten reference users and the sample jobs, demands, invoices… (demo data). */

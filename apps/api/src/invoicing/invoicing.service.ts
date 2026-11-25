@@ -65,7 +65,7 @@ export class InvoicingService {
       taxLabel: tax.label,
       gstMYR,
       totalMYR,
-      status: 'DRAFTED',
+      status: this.store.initialStatus('INVOICE'),
       statusSince: now,
       outstanding: true,
       raisedBy: actor.name,
@@ -87,49 +87,59 @@ export class InvoicingService {
 
   async transition(id: string, to: InvoiceStatus, fields: Record<string, string>, actor: { name: string; role: Role }): Promise<Invoice> {
     const inv = await this.get(id);
+    if (this.store.isFinal('INVOICE', inv.status)) throw new BadRequestException('Invoice is closed');
     const def = this.store.invoiceStreams.find((s) => s.id === inv.stream);
+    const f = fields ?? {};
 
-    // Stream-specific gate: ACD must be keyed into the Company Sales Performance
-    // Report (e-Payment) before submission (QP.51 §E4 / FR-14).
-    if (to === 'SUBMITTED' && inv.stream === 'ACD' && !fields.salesPerfRef && !inv.salesPerfRef) {
-      throw new BadRequestException(
-        'ACD invoices must be keyed into the Company Sales Performance Report (e-Payment) before submission — provide salesPerfRef.',
-      );
-    }
-
-    applyTransition(inv, this.store.invoiceTransitions, to, fields ?? {}, actor);
-
-    if (to === 'CERTIFIED') {
-      inv.customerSignRef = fields.customerSignRef;
-      inv.ctcRef = fields.ctcRef;
-    }
-    if (to === 'TAX_RAISED') {
-      inv.f311Ref = fields.f311Ref;
-      if (fields.amountMYR) {
-        inv.amountMYR = Number(fields.amountMYR);
-        const { gstMYR, totalMYR } = this.gst(inv.amountMYR, inv.gstRate);
-        inv.gstMYR = gstMYR;
-        inv.totalMYR = totalMYR;
+    // Stream-specific requirements, e.g. ACD must be keyed into the Company Sales
+    // Performance Report (e-Payment) before submission (QP.51 §E4 / FR-14).
+    for (const key of def?.requiredFields?.[to] ?? []) {
+      if (!f[key] && !(inv as unknown as Record<string, unknown>)[key]) {
+        throw new BadRequestException(
+          key === 'salesPerfRef'
+            ? `${inv.stream} invoices must be keyed into the Company Sales Performance Report (e-Payment) before submission — provide salesPerfRef.`
+            : `${def?.label ?? inv.stream} invoices need ${key} before this step`,
+        );
       }
     }
-    if (to === 'SUBMITTED') {
-      inv.correctnessBy = fields.correctnessBy ?? inv.correctnessBy;
-      if (fields.salesPerfRef) inv.salesPerfRef = fields.salesPerfRef;
+
+    const rule = applyTransition(inv, this.store.invoiceTransitions, to, f, actor);
+
+    for (const e of rule.effects ?? []) {
+      const p = (e.params ?? {}) as Record<string, string>;
+      switch (e.type) {
+        case 'setAttributes':
+          for (const attr of ['customerSignRef', 'ctcRef', 'correctnessBy', 'salesPerfRef'] as const) {
+            if (p[attr] && f[p[attr]]) inv[attr] = f[p[attr]];
+          }
+          break;
+        case 'raiseTaxInvoice':
+          inv.f311Ref = f[p.numberField];
+          if (p.amountField && f[p.amountField]) {
+            inv.amountMYR = Number(f[p.amountField]);
+            const { gstMYR, totalMYR } = this.gst(inv.amountMYR, inv.gstRate);
+            inv.gstMYR = gstMYR;
+            inv.totalMYR = totalMYR;
+          }
+          break;
+        case 'markPaid':
+          inv.paymentRef = f[p.refField];
+          inv.paidAt = new Date().toISOString().slice(0, 10);
+          inv.outstanding = false;
+          break;
+        case 'markOutstanding':
+          inv.outstanding = true;
+          break;
+      }
     }
-    if (to === 'PAID') {
-      inv.paymentRef = fields.paymentRef;
-      inv.paidAt = new Date().toISOString().slice(0, 10);
-      inv.outstanding = false;
-    }
-    if (to === 'REJECTED') inv.outstanding = true;
 
     // Reflect key billing milestones onto the parent job's audit trail
     const job = inv.jobId ? await this.store.job(inv.jobId) : null;
     if (job) {
-      const label =
-        to === 'PAID' ? `Invoice ${inv.id} PAID (${def?.label})` :
-        to === 'SUBMITTED' ? `Invoice ${inv.id} submitted to ${inv.customer}` :
-        `Invoice ${inv.id}: ${to}`;
+      const paid = rule.effects?.some((e) => e.type === 'markPaid');
+      const label = paid ? `Invoice ${inv.id} PAID (${def?.label})`
+        : this.store.phaseOf('INVOICE', to) === 'waiting_customer' ? `Invoice ${inv.id} submitted to ${inv.customer}`
+        : `Invoice ${inv.id}: ${to}`;
       job.audit.push(this.store.audit(actor.name, actor.role, label));
       await this.store.save(job, inv);
     } else {

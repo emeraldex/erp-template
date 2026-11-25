@@ -1,7 +1,18 @@
 import { JOB_TRANSITIONS, INVOICE_TRANSITIONS } from '../../src/common/workflow-config';
-import { protectedRules, validateTransitions } from '../../src/workflow/workflow-rules';
+import { AVIATION } from '../../src/packs/aviation';
+import type { Kind } from '../../src/packs/types';
+import { validateTransitions as validate, type WorkflowContext } from '../../src/workflow/workflow-rules';
 
 const clone = <T,>(x: T): T => structuredClone(x);
+
+/** The aviation organisation's vocabulary. */
+const ctx = (kind: Kind): WorkflowContext => ({
+  statuses: AVIATION.statuses[kind].map((s) => s.key),
+  initial: AVIATION.statuses[kind][0].key,
+  roles: AVIATION.roles.map((r) => r.key),
+  locations: AVIATION.dictionaries.location.map((l) => l.key),
+});
+const validateTransitions = (kind: Kind, input: unknown) => validate(kind, input, ctx(kind));
 
 describe('workflow editor validation', () => {
   it('accepts the shipped workflows unchanged', () => {
@@ -9,15 +20,33 @@ describe('workflow editor validation', () => {
     expect(validateTransitions('INVOICE', clone(INVOICE_TRANSITIONS)).errors).toEqual([]);
   });
 
-  it('protects transitions and fields the system logic reads', () => {
-    expect(protectedRules('JOB')).toEqual(expect.arrayContaining([
-      { from: 'TDI', to: 'AWAITING_SPARE', keys: ['f212Ref'] },
-      { from: 'TDI', to: 'REC_OV', keys: ['f135Ref'] },
-    ]));
-    const withoutDemand = clone(JOB_TRANSITIONS).filter((r) => !(r.from === 'TDI' && r.to === 'AWAITING_SPARE'));
-    expect(validateTransitions('JOB', withoutDemand).errors).toContain('TDI → AWAITING_SPARE is used by the system and cannot be removed');
+  it('keeps fields mandatory while a step\'s action reads them', () => {
+    const at = JOB_TRANSITIONS.findIndex((r) => r.to === 'REC_OV') + 1;
     const stripped = clone(JOB_TRANSITIONS).map((r) => (r.to === 'REC_OV' ? { ...r, requires: [] } : r));
-    expect(validateTransitions('JOB', stripped).errors).toContain('TDI → REC_OV: field f135Ref is used by the system and cannot be removed');
+    expect(validateTransitions('JOB', stripped).errors)
+      .toContain(`Transition ${at} (TDI → REC_OV): field f135Ref is needed by the action "Open an outside-vendor repair" and must stay mandatory`);
+    // Dropping the action as well frees the field.
+    const plain = clone(JOB_TRANSITIONS).map((r) => (r.to === 'REC_OV' ? { ...r, requires: [], effects: [] } : r));
+    expect(validateTransitions('JOB', plain).errors).toEqual([]);
+  });
+
+  it('lets an organisation remove a step together with its actions', () => {
+    const withoutDemand = clone(JOB_TRANSITIONS).filter((r) => !(r.from === 'TDI' && r.to === 'AWAITING_SPARE'));
+    expect(validateTransitions('JOB', withoutDemand).errors).toEqual([]);
+  });
+
+  it('rejects unknown actions and bad action settings', () => {
+    const bad = clone(JOB_TRANSITIONS).map((r, i) => (i === 0 ? { ...r, effects: [{ type: 'launchRocket' }] } : r));
+    expect(validateTransitions('JOB', bad).errors.join(' ')).toContain('launchRocket');
+    const wrongKind = clone(INVOICE_TRANSITIONS).map((r, i) => (i === 0 ? { ...r, effects: [{ type: 'raiseDemand', params: { refField: 'x' } }] } : r));
+    expect(validateTransitions('INVOICE', wrongKind).errors.length).toBeGreaterThan(0);
+  });
+
+  it('checks against the organisation\'s own roles and statuses', () => {
+    const fleet: WorkflowContext = { statuses: ['OPEN', 'DONE'], initial: 'OPEN', roles: ['TECH'], locations: ['DEPOT'] };
+    const rules = [{ from: 'OPEN', to: 'DONE', label: 'Finish', labelMs: 'Selesai', roles: ['TECH'], requires: [], setLocation: 'DEPOT' }];
+    expect(validate('JOB', rules, fleet).errors).toEqual([]);
+    expect(validate('JOB', [{ ...rules[0], roles: ['STORES'] }], fleet).errors).toContain('Transition 1: unknown role STORES');
   });
 
   it('allows changing roles, labels and non-system fields', () => {

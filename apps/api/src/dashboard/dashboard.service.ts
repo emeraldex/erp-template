@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { StoreService } from '../common/store.service';
-import { JOB_STATUS_META } from '../common/workflow-config';
 import { JobStatus } from '../common/types';
 import { computeBreaches, daysSince, SlaBreach } from './sla';
 
@@ -28,8 +27,14 @@ export class DashboardService {
   async kpis() {
     const snap = await this.store.dashboardSnapshot();
     const jobs = snap.jobs;
-    const open = jobs.filter((j) => j.status !== 'CLOSED');
-    const byStatus = (Object.keys(JOB_STATUS_META) as JobStatus[]).map((s) => ({
+    // Counts work from status phases, so they hold for any sector's workflow.
+    const final = new Set(this.store.finalStatuses('JOB'));
+    const inPhase = (...phases: Parameters<StoreService['statusesInPhase']>[1][]) => {
+      const keys = new Set(this.store.statusesInPhase('JOB', ...phases));
+      return jobs.filter((j) => keys.has(j.status)).length;
+    };
+    const open = jobs.filter((j) => !final.has(j.status));
+    const byStatus = (this.store.statusKeys('JOB') as JobStatus[]).map((s) => ({
       status: s,
       count: jobs.filter((j) => j.status === s).length,
     }));
@@ -41,7 +46,8 @@ export class DashboardService {
 
     // QP.51 invoicing / revenue (5.8) — FR-13 / FR-14
     const invoices = snap.invoices;
-    const openInvoices = invoices.filter((i) => i.status !== 'PAID');
+    const paidStatuses = new Set(this.store.finalStatuses('INVOICE'));
+    const openInvoices = invoices.filter((i) => !paidStatuses.has(i.status));
     const revenueBilledMYR = invoices.reduce((s, i) => s + i.totalMYR, 0);
     const gstCollectedMYR = invoices.reduce((s, i) => s + i.gstMYR, 0);
     const outstandingMYR = invoices.filter((i) => i.outstanding).reduce((s, i) => s + i.totalMYR, 0);
@@ -57,9 +63,10 @@ export class DashboardService {
 
     return {
       openJobs: open.length,
-      wip: jobs.filter((j) => j.status === 'WIP').length,
-      awaitingCustomer: jobs.filter((j) => j.status === 'AWAITING_INDENT' || j.status === 'BER' || j.status === 'SOR').length,
-      atVendor: jobs.filter((j) => j.status === 'REC_OV').length,
+      wip: inPhase('active'),
+      awaitingCustomer: inPhase('waiting_customer'),
+      awaitingParts: inPhase('waiting_parts'),
+      atVendor: inPhase('external'),
       slaBreaches: breaches.length,
       breaches: breaches.slice(0, 8),
       partnersDueReassessment: dueReassessment.length,

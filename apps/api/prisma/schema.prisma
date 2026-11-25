@@ -17,100 +17,10 @@ datasource db {
   provider = "postgresql"
 }
 
-// ─── Enumerations (Section 4 actors, Section 5 workflow statuses) ─────────────
-
-enum Role {
-  ADMIN
-  STORES
-  WORKSHOP
-  MIS
-  MM
-  PURCHASING
-  PCE
-  QUALITY
-  FINANCE
-  BILLING
-}
-
-enum Branch {
-  HQ
-  CENTRAL
-  EAST
-  NORTH
-  NORTHEAST  @map("NORTHEAST")
-  OFFSHORE
-}
-
-enum Location {
-  LOGISTIC
-  BAY
-  HQ
-  VENDOR
-  CUSTOMER
-}
-
-enum JobStatus {
-  REGISTERED
-  AWAITING_TDI
-  TDI
-  AWAITING_SPARE
-  AWAITING_INDENT
-  WIP
-  REC_OV
-  BER
-  SOR
-  SERVICEABLE
-  DELIVERED
-  CLOSED
-}
-
-enum ItemCategory {
-  MILITARY
-  NAS
-}
-
-enum DemandStatus {
-  RAISED
-  APPROVED
-  STOCK_CHECK
-  ISSUED_FROM_STOCK
-  RFQ_ISSUED
-  EVALUATED
-  PO_ISSUED
-  RECEIVED
-  ISSUED
-}
-
-enum OvStatus {
-  RECEIVED_HQ
-  VENDOR_IDENTIFIED
-  F134_SUBMITTED
-  APPROVED
-  REJECTED
-  PO_ISSUED
-  AT_VENDOR
-  COST_ADVISED
-  QUOTE_APPROVED
-  RECEIVED_BACK
-  RETURNED
-}
-
-enum InvoiceStream {
-  PBC
-  BRANCH_REPAIR
-  COE_MRA
-  ACD
-}
-
-enum InvoiceStatus {
-  DRAFTED
-  CERTIFIED
-  TAX_RAISED
-  CORRECTNESS_CHECK
-  SUBMITTED
-  REJECTED
-  PAID
-}
+// ─── Enumerations: only generic lifecycles stay as database enums ────────────
+// Statuses, roles, sites, locations, categories, streams, priority levels,
+// routes, incident areas and courses are per-organisation dictionary data
+// (dictionary_entries), so any maintenance sector can define its own.
 
 enum PartnerType {
   SUPPLIER
@@ -125,20 +35,6 @@ enum PartnerStatus {
   DROPPED
 }
 
-enum PriorityType {
-  AOG
-  ROA
-  CRITICAL
-}
-
-enum RepairRoute {
-  COE_UNIT
-  OV
-  POOLEX
-  AW_SPARE
-  UNIT_PROCEED
-}
-
 enum PriorityState {
   OPEN
   CLOSED
@@ -147,12 +43,6 @@ enum PriorityState {
 enum PriorityCloseReason {
   DELIVERED
   DOWNGRADED
-}
-
-enum FodArea {
-  AWARENESS
-  CONTROL
-  CRITICAL
 }
 
 enum FodStatus {
@@ -165,11 +55,6 @@ enum ToolStatus {
   IN
   OUT
   MISSING
-}
-
-enum TrainingCourse {
-  FOD_INITIAL
-  FOD_RECURRENT
 }
 
 enum SlaEntity {
@@ -193,9 +78,9 @@ model User {
   name         String
   email        String   @unique
   passwordHash String
-  role         Role
+  role         String
   designation  String
-  branch       Branch
+  branch       String
   createdAt    DateTime @default(now())
 
   // Account protection (Phase 1 hardening)
@@ -238,11 +123,11 @@ model Job {
   component   String
   partNo      String
   serialNo    String
-  category    ItemCategory
+  category    String
   originUnit  String
-  repairUnit  Branch
-  status      JobStatus
-  location    Location
+  repairUnit  String
+  status      String
+  location    String
   receivedAt  DateTime
   statusSince DateTime
   indentRef   String?
@@ -275,9 +160,9 @@ model JobPriority {
   id          String               @id @default(cuid())
   job         Job                  @relation(fields: [jobId], references: [id], onDelete: Cascade)
   jobId       String               @unique
-  type        PriorityType
+  type        String
   quantity    Int                  @default(1)
-  route       RepairRoute
+  route       String
   suffixK     Boolean              @default(false)
   state       PriorityState        @default(OPEN)
   colRef      String
@@ -303,10 +188,10 @@ model Demand {
   partDescription String
   partNo          String
   qty             Int
-  status          DemandStatus
+  status          String
   statusSince     DateTime
   raisedBy        String
-  branch          Branch
+  branch          String
   version         Int          @default(0)
   ordinal     Int          @default(0)
 
@@ -369,7 +254,7 @@ model OvRepair {
   eddDays         Int?
   aboveIndent     Boolean?
   f119Ref         String?
-  status          OvStatus
+  status          String
   statusSince     DateTime
   version         Int      @default(0)
   ordinal     Int          @default(0)
@@ -433,7 +318,7 @@ model FodIncident {
   partName         String
   typeModel        String
   serialNo         String
-  area             FodArea
+  area             String
   location         String
   discovered       String
   rootCause        String?
@@ -468,7 +353,7 @@ model Tool {
 model TrainingRecord {
   id      Int            @id @default(autoincrement())
   person  String
-  course  TrainingCourse
+  course  String
   date    String
   nextDue String
   ordinal Int    @default(0)
@@ -482,7 +367,7 @@ model TrainingRecord {
 
 model Invoice {
   id              String        @id
-  stream          InvoiceStream
+  stream          String
   job             Job?          @relation(fields: [jobId], references: [id])
   jobId           String?
   customer        String
@@ -493,7 +378,7 @@ model Invoice {
   taxLabel        String        @default("GST")
   gstMYR          Decimal       @db.Decimal(14, 2)
   totalMYR        Decimal       @db.Decimal(14, 2)
-  status          InvoiceStatus
+  status          String
   statusSince     DateTime
   f311Ref         String?
   ctcRef          String?
@@ -504,7 +389,7 @@ model Invoice {
   paidAt          String?
   outstanding     Boolean       @default(true)
   raisedBy        String
-  branch          Branch
+  branch          String
   version         Int           @default(0)
   ordinal     Int          @default(0)
 
@@ -527,7 +412,7 @@ model AuditEntry {
   id     BigInt   @id @default(autoincrement())
   at     DateTime
   by     String
-  role   Role
+  role   String
   action String
   fields Json?
   seq    Int
@@ -594,9 +479,11 @@ model TransitionRuleRow {
   to          String
   label       String
   labelMs     String
-  roles       Role[]
+  roles       String[]
   requires    Json
-  setLocation Location?
+  setLocation String?
+  /// Actions run when the step is taken (raise a demand, mark paid…): [{type, params}]
+  effects     Json         @default("[]")
   seq         Int
 
   @@unique([kind, from, to])
@@ -618,13 +505,15 @@ model SlaRule {
 }
 
 model InvoiceStreamDef {
-  id        InvoiceStream @id
+  id        String @id
   label     String
   labelMs   String
   customer  String
   perJob    Boolean
   docSet    String[]
   deadlines Json
+  /// Extra fields this stream needs before a status, e.g. {"SUBMITTED": ["salesPerfRef"]}
+  requiredFields Json   @default("{}")
   seq       Int
 
   @@map("invoice_streams")
@@ -649,20 +538,11 @@ model Setting {
   @@map("settings")
 }
 
-enum AttachmentEntity {
-  JOB
-  DEMAND
-  OV
-  INVOICE
-  PARTNER
-  FOD
-}
-
 /// A file attached to a record (signed forms, certificates, photos). The bytes
 /// live in object storage; the SHA-256 lets anyone verify they are unchanged.
 model Attachment {
   id          String           @id
-  entity      AttachmentEntity
+  entity      String
   entityId    String
   formNo      String?
   filename    String
@@ -710,7 +590,7 @@ model ConfigChange {
   id      String   @id
   at      DateTime @default(now())
   by      String
-  role    Role
+  role    String
   area    String
   summary String
   before  Json
@@ -718,4 +598,22 @@ model ConfigChange {
 
   @@index([at])
   @@map("config_changes")
+}
+
+/// Per-organisation vocabulary: statuses of each workflow, roles (with their
+/// capabilities), sites, locations, categories, priority levels, routes,
+/// incident areas, training courses, asset types… One row per entry.
+model DictionaryEntry {
+  id      Int     @id @default(autoincrement())
+  kind    String
+  key     String
+  label   String
+  labelMs String  @default("")
+  meta    Json    @default("{}")
+  seq     Int     @default(0)
+  active  Boolean @default(true)
+
+  @@unique([kind, key])
+  @@index([kind, seq])
+  @@map("dictionary_entries")
 }

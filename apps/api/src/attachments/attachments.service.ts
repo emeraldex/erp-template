@@ -84,7 +84,7 @@ export class AttachmentsService {
 
     const rec = await this.record(e, entityId);
     if (!rec) throw new NotFoundException(`${e} ${entityId} not found`);
-    if (e === 'JOB' && rec.status === 'CLOSED') throw new BadRequestException('Job is closed — editing locked (QP.44 stage 10)');
+    if (e === 'JOB' && rec.status && this.store.isFinal('JOB', rec.status)) throw new BadRequestException('Job is closed — editing locked (QP.44 stage 10)');
 
     const sha256 = createHash('sha256').update(file.buffer).digest('hex');
     const id = randomUUID();

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { StoreService } from '../common/store.service';
 import { applyTransition } from '../common/transition.engine';
 import { OvRepair, OvStatus, Role } from '../common/types';
@@ -19,34 +19,47 @@ export class OvService {
 
   async transition(id: string, to: OvStatus, fields: Record<string, string>, actor: { name: string; role: Role }): Promise<OvRepair> {
     const ov = await this.get(id);
-    applyTransition(ov, this.store.ovTransitions, to, fields ?? {}, actor);
-
-    if (to === 'VENDOR_IDENTIFIED') {
-      const vendor = fields.vendorId ? await this.store.partner(fields.vendorId) : null;
-      ov.vendorId = fields.vendorId;
-      ov.vendorName = vendor?.name ?? fields.vendorId;
-    }
-    if (to === 'F134_SUBMITTED') ov.f134Ref = fields.f134Ref;
-    if (to === 'PO_ISSUED') ov.poRef = fields.f312Ref;
-    if (to === 'COST_ADVISED') {
-      ov.costMYR = Number(fields.costMYR);
-      ov.eddDays = Number(fields.eddDays);
-      ov.aboveIndent = fields.aboveIndent === 'true';
-      if (fields.f119Ref) ov.f119Ref = fields.f119Ref;
-    }
-
-    // Reflect key OV milestones onto the parent job's audit trail
+    if (this.store.isFinal('OV', ov.status)) throw new BadRequestException('Vendor repair is closed');
+    const f = fields ?? {};
+    const rule = applyTransition(ov, this.store.ovTransitions, to, f, actor);
     const job = await this.store.job(ov.jobId);
-    if (job) {
-      job.audit.push(this.store.audit(actor.name, actor.role, `OV ${ov.id}: ${to}`));
-      if (to === 'REJECTED') {
-        job.status = 'CLOSED';
-        job.location = 'CUSTOMER';
-        job.statusSince = new Date().toISOString();
-        job.audit.push(this.store.audit(actor.name, actor.role, 'OV not approved — item returned to customer; job closed'));
+    // Reflect vendor-repair milestones on the parent job's audit trail.
+    job?.audit.push(this.store.audit(actor.name, actor.role, `OV ${ov.id}: ${to}`));
+
+    for (const e of rule.effects ?? []) {
+      const p = (e.params ?? {}) as Record<string, string>;
+      switch (e.type) {
+        case 'setVendor': {
+          const vendor = f[p.field] ? await this.store.partner(f[p.field]) : null;
+          ov.vendorId = f[p.field];
+          ov.vendorName = vendor?.name ?? f[p.field];
+          break;
+        }
+        case 'setAttributes':
+          if (p.f134Ref && f[p.f134Ref]) ov.f134Ref = f[p.f134Ref];
+          if (p.poRef && f[p.poRef]) ov.poRef = f[p.poRef];
+          break;
+        case 'recordCost':
+          ov.costMYR = Number(f[p.costField]);
+          if (p.eddField && f[p.eddField] !== undefined) ov.eddDays = Number(f[p.eddField]);
+          ov.aboveIndent = p.aboveIndentField ? f[p.aboveIndentField] === 'true' : false;
+          if (p.quoteField && f[p.quoteField]) ov.f119Ref = f[p.quoteField];
+          break;
+        case 'closeParentJob':
+          if (job) {
+            job.status = this.store.finalStatuses('JOB')[0] ?? job.status;
+            if (p.location) job.location = p.location;
+            job.statusSince = new Date().toISOString();
+            job.audit.push(this.store.audit(actor.name, actor.role, 'OV not approved — item returned to customer; job closed'));
+          }
+          break;
+        case 'setParentLocation':
+          if (job && p.location) job.location = p.location;
+          break;
       }
-      if (to === 'AT_VENDOR') job.location = 'VENDOR';
-      if (to === 'RECEIVED_BACK') job.location = 'HQ';
+    }
+
+    if (job) {
       await this.store.save(ov, job);
     } else {
       await this.store.save(ov);

@@ -3,9 +3,8 @@ import { randomBytes, randomUUID } from 'crypto';
 import { PrismaService } from '../common/prisma.service';
 import { hashPassword } from '../common/password';
 import type { Role } from '../common/types';
-import { ROLES } from '../workflow/workflow-rules';
+import { StoreService } from '../common/store.service';
 
-export const BRANCHES = ['HQ', 'CENTRAL', 'EAST', 'NORTH', 'NORTHEAST', 'OFFSHORE'] as const;
 type Actor = { sub: string; name: string; role: Role };
 
 const EMAIL = /^[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s]{2,}$/;
@@ -22,7 +21,7 @@ const PUBLIC = {
  */
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly store: StoreService) {}
 
   private async log(actor: Actor, summary: string, before: unknown, after: unknown) {
     await this.prisma.configChange.create({
@@ -42,8 +41,10 @@ export class UsersService {
 
   private check(body: { name?: unknown; role?: unknown; branch?: unknown; designation?: unknown }) {
     if (body.name !== undefined && (typeof body.name !== 'string' || !body.name.trim() || body.name.length > 100)) throw new BadRequestException('Name is required (up to 100 characters)');
-    if (body.role !== undefined && !ROLES.includes(body.role as Role)) throw new BadRequestException(`Role must be one of ${ROLES.join(', ')}`);
-    if (body.branch !== undefined && !(BRANCHES as readonly string[]).includes(body.branch as string)) throw new BadRequestException(`Branch must be one of ${BRANCHES.join(', ')}`);
+    const roles = this.store.dict('role', true).map((r) => r.key);
+    const sites = this.store.dict('site', true).map((r) => r.key);
+    if (body.role !== undefined && !roles.includes(body.role as string)) throw new BadRequestException(`Role must be one of ${roles.join(', ')}`);
+    if (body.branch !== undefined && !sites.includes(body.branch as string)) throw new BadRequestException(`Branch must be one of ${sites.join(', ')}`);
     if (body.designation !== undefined && (typeof body.designation !== 'string' || body.designation.length > 40)) throw new BadRequestException('Designation is up to 40 characters');
   }
 

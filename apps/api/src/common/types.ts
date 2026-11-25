@@ -1,18 +1,10 @@
-// ─── CO-RFP-IT-001 domain types ─────────────────────────────────────────────
-// Modelled on Section 4 (actors), Section 5 (workflows) and Section 6 (forms
-// register) of the Business Workflow & System Requirements Specification.
+// ─── Domain types ────────────────────────────────────────────────────────────
+// Statuses, roles, sites and similar vocabularies are per-organisation data
+// (dictionary_entries), so their types are plain strings. The aviation pack
+// (CO-RFP-IT-001) uses the keys the comments below mention.
 
-export type Role =
-  | "ADMIN"        // Software / IT Management
-  | "STORES"       // StS / StP — Logistic
-  | "WORKSHOP"     // Tst / ATP / WoS
-  | "MIS"          // Maintenance Inspector / Supervisor
-  | "MM"           // (Senior) Maintenance Manager / HOD
-  | "PURCHASING"   // PcE / PcMgr
-  | "PCE"          // Production Control Executive (OV)
-  | "QUALITY"      // QM / QAD / JTP secretariat
-  | "FINANCE"
-  | "BILLING";
+/** Role key from the organisation's dictionary (e.g. "STORES" in the aviation pack). */
+export type Role = string;
 
 export interface User {
   id: string;
@@ -24,30 +16,15 @@ export interface User {
   branch: Branch;
 }
 
-export type Branch =
-  | "HQ"
-  | "CENTRAL"
-  | "EAST"
-  | "NORTH"
-  | "NORTHEAST"
-  | "OFFSHORE";
+/** Site key from the organisation's dictionary ("HQ", "CENTRAL"… in the aviation pack). */
+export type Branch = string;
 
-export type Location = "LOGISTIC" | "BAY" | "HQ" | "VENDOR" | "CUSTOMER";
+/** Where an item physically is; keys come from the organisation's dictionary. */
+export type Location = string;
 
 // QP.44 lifecycle statuses (JTS)
-export type JobStatus =
-  | "REGISTERED"
-  | "AWAITING_TDI"
-  | "TDI"
-  | "AWAITING_SPARE"
-  | "AWAITING_INDENT"
-  | "WIP"
-  | "REC_OV"
-  | "BER"
-  | "SOR"
-  | "SERVICEABLE"
-  | "DELIVERED"
-  | "CLOSED";
+/** Work-order status key from the organisation's JOB workflow. */
+export type JobStatus = string;
 
 export interface AuditEntry {
   at: string;          // ISO timestamp — FR-04
@@ -72,7 +49,7 @@ export interface Job {
   component: string;
   partNo: string;
   serialNo: string;
-  category: "MILITARY" | "NAS"; // QP.17 vs QP.17A item category parameter
+  category: string;           // category key (MILITARY / NAS in the aviation pack)
   originUnit: string;          // customer unit (Customer)
   repairUnit: Branch;
   status: JobStatus;
@@ -91,13 +68,10 @@ export interface Job {
 // ─── QP.56 AOG / ROA / Critical priority overlay (5.9) — FR-15 ─────────────────
 // A cross-cutting priority that can be raised on any job at any stage, modelled
 // on the COL (Company Online) AOG/ROA column: status, quantity and dates.
-export type PriorityType = "AOG" | "ROA" | "CRITICAL";
-export type RepairRoute =
-  | "COE_UNIT"     // CoE / Unit repair — upgrade to priority repair
-  | "OV"            // Outside Vendor repair — hasten repair centre
-  | "POOLEX"        // Pool Exchange — source & respond within 14 days
-  | "AW_SPARE"      // Airworthy spares — hasten Purchasing
-  | "UNIT_PROCEED"; // no spares required — unit proceeds & expedites
+/** Priority level key (AOG / ROA / CRITICAL in the aviation pack). */
+export type PriorityType = string;
+/** Expedite route key (dictionary). */
+export type RepairRoute = string; // no spares required — unit proceeds & expedites
 
 export interface JobPriority {
   type: PriorityType;
@@ -116,16 +90,8 @@ export interface JobPriority {
 }
 
 // QP.14 demand / procurement
-export type DemandStatus =
-  | "RAISED"
-  | "APPROVED"
-  | "STOCK_CHECK"
-  | "ISSUED_FROM_STOCK"
-  | "RFQ_ISSUED"
-  | "EVALUATED"
-  | "PO_ISSUED"
-  | "RECEIVED"
-  | "ISSUED";
+/** Parts-demand status key from the DEMAND workflow. */
+export type DemandStatus = string;
 
 export interface Quotation {
   supplierId: string;
@@ -156,18 +122,8 @@ export interface Demand {
 }
 
 // QP.33 outside-vendor repair
-export type OvStatus =
-  | "RECEIVED_HQ"
-  | "VENDOR_IDENTIFIED"
-  | "F134_SUBMITTED"
-  | "APPROVED"
-  | "REJECTED"
-  | "PO_ISSUED"
-  | "AT_VENDOR"
-  | "COST_ADVISED"
-  | "QUOTE_APPROVED"
-  | "RECEIVED_BACK"
-  | "RETURNED";
+/** Outside-vendor repair status key from the OV workflow. */
+export type OvStatus = string;
 
 export interface OvRepair {
   id: string;
@@ -225,7 +181,7 @@ export interface FodIncident {
   partName: string;
   typeModel: string;
   serialNo: string;
-  area: "AWARENESS" | "CONTROL" | "CRITICAL";
+  area: string;               // incident area key (dictionary)
   location: string;
   discovered: string;   // who/when/how
   rootCause?: string;
@@ -247,7 +203,7 @@ export interface Tool {
 
 export interface TrainingRecord {
   person: string;
-  course: "FOD_INITIAL" | "FOD_RECURRENT";
+  course: string;             // training course key (dictionary)
   date: string;
   nextDue: string;
 }
@@ -256,16 +212,11 @@ export interface TrainingRecord {
 // Four parallel invoicing streams modelled as configurable variants of a single
 // billing process: each adds tax (rate from settings), produces a Certified True Copy (CTC), passes
 // a correctness gate and routes the tax invoice to CPU (Finance) for payment.
-export type InvoiceStream = "PBC" | "BRANCH_REPAIR" | "COE_MRA" | "ACD";
+/** Invoicing stream id (configurable). */
+export type InvoiceStream = string;
 
-export type InvoiceStatus =
-  | "DRAFTED"           // stream document set assembled
-  | "CERTIFIED"         // Customer/CAO signatures obtained + CTC made
-  | "TAX_RAISED"        // Tax Invoice (F311) raised with tax
-  | "CORRECTNESS_CHECK" // HQ / CoE Invoicing correctness & completeness gate
-  | "SUBMITTED"         // forwarded to CPU (Finance) / MRA
-  | "REJECTED"          // incomplete / rejected — correct promptly
-  | "PAID";             // Finance received & recorded payment
+/** Invoice status key from the INVOICE workflow. */
+export type InvoiceStatus = string;             // Finance received & recorded payment
 
 export interface Invoice {
   id: string;
@@ -303,6 +254,8 @@ export interface TransitionRule<S extends string = string> {
   roles: Role[];                 // process-owner gating — FR-03
   requires: { key: string; label: string; formNo?: string }[]; // mandatory fields — FR-05
   setLocation?: Location;
+  /** Actions taken with the step (raise a demand, mark paid…) — see workflow/effects.ts. */
+  effects?: { type: string; params?: Record<string, unknown> }[];
 }
 
 export interface StatusMeta {
