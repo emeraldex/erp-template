@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { Logger } from '@nestjs/common';
 import { link, mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, join, resolve, sep } from 'path';
@@ -8,6 +8,8 @@ export interface ObjectStorage {
   readonly name: string;
   put(key: string, body: Buffer, contentType: string): Promise<void>;
   get(key: string): Promise<Buffer>;
+  /** Only for material that is not evidence: photos on a request declined as spam. */
+  delete(key: string): Promise<void>;
 }
 
 // <tenant>/<entity>/<sha256 prefix>/<uuid>; keys without a tenant prefix predate multi-tenancy.
@@ -50,6 +52,10 @@ export class LocalStorage implements ObjectStorage {
   async get(key: string): Promise<Buffer> {
     return readFile(this.path(key));
   }
+
+  async delete(key: string): Promise<void> {
+    await unlink(this.path(key)).catch((e: NodeJS.ErrnoException) => { if (e.code !== 'ENOENT') throw e; });
+  }
 }
 
 /** Any S3-compatible service: AWS S3, MinIO, Cloudflare R2, Wasabi… */
@@ -71,6 +77,11 @@ export class S3Storage implements ObjectStorage {
     const body = res.Body as { transformToByteArray?: () => Promise<Uint8Array> } | undefined;
     if (!body?.transformToByteArray) throw new Error(`Object ${key} has no body`);
     return Buffer.from(await body.transformToByteArray());
+  }
+
+  async delete(key: string): Promise<void> {
+    assertKey(key);
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: this.prefix + key }));
   }
 }
 

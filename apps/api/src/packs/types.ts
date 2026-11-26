@@ -57,6 +57,7 @@ export const CAPABILITIES = {
   'meters.record': 'Record meter readings',
   'stock.manage': 'Parts catalogue, stock levels, counts, transfers and buying for stock',
   'stock.issue': 'Issue parts to work orders and take returns',
+  'requests.manage': 'Triage requests from the request portal, message requesters, print QR posters',
   'reports.billing': 'Revenue and outstanding-payment reports',
   'reports.payments': 'Payment-system export files',
   'reports.audit': 'Audit trail, retention report, attachment checks',
@@ -82,9 +83,11 @@ export interface Modules {
   assets: boolean; pm: boolean;
   /** Parts catalogue and stock control. */
   stock: boolean;
+  /** The public request portal: anyone with the link can report a problem. */
+  requests: boolean;
 }
 export type ModuleKey = keyof Modules;
-export const MODULE_KEYS: (keyof Modules)[] = ['procurement', 'vendorRepair', 'priority', 'incidents', 'tools', 'training', 'invoicing', 'registers', 'assets', 'pm', 'stock'];
+export const MODULE_KEYS: (keyof Modules)[] = ['procurement', 'vendorRepair', 'priority', 'incidents', 'tools', 'training', 'invoicing', 'registers', 'assets', 'pm', 'stock', 'requests'];
 
 /** Dictionary kinds a pack fills in (besides statuses and roles). */
 export const DICT_KINDS = ['site', 'location', 'category', 'priority', 'route', 'incidentArea', 'course', 'jobType', 'assetType', 'store', 'unit', 'partGroup'] as const;
