@@ -26,6 +26,21 @@ export interface TaxSettings {
 
 export interface WorkflowDefaults { jobPrefix: string; initialLocation: string }
 
+/** The public request portal. */
+export interface PortalSettings {
+  /** The public form accepts requests. */
+  open: boolean;
+  /** Asked for on the plain form (not from a QR poster); empty = none. */
+  accessCode: string;
+  /** Shown above the form. */
+  intro: string;
+  introMs: string;
+  /** Ask the requester what type of problem it is. */
+  askCategory: boolean;
+  /** Remind the help desk once about a request still new after this many hours; 0 = never. */
+  triageHours: number;
+}
+
 export interface Settings {
   company: CompanyProfile;
   tax: TaxSettings;
@@ -34,6 +49,7 @@ export interface Settings {
   terms: Terms;
   modules: Modules;
   defaults: WorkflowDefaults;
+  portal: PortalSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -55,6 +71,7 @@ export const DEFAULT_SETTINGS: Settings = {
   terms: AVIATION.terms,
   modules: AVIATION.modules,
   defaults: { jobPrefix: AVIATION.defaults.jobPrefix, initialLocation: AVIATION.defaults.initialLocation },
+  portal: { open: true, accessCode: '', intro: '', introMs: '', askCategory: true, triageHours: 4 },
 };
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : undefined);
@@ -89,6 +106,7 @@ export class SettingsService {
         terms: { ...DEFAULT_SETTINGS.terms, ...(byKey.terms ?? {}) },
         modules: { ...DEFAULT_SETTINGS.modules, ...(byKey.modules ?? {}) },
         defaults: { ...DEFAULT_SETTINGS.defaults, ...(byKey.defaults ?? {}) },
+        portal: { ...DEFAULT_SETTINGS.portal, ...(byKey.portal ?? {}) },
       },
       loadedAt: Date.now(),
     });
@@ -116,6 +134,30 @@ export class SettingsService {
 
   get defaults(): WorkflowDefaults {
     return { ...this.cache.defaults };
+  }
+
+  get portal(): PortalSettings {
+    return { ...this.cache.portal };
+  }
+
+  async updatePortal(patch: Partial<PortalSettings>, by: string): Promise<PortalSettings> {
+    const next = { ...this.cache.portal };
+    if (patch.open !== undefined) next.open = !!patch.open;
+    if (patch.askCategory !== undefined) next.askCategory = !!patch.askCategory;
+    if (patch.accessCode !== undefined) {
+      const code = String(patch.accessCode ?? '').trim();
+      if (code && !/^[A-Za-z0-9-]{4,32}$/.test(code)) throw new BadRequestException('Access code: 4–32 letters, digits or hyphens (or empty for none)');
+      next.accessCode = code;
+    }
+    if (patch.intro !== undefined) next.intro = str(patch.intro, 500) ?? '';
+    if (patch.introMs !== undefined) next.introMs = str(patch.introMs, 500) ?? '';
+    if (patch.triageHours !== undefined) {
+      const h = Number(patch.triageHours);
+      if (!Number.isInteger(h) || h < 0 || h > 168) throw new BadRequestException('Reminder after: a whole number of hours from 0 (never) to 168');
+      next.triageHours = h;
+    }
+    await this.save('portal', next, by);
+    return next;
   }
 
   async updateTerms(patch: Partial<Terms>, by: string): Promise<Terms> {

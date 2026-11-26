@@ -29,6 +29,7 @@ const DICT = {
   assets: { en: "Assets", ms: "Aset" },
   pm: { en: "Preventive maintenance", ms: "Penyelenggaraan pencegahan" },
   stock: { en: "Parts & stock", ms: "Alat ganti & stok" },
+  requests: { en: "Requests", ms: "Permohonan" },
   checklist: { en: "Checklist", ms: "Senarai semak" },
   attachments: { en: "Attachments", ms: "Lampiran" },
   documents: { en: "Documents", ms: "Dokumen" },

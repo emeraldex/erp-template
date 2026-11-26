@@ -864,3 +864,80 @@ model StockCountLine {
   @@unique([countId, partId])
   @@map("stock_count_lines")
 }
+
+/// A problem reported through the public request portal (or logged by staff for a caller).
+model ServiceRequest {
+  id             String           @id
+  /// NEW, ACCEPTED, DECLINED or CANCELLED.
+  status         String           @default("NEW")
+  description    String
+  /// Where, in the requester's words (e.g. "Level 3, east toilets").
+  place          String           @default("")
+  site           String           @default("")
+  assetId        String?
+  /// The QR poster it came from, if any.
+  pointCode      String?
+  category       String           @default("")
+  urgent         Boolean          @default(false)
+  requesterName  String
+  requesterEmail String           @default("")
+  requesterPhone String           @default("")
+  /// en or ms: the language of emails and the tracking page.
+  lang           String           @default("en")
+  /// PORTAL, POSTER or STAFF.
+  source         String           @default("PORTAL")
+  /// Part of the tracking link's signature; changing it cancels old links.
+  trackSalt      String
+  jobId          String?
+  /// Added to an existing work order rather than starting a new one.
+  merged         Boolean          @default(false)
+  decidedBy      String?
+  decidedAt      DateTime?
+  declineReason  String           @default("")
+  spam           Boolean          @default(false)
+  rating         Int?
+  ratingComment  String           @default("")
+  ratedAt        DateTime?
+  remindedAt     DateTime?
+  doneNotifiedAt DateTime?
+  /// Keyed hash of the sender's address, for spotting abuse (never the address itself).
+  ipHash         String           @default("")
+  createdAt      DateTime         @default(now())
+  version        Int              @default(0)
+  messages       RequestMessage[]
+
+  @@index([status])
+  @@index([jobId])
+  @@index([createdAt])
+  @@map("service_requests")
+}
+
+/// A message on a request, from the team or from the requester.
+model RequestMessage {
+  id        Int            @id @default(autoincrement())
+  requestId String
+  request   ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  /// TEAM or REQUESTER.
+  from      String
+  by        String
+  body      String
+  at        DateTime       @default(now())
+
+  @@index([requestId])
+  @@map("request_messages")
+}
+
+/// A "Report a problem" QR poster or sticker for a place or an asset.
+model RequestPoint {
+  /// Random and unguessable; the QR carries it.
+  code      String   @id
+  label     String
+  site      String   @default("")
+  assetId   String?
+  active    Boolean  @default(true)
+  createdBy String
+  createdAt DateTime @default(now())
+
+  @@index([assetId])
+  @@map("request_points")
+}

@@ -4,7 +4,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { AuthUser } from '../auth/auth.service';
 import { Requires } from '../auth/roles.decorator';
 import type { Modules, Terms } from '../packs/types';
-import { CompanyProfile, SettingsService, TaxSettings, WorkflowDefaults } from './settings.service';
+import { CompanyProfile, PortalSettings, SettingsService, TaxSettings, WorkflowDefaults } from './settings.service';
 
 @Controller('settings')
 @UseGuards(AuthGuard)
@@ -12,8 +12,18 @@ export class SettingsController {
   constructor(private readonly settings: SettingsService, private readonly store: StoreService) {}
 
   @Get()
-  get() {
-    return this.settings.get();
+  get(@Req() req: { user: AuthUser }) {
+    const s = this.settings.get();
+    // The portal's access code is for administrators to set and hand out.
+    if (!this.store.capabilitiesOf(req.user.role).includes('org.admin')) s.portal = { ...s.portal, accessCode: s.portal.accessCode ? '********' : '' };
+    return s;
+  }
+
+  /** The public request portal: open or closed, access code, intro text, triage reminder. */
+  @Patch('portal')
+  @Requires('org.admin')
+  portal(@Body() body: Partial<PortalSettings>, @Req() req: { user: AuthUser }) {
+    return this.settings.updatePortal(body ?? {}, req.user.name);
   }
 
   @Patch('company')

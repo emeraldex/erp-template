@@ -141,6 +141,34 @@ curl -s -X POST "https://acme.erp.example.com/api/v1/stock/import?dryRun=1" \
   -H "Authorization: Bearer $TOKEN" -F "file=@parts.csv"
 ```
 
+### Request portal
+
+Public, no session (they answer 404 while the organisation has the portal
+off):
+
+- `GET /public/portal?p=CODE` — the organisation's name, whether the form is
+  open and needs an access code, sites, types, and a poster's place or asset.
+- `POST /public/requests` — multipart: `description`, `name`, `email` and/or
+  `phone`, `site`, `place`, `category`, `urgent`, `lang` (`en`|`ms`), `p`
+  (poster code), `accessCode`, up to three files in `photos` → `{ id, track }`.
+- `POST /public/track` `{ token }`; `POST /public/track/messages`
+  `{ token, body }`; `POST /public/track/rating` `{ token, rating, comment }`;
+  `POST /public/track/cancel` `{ token }`.
+
+Triage (`requests.manage`):
+
+- `GET /requests?status=NEW|ACCEPTED|DECLINED|CANCELLED|ALL&q=`,
+  `GET /requests/:id`, `POST /requests` (log one for a caller).
+- `POST /requests/:id/accept` `{ assetId?, category?, site?, jobType?, component? }`,
+  `POST /requests/:id/merge` `{ jobId }`, `POST /requests/:id/decline`
+  `{ reason, spam? }`, `POST /requests/:id/messages` `{ body }`,
+  `POST /requests/:id/erase`.
+- Posters: `GET|POST /requests/points`, `POST /requests/points/assets`
+  `{ assetIds }`, `PATCH /requests/points/:code`,
+  `GET /requests/points/posters?codes=&format=poster|stickers`.
+- `GET /jobs/:id/requests` (anyone signed in) — a work order's requesters.
+- `GET /reports/requests?from&to`; `POST /requests/remind` (`org.admin`).
+
 ## Errors
 
 Errors are JSON: `{"statusCode": 400, "message": "…"}`. The ones to handle:

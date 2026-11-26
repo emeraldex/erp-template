@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { AssetsService } from '../assets/assets.service';
 import { PmService } from '../assets/pm.service';
 import { StockService } from '../stock/stock.service';
+import { JobDoneHook } from '../requests/job-hook';
 import { StoreService } from '../common/store.service';
 import { applyTransition } from '../common/transition.engine';
 import { Branch, ChecklistItem, Job, JobStatus, PriorityType, RepairRoute, Role } from '../common/types';
@@ -21,6 +22,7 @@ export class JobsService {
     @Optional() private readonly assets?: AssetsService,
     @Optional() private readonly pm?: PmService,
     @Optional() private readonly stock?: StockService,
+    @Optional() private readonly requests?: JobDoneHook,
   ) {}
 
   /** Parts used on a job (issues net of returns) with their cost. */
@@ -126,6 +128,8 @@ export class JobsService {
       if (toPhase === 'done' && fromPhase !== 'done') await this.pm.completed(job);
       else if (this.store.isFinal('JOB', to) && fromPhase !== 'done') await this.pm.cancelled(job);
     }
+    // Whoever reported the problem through the portal hears that it is done.
+    if (toPhase !== fromPhase && (toPhase === 'done' || toPhase === 'closed')) await this.requests?.jobChanged(job.id, to);
     return job;
   }
 

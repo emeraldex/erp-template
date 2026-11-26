@@ -80,6 +80,16 @@ function AssetsRegister() {
                 Print labels ({Math.min(shown.length, 100)})
               </Button>
             )}
+            {shown.length > 0 && modules.requests && can("requests.manage") && (
+              <Button variant="ghost" onClick={async () => {
+                try {
+                  const { codes } = await api.post<{ codes: string[] }>("/requests/points/assets", { assetIds: shown.slice(0, 100).map((a) => a.id) });
+                  await download(`/requests/points/posters?codes=${codes.join(",")}&format=stickers`, "request-stickers.pdf");
+                } catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
+              }}>
+                Request stickers ({Math.min(shown.length, 100)})
+              </Button>
+            )}
             {canManage && <Button onClick={() => setAdding(!adding)} variant={adding ? "ghost" : "primary"}>{adding ? "Cancel" : `+ Add ${terms.asset.toLowerCase()}`}</Button>}
           </>
         }

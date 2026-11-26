@@ -356,7 +356,7 @@ export interface Terms {
 export interface Modules {
   procurement: boolean; vendorRepair: boolean; priority: boolean; incidents: boolean;
   tools: boolean; training: boolean; invoicing: boolean; registers: boolean;
-  assets: boolean; pm: boolean; stock: boolean;
+  assets: boolean; pm: boolean; stock: boolean; requests: boolean;
 }
 
 export interface Meter { key: string; label: string; unit: string; value: number; readAt: string | null }
@@ -450,6 +450,10 @@ export interface Kpis {
   weeklyClosures: number[];
   /** Store places at or below their reorder point; null when stock control is off. */
   lowStock?: number | null;
+  /** Portal requests waiting for triage; null when the portal is off. */
+  newRequests?: number | null;
+  /** Requesters' average rating over 90 days. */
+  satisfaction?: { average: number; ratings: number } | null;
 }
 
 export interface Attachment {
@@ -497,6 +501,7 @@ export interface Settings {
   terms?: Terms;
   modules?: Modules;
   defaults?: { jobPrefix: string; initialLocation: string };
+  portal?: PortalSettings;
 }
 
 // ─── stock ──────────────────────────────────────────────────────────────────
@@ -608,4 +613,85 @@ export interface ImportResult {
   levels: number;
   openings: number;
   errors: { row: number; message: string }[];
+}
+
+// ─── request portal ─────────────────────────────────────────────────────────
+
+export type RequestStatus = "NEW" | "ACCEPTED" | "DECLINED" | "CANCELLED";
+
+export interface RequestMessage { from: "TEAM" | "REQUESTER"; by: string; body: string; at: string }
+
+export interface ServiceRequestSummary {
+  id: string;
+  status: RequestStatus;
+  createdAt: string;
+  description: string;
+  place: string;
+  site: string;
+  siteLabel: string;
+  category: string;
+  categoryLabel: string;
+  urgent: boolean;
+  requesterName: string;
+  source: "PORTAL" | "POSTER" | "STAFF";
+  jobId: string | null;
+  merged: boolean;
+  photos: number;
+  rating: number | null;
+  awaitingReply: boolean;
+  decidedBy: string | null;
+  decidedAt: string | null;
+}
+
+export interface ServiceRequest extends ServiceRequestSummary {
+  requesterEmail: string;
+  requesterPhone: string;
+  lang: "en" | "ms";
+  pointCode: string | null;
+  asset: { id: string; tag: string; name: string } | null;
+  declineReason: string;
+  spam: boolean;
+  ratingComment: string;
+  messages: RequestMessage[];
+  photoIds: string[];
+  duplicates: { jobs: { id: string; component: string; status: string; receivedAt: string }[]; requests: { id: string; description: string; createdAt: string }[] };
+  trackLink: string | null;
+}
+
+export interface JobRequester {
+  id: string;
+  createdAt: string;
+  merged: boolean;
+  requesterName: string;
+  requesterEmail: string;
+  requesterPhone: string;
+  urgent: boolean;
+  description: string;
+  rating: number | null;
+  ratingComment: string;
+  ratedAt: string | null;
+  doneNotified: boolean;
+  messages: RequestMessage[];
+}
+
+export interface RequestPoint {
+  code: string;
+  label: string;
+  site: string;
+  siteLabel: string;
+  assetId: string | null;
+  assetTag: string | null;
+  active: boolean;
+  createdBy: string;
+  createdAt: string;
+  requests: number;
+}
+
+export interface PortalSettings {
+  open: boolean;
+  accessCode: string;
+  intro: string;
+  introMs: string;
+  askCategory: boolean;
+  triageHours: number;
 }

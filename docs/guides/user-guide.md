@@ -127,6 +127,50 @@ then **Add to Home Screen**.
   cost) and *Parts usage* (parts issued to work orders in a period, net of
   returns, by part and by work order).
 
+## Requests from the portal
+
+When an administrator switches on the request portal, anyone the team serves —
+tenants, drivers, machine operators, ward staff — can report a problem at the
+organisation's address followed by `/r`, or by scanning a **Report a
+problem** QR poster or sticker. They need no account. They describe the
+problem, say where it is (a poster fills that in), can mark it urgent and add
+up to three photos, and give a name and an email or phone. They get a
+reference and a private tracking link; with an email address they also get
+updates.
+
+People who triage requests (help desk, supervisors, managers) see **Requests**
+in the menu, with the number waiting:
+
+- **New** lists what has come in, urgent first. Open one to see the photos,
+  the contact details and anything **possibly already reported** (open work
+  on the same asset or from the same poster).
+- **Accept → new work order** registers a work order: choose the asset (or
+  keep the place), category and site. The description, contact details and
+  photos go onto the work order.
+- **Add to a work order** links it to work already under way — the requester
+  is told it is being dealt with.
+- **Decline** with a reason the requester sees. Tick *spam* to delete the
+  photos and contact details and send nothing.
+- **Messages**: ask the requester a question; they reply on their tracking
+  page. They see your message as from the organisation, not from you by name.
+  Replies notify the help desk and whoever the work is assigned to.
+- **+ Log a request** for someone who phoned or walked in; copy their tracking
+  link to read out or text to them.
+- **QR posters**: add a place, tick it and print an A4 poster, or stickers. On
+  the assets page, *Request stickers* makes stickers for the assets listed.
+  Switch a poster off if it is taken down.
+
+When the work order reaches a done status, the requester is told and asked to
+rate the work from 1 to 5 stars. The rating shows on the work order; ratings
+of 1 or 2 alert the help desk. The dashboard shows the requests waiting and
+the average rating over 90 days, and *Reports → Requests and satisfaction*
+lists every request with how long it took. A request left waiting longer than
+the organisation's reminder time (4 hours unless changed) reminds the help
+desk once.
+
+On the phone app, a work order that came from a request shows who reported it
+with a button to call them.
+
 ## By role
 
 **Stores** — register incoming items (*+ Register job*), dispatch them to the
@@ -158,6 +202,8 @@ the correctness gate, submit and record payment. On an invoice, **Documents**
 downloads the tax invoice, covering letter, delivery note or the full pack (a
 *Certified True Copy* version once a CTC reference is recorded). Reports give
 the Sales Performance Report, the e-Payment file and outstanding payments.
+
+**Help desk** — with the request portal on, you triage *Requests*: accept, add to existing work, decline, message requesters and print QR posters — see *Requests from the portal* above.
 
 **Administrators** — users, settings, single sign-on and the workflow editor;
 see the [administrator guide](admin-guide.md).

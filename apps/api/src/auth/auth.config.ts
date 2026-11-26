@@ -35,6 +35,9 @@ export const authConfig = {
   loginRateLimit: num('LOGIN_RATE_LIMIT', 10),
   /** All other requests allowed per client IP per minute. */
   apiRateLimit: num('API_RATE_LIMIT', 600),
+  /** Request-portal submissions allowed per client IP, per minute and per hour. */
+  portalRateLimit: num('PORTAL_RATE_LIMIT', 5),
+  portalHourlyLimit: num('PORTAL_HOURLY_LIMIT', 20),
   cookieName: 'erp_session',
   cookieSecure: bool('COOKIE_SECURE', production),
   minPasswordLength: 12,

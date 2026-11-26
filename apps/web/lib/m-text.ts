@@ -76,6 +76,7 @@ const TEXT = {
   loading: { en: "Loading…", ms: "Memuatkan…" },
   back: { en: "Back", ms: "Kembali" },
   parts: { en: "Parts used", ms: "Alat ganti digunakan" },
+  requester: { en: "Reported by", ms: "Dilaporkan oleh" },
   noParts: { en: "No parts issued yet.", ms: "Belum ada alat ganti dikeluarkan." },
   issuePart: { en: "Issue a part", ms: "Keluarkan alat ganti" },
   returnPart: { en: "Return a part", ms: "Pulangkan alat ganti" },

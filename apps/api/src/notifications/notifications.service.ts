@@ -13,6 +13,7 @@ const LINKS: Record<string, (ref: string) => string> = {
   OV: () => '/ov',
   INVOICE: () => '/invoicing',
   STOCK: (r) => `/stock?part=${encodeURIComponent(r)}`,
+  REQUEST: (r) => `/requests?id=${encodeURIComponent(r)}`,
 };
 
 export interface AlertRunResult { checked: number; newAlerts: number; notifications: number; emails: number }

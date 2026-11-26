@@ -13,6 +13,7 @@ import { Button, MetaPill, OfflineNotice, Panel } from "@/components/ui";
 import { AuditTrail, RecordsList, StageRail, TransitionActions } from "@/components/workflow";
 import { AttachmentsPanel } from "@/components/attachments";
 import { JobParts } from "@/components/stock/job-parts";
+import { JobRequesters } from "@/components/requests/job-requesters";
 
 export default function JobDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -317,6 +318,12 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
           <div className="mt-6">
             <RecordsList records={job.records} />
           </div>
+
+          {modules.requests && (
+            <div className="mt-6 border-t hairline pt-4 empty:hidden">
+              <JobRequesters jobId={job.id} />
+            </div>
+          )}
 
           {modules.stock && (
             <div className="mt-6 border-t hairline pt-4">

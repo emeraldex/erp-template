@@ -8,7 +8,7 @@ import type { ObjectStorage } from './storage';
 import { currentTenant } from '../tenancy/tenant';
 
 export const STORAGE = Symbol('STORAGE');
-export const ENTITIES = ['JOB', 'DEMAND', 'OV', 'INVOICE', 'PARTNER', 'FOD'] as const;
+export const ENTITIES = ['JOB', 'DEMAND', 'OV', 'INVOICE', 'PARTNER', 'FOD', 'REQUEST'] as const;
 export type Entity = (typeof ENTITIES)[number];
 
 export const maxBytes = () => Number(process.env.ATTACHMENT_MAX_MB || 20) * 1024 * 1024;
@@ -21,6 +21,7 @@ export interface AttachmentView {
 
 export const ATTACHMENT_KINDS = ['file', 'photo', 'signature'] as const;
 const SIGNATURE_MAX_BYTES = 200 * 1024;
+export const REQUEST_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
 type Audited = { audit: AuditEntry[]; status?: string };
 
@@ -65,6 +66,8 @@ export class AttachmentsService {
       case 'INVOICE': return this.store.invoice(id);
       case 'PARTNER': return this.store.partner(id);
       case 'FOD': return this.store.fodIncident(id);
+      // Photos reach a request only through the public form; staff attach to the work order.
+      case 'REQUEST': return null;
     }
   }
 
@@ -122,6 +125,50 @@ export class AttachmentsService {
     }));
     await this.store.save(rec);
     return view(row);
+  }
+
+  /**
+   * A photo sent with a portal request. Only JPEG, PNG or WebP, recognised by
+   * content, at most 5 MB. Not audited: the request is not a workflow record.
+   */
+  /** The type of an acceptable request photo, judged by its bytes; throws otherwise. */
+  checkRequestPhoto(file: { buffer: Buffer; size: number }): 'image/jpeg' | 'image/png' | 'image/webp' {
+    if (!file.buffer?.length) throw new BadRequestException('A photo is empty');
+    if (file.size > REQUEST_PHOTO_MAX_BYTES) throw new PayloadTooLargeException('Photos are limited to 5 MB each');
+    const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' } as const;
+    const type = (Object.keys(ext) as (keyof typeof ext)[]).find((t) => !checkFileType(`x.${ext[t]}`, t, file.buffer));
+    if (!type) throw new BadRequestException('Photos must be JPEG, PNG or WebP images');
+    return type;
+  }
+
+  async storeRequestPhoto(requestId: string, file: { originalname: string; mimetype: string; buffer: Buffer; size: number }, uploadedBy: string): Promise<string> {
+    const type = this.checkRequestPhoto(file);
+    const sha256 = createHash('sha256').update(file.buffer).digest('hex');
+    const id = randomUUID();
+    const storageKey = `${currentTenant().id}/request/${sha256.slice(0, 2)}/${id}`;
+    await this.storage.put(storageKey, file.buffer, type);
+    const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[type];
+    await this.prisma.attachment.create({
+      data: {
+        id, entity: 'REQUEST', entityId: requestId, filename: `${requestId}-photo-${id.slice(0, 6)}.${ext}`, contentType: type, sizeBytes: file.size, sha256, storageKey,
+        uploadedBy, kind: 'photo', caption: 'Photo from the requester',
+      },
+    });
+    return id;
+  }
+
+  /** Move a request's photos onto the work order it became (or joined). */
+  async moveRequestPhotos(requestId: string, jobId: string): Promise<number> {
+    const res = await this.prisma.attachment.updateMany({ where: { entity: 'REQUEST', entityId: requestId }, data: { entity: 'JOB', entityId: jobId } });
+    return res.count;
+  }
+
+  /** Delete a request's photos for good (declined as spam). */
+  async purgeRequestPhotos(requestId: string): Promise<number> {
+    const rows = await this.prisma.attachment.findMany({ where: { entity: 'REQUEST', entityId: requestId }, select: { id: true, storageKey: true } });
+    for (const r of rows) await this.storage.delete(r.storageKey).catch((e) => this.log.error(`Could not delete ${r.storageKey}: ${(e as Error).message}`));
+    await this.prisma.attachment.deleteMany({ where: { id: { in: rows.map((r) => r.id) } } });
+    return rows.length;
   }
 
   private async find(id: string) {

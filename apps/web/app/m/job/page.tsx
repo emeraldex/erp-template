@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BigButton, MHeader, Notice, Section } from "@/components/m/ui";
 import { PhoneJobParts } from "@/components/m/job-parts";
+import { PhoneRequester } from "@/components/m/requester";
 import { StepForm, stepComplete } from "@/components/step-form";
 import { api } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
@@ -120,6 +121,8 @@ function JobView() {
       </div>
 
       {locked && <Notice>{m("locked")}</Notice>}
+
+      {modules.requests && <PhoneRequester jobId={job.id} title={m("requester")} />}
 
       {pack.pm?.instructions && (
         <Section title={m("instructions")}>
