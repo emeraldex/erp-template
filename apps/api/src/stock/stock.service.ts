@@ -57,6 +57,11 @@ export class StockService {
 
   // ─── catalogue ───────────────────────────────────────────────────────────────
 
+  /** A unit's name as people say it ("Set", "Litre") rather than its code. */
+  private unitLabel(key: string) {
+    return this.store.label('unit', key);
+  }
+
   storeLabel(key: string) {
     return this.store.label('store', key);
   }
@@ -265,7 +270,7 @@ export class StockService {
       const res = await tx.stockLevel.updateMany({ where: { partId: m.part.id, store: m.store, qty: { gte: need } }, data: { qty: { decrement: need } } });
       if (!res.count) {
         const have = await tx.stockLevel.findUnique({ where: { partId_store: { partId: m.part.id, store: m.store } } });
-        throw new BadRequestException(`Only ${Number(have?.qty ?? 0)} ${m.part.unit} of ${m.part.partNo} in ${this.storeLabel(m.store)} (${need} needed)`);
+        throw new BadRequestException(`Only ${Number(have?.qty ?? 0)} ${this.unitLabel(m.part.unit)} of ${m.part.partNo} in ${this.storeLabel(m.store)} (${need} needed)`);
       }
     } else if (m.qty > 0) {
       await tx.stockLevel.update({ where: { partId_store: { partId: m.part.id, store: m.store } }, data: { qty: { increment: m.qty } } });
@@ -334,7 +339,7 @@ export class StockService {
     const r = await this.prisma.$transaction(async (tx) => {
       const out = await this.takeTx(tx, { partId: body.partId!, store: s, qty, type: 'ISSUE', by: actor.name, jobId: body.jobId });
       const part = await tx.part.findUniqueOrThrow({ where: { id: body.partId! }, select: { partNo: true, name: true, unit: true } });
-      await this.jobAudit(tx, body.jobId!, actor, `Part issued: ${qty} ${part.unit} ${part.partNo} — ${part.name} from ${this.storeLabel(s)}`, { partId: body.partId!, store: s, qty: String(qty) });
+      await this.jobAudit(tx, body.jobId!, actor, `Part issued: ${qty} ${this.unitLabel(part.unit)} ${part.partNo} — ${part.name} from ${this.storeLabel(s)}`, { partId: body.partId!, store: s, qty: String(qty) });
       return out;
     });
     await this.checkLow([{ partId: body.partId, store: s }]);
@@ -345,7 +350,7 @@ export class StockService {
   async issueToJobTx(tx: Tx, args: { partId: string; store: string; qty: number; jobId: string; demandId?: string }, actor: Actor) {
     const out = await this.takeTx(tx, { partId: args.partId, store: args.store, qty: args.qty, type: 'ISSUE', by: actor.name, jobId: args.jobId, demandId: args.demandId });
     const part = await tx.part.findUniqueOrThrow({ where: { id: args.partId }, select: { partNo: true, name: true, unit: true } });
-    await this.jobAudit(tx, args.jobId, actor, `Part issued: ${args.qty} ${part.unit} ${part.partNo} — ${part.name} from ${this.storeLabel(args.store)}${args.demandId ? ` (request ${args.demandId})` : ''}`,
+    await this.jobAudit(tx, args.jobId, actor, `Part issued: ${args.qty} ${this.unitLabel(part.unit)} ${part.partNo} — ${part.name} from ${this.storeLabel(args.store)}${args.demandId ? ` (request ${args.demandId})` : ''}`,
       { partId: args.partId, store: args.store, qty: String(args.qty) });
     return out;
   }
@@ -374,9 +379,9 @@ export class StockService {
     const r = await this.prisma.$transaction(async (tx) => {
       const part = await this.lockPart(tx, body.partId!);
       const net = await this.netIssued(tx, body.partId!, body.jobId!);
-      if (qty > net) throw new BadRequestException(`Only ${net} ${part.unit} of ${part.partNo} was issued to ${body.jobId} — it cannot take back ${qty}`);
+      if (qty > net) throw new BadRequestException(`Only ${net} ${this.unitLabel(part.unit)} of ${part.partNo} was issued to ${body.jobId} — it cannot take back ${qty}`);
       const out = await this.move(tx, { part, store: s, type: 'RETURN', qty, unitCost: Number(part.avgCost), by: actor.name, jobId: body.jobId });
-      await this.jobAudit(tx, body.jobId!, actor, `Part returned: ${qty} ${part.unit} ${part.partNo} — ${part.name} to ${this.storeLabel(s)}`, { partId: body.partId!, store: s, qty: String(qty) });
+      await this.jobAudit(tx, body.jobId!, actor, `Part returned: ${qty} ${this.unitLabel(part.unit)} ${part.partNo} — ${part.name} to ${this.storeLabel(s)}`, { partId: body.partId!, store: s, qty: String(qty) });
       return out;
     });
     await this.checkLow([{ partId: body.partId, store: s }]);
@@ -491,7 +496,7 @@ export class StockService {
         id, partId: part.id, forStore: s, partDescription: part.name, partNo: part.partNo, qty,
         status: this.store.initialStatus('DEMAND'), statusSince: now, raisedBy: actor.name, branch: site,
         quotations: [], records: [],
-        audit: [this.store.audit(actor.name, actor.role, `Purchase request for stock: ${qty} ${part.unit} for ${this.storeLabel(s)}`,
+        audit: [this.store.audit(actor.name, actor.role, `Purchase request for stock: ${qty} ${this.unitLabel(part.unit)} for ${this.storeLabel(s)}`,
           { onHand: String(Number(level?.qty ?? 0)), reorderPoint: level?.reorderPoint == null ? '-' : String(Number(level.reorderPoint)) })],
       });
       await this.store.save(dm);
@@ -529,7 +534,7 @@ export class StockService {
     const people = await this.prisma.user.findMany({ where: { role: { in: roles }, deactivatedAt: null }, select: { id: true } });
     for (const p of people) {
       await this.store.notify(p.id, {
-        kind: 'stock.low', title: `Low stock: ${part.name}`, body: `${qty} ${part.unit} of ${part.partNo} left in ${this.storeLabel(storeKey)}`, ref: `STOCK:${part.id}`,
+        kind: 'stock.low', title: `Low stock: ${part.name}`, body: `${qty} ${this.unitLabel(part.unit)} of ${part.partNo} left in ${this.storeLabel(storeKey)}`, ref: `STOCK:${part.id}`,
       });
     }
   }

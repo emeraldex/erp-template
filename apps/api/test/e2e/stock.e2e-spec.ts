@@ -63,9 +63,9 @@ describe('Stock: catalogue and ledger (integration)', () => {
     const issued = (await send('post', '/stock/issue', { partId, store: 'MAIN', qty: 3, jobId: job }, 'technician').then(st(201))).body;
     expect(issued.balance).toBe(37);
     const tooMany = await send('post', '/stock/issue', { partId, store: 'MAIN', qty: 100, jobId: job }, 'technician');
-    expect(tooMany.body.message).toBe('Only 37 SET of BP-100 in Main depot store (100 needed)');
+    expect(tooMany.body.message).toBe('Only 37 Set of BP-100 in Main depot store (100 needed)');
 
-    expect((await send('post', '/stock/return', { partId, store: 'MAIN', qty: 5, jobId: job }, 'technician')).body.message).toContain('Only 3 SET of BP-100 was issued');
+    expect((await send('post', '/stock/return', { partId, store: 'MAIN', qty: 5, jobId: job }, 'technician')).body.message).toContain('Only 3 Set of BP-100 was issued');
     await send('post', '/stock/return', { partId, store: 'MAIN', qty: 1, jobId: job }, 'technician').then(st(201));
     expect(await level('MAIN')).toBe(38);
 
@@ -75,8 +75,8 @@ describe('Stock: catalogue and ledger (integration)', () => {
     expect(pack.parts.total).toBe(27.25);
     const actions = (await get(`/jobs/${job}`, 'technician')).body.audit.map((a: { action: string }) => a.action);
     expect(actions).toEqual(expect.arrayContaining([
-      'Part issued: 3 SET BP-100 — Brake pads (front) from Main depot store',
-      'Part returned: 1 SET BP-100 — Brake pads (front) to Main depot store',
+      'Part issued: 3 Set BP-100 — Brake pads (front) from Main depot store',
+      'Part returned: 1 Set BP-100 — Brake pads (front) to Main depot store',
     ]));
 
     await send('patch', `/jobs/${job}/transition`, { to: 'CANCELLED', fields: { reason: 'Duplicate' } }, 'helpdesk');

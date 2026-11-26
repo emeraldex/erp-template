@@ -139,7 +139,7 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
           </span>
           <MetaPill status={job.status} meta={cfg?.jobStatusMeta?.[job.status]} lang={lang} />
           <Button variant="ghost" onClick={() => download(`/job-cards?ids=${encodeURIComponent(job.id)}`, `${job.id}-job-card.pdf`).catch((e) => setError((e as Error).message))}>
-            Print {aviation ? "job" : terms.job.toLowerCase()} card
+            Print {aviation ? "job card" : /card$/i.test(terms.job) ? terms.job.toLowerCase() : `${terms.job.toLowerCase()} card`}
           </Button>
         </div>
       </div>

@@ -173,12 +173,12 @@ function PartsView() {
               <Table head={["Part no.", "Name", "Group", store ? "In store" : "On hand", "Avg cost", "Value", ""]}>
                 {shown.map((p) => (
                   <Tr key={p.id} onClick={() => router.push(`/stock?part=${encodeURIComponent(p.id)}`)}>
-                    <Td className="mono text-xs text-trace">{p.partNo}</Td>
+                    <Td className="mono whitespace-nowrap text-xs text-trace">{p.partNo}</Td>
                     <Td>{p.name}{p.manufacturer && <span className="mono ml-2 text-[10.5px] text-dim">{p.manufacturer}</span>}</Td>
                     <Td className="mono text-xs text-steel">{p.group ? label("partGroup", p.group) : "—"}</Td>
-                    <Td className="mono text-xs tabular-nums">{qty(held(p))} <span className="text-dim">{label("unit", p.unit)}</span></Td>
-                    <Td className="mono text-xs tabular-nums text-steel">{money(p.avgCost)}</Td>
-                    <Td className="mono text-xs tabular-nums text-steel">{money(store ? held(p) * p.avgCost : p.value)}</Td>
+                    <Td className="mono whitespace-nowrap text-xs tabular-nums">{qty(held(p))} <span className="text-dim">{label("unit", p.unit)}</span></Td>
+                    <Td className="mono whitespace-nowrap text-xs tabular-nums text-steel">{money(p.avgCost)}</Td>
+                    <Td className="mono whitespace-nowrap text-xs tabular-nums text-steel">{money(store ? held(p) * p.avgCost : p.value)}</Td>
                     <Td>{p.levels.some((l) => l.low && (!store || l.store === store)) && <StatusPill value="LOW" tone="warn" />}</Td>
                   </Tr>
                 ))}
