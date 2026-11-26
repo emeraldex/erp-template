@@ -22,8 +22,9 @@ Section 4 (actors), Section 5 (workflows), Section 6 (forms register), Section 7
 | For | Read |
 |---|---|
 | Installing and running client organisations | [Administrator guide](docs/guides/admin-guide.md) |
-| Setting a client up for its sector (packs, terms, statuses, actions, permissions, assets, PM) | [Setting up for any sector](docs/guides/sectors.md) |
+| Setting a client up for its sector (packs, terms, statuses, actions, permissions, assets, PM, stock) | [Setting up for any sector](docs/guides/sectors.md) |
 | Daily use, by role | [User guide](docs/guides/user-guide.md) · [Panduan pengguna](docs/guides/panduan-pengguna.md) |
+| How stock control works (ledger, costing, counts, purchasing) | [Stock](docs/architecture/stock.md) |
 | Integrations | [API guide](docs/api/README.md) and the generated reference at `/api/docs` |
 | Security reviews | [Security overview](docs/security-overview.md) |
 | Sales demos | [Running a demo](docs/demo-environment.md) |
@@ -93,6 +94,9 @@ pnpm --filter web test        # the phone app's offline sync rules
 `node scripts/phone-offline-check.js` drives the phone app in an emulated phone
 against a running facilities demo (`SEED_PACK=facilities`): it goes offline,
 works a job, reconnects and checks the server received everything once.
+`node scripts/stock-check.js` does the same for stock against a fresh fleet demo
+(`SEED_PACK=fleet`): catalogue, receipts, reorder, a count, import, labels,
+purchasing for stock, parts on a work order and on the phone.
 
 The integration tests boot the real API against PostgreSQL. Point
 `TEST_DATABASE_URL` at a **disposable** database whose name contains `test` — its
@@ -164,6 +168,11 @@ dependency audit, on every push and pull request.
   named people, checklists, photos, notes and meter readings that work without a signal,
   photo and signature proof on workflow steps, and QR labels for assets
   ([how it works](docs/architecture/mobile-offline.md)).
+- **Stock control** — parts catalogue, stores and bins, an append-only ledger with
+  moving-average cost, issue/return to work orders with the parts cost, low-stock alerts
+  and a reorder list that raises purchase requests, receipts into stock, counts that keep
+  issues made while counting, spreadsheet import, QR shelf and bin labels, stock valuation
+  and parts usage reports, and parts on the phone ([how it works](docs/architecture/stock.md)).
 
 ## Section 8 demonstration script
 
@@ -195,6 +204,10 @@ GET|POST /jobs · GET /jobs/:id · PATCH /jobs/:id/transition · PATCH /jobs/:id
 GET   /jobs/mine · GET /jobs/:id/pack · POST /jobs/:id/{notes,claim} · PATCH /jobs/:id/assignee
                                        phone app / field work (X-Client-Op makes resends safe)
 GET   /users/directory · GET /assets/labels?ids=…
+GET|POST /stock/parts · GET|PATCH /stock/parts/:id · PUT /stock/parts/:id/levels/:store
+POST  /stock/{issue,return,receive,adjust,transfer} · GET /stock/movements · GET /jobs/:id/parts
+GET|POST /stock/reorder · /stock/counts[/:id[/post|/cancel]] · POST /stock/import?dryRun=1
+GET   /stock/labels?ids=…&store=… · GET /reports/{stock-valuation,parts-usage}
 POST  /jobs/:id/priority · PATCH /jobs/:id/priority · POST /jobs/:id/priority/close
                                        AOG/ROA/Critical overlay (QP.56)
 GET   /demands · /demands/:id · POST /demands/:id/quotations · PATCH /demands/:id/transition

@@ -79,13 +79,62 @@ then **Add to Home Screen**.
 - Changes are sent while the app is open. Sign out only when *All sent* shows —
   you are warned otherwise; unsent changes stay on the phone for you.
 - **More → Open the full site** switches to the desktop screens.
+- With stock control on, a work order shows the **Parts used**; *Issue a
+  part* and *Return a part* take them from or back to a store. Scanning a
+  **shelf or bin label** opens the part: what each store holds and where, what
+  is on order, and *Issue to a work order*. Issuing needs a connection, because
+  the stock is checked at that moment.
+
+## Parts and stock
+
+*Parts & stock* appears when an administrator switches on stock control.
+
+- **Parts** — the catalogue: part number, name, unit, group, maker, what each
+  store holds, the average cost and the value. Click a part for its stores,
+  bins and reorder points, its **ledger** (every receipt, issue, return,
+  adjustment, transfer and count, with who and why) and its open purchase
+  requests. Stores staff can **receive** stock that did not come through a
+  purchase (with its cost and where it came from), **adjust** with a reason,
+  **transfer** between stores, and set a store's **bin** and **reorder point**.
+- **Issuing to work** — on a work order, *Parts used → + Issue part* (or from
+  the part, *Issue to work order*). Stock never goes below zero: if two people
+  take the last one at the same moment, only one succeeds. *Return* takes back
+  no more than was issued to that work order. The work order shows the parts'
+  cost, at the average cost when they were issued.
+- **Low stock** — when a store falls to its reorder point, people who manage
+  stock get an alert (once, until it is restocked), and the dashboard counts
+  it. **Reorder** lists everything low with a suggested quantity: change the
+  quantities, tick the lines and *Raise purchase requests*. Those requests have
+  no work order; they go through quotations and ordering as usual and close
+  when the goods are **received into stock**, which also updates the average
+  cost.
+- **Requests for a work order** — the *Request parts* step lets the technician
+  pick a catalogue part (type to search; if one part matches it is chosen) or
+  describe one that is not in the catalogue. A catalogue part that is in stock
+  can be issued straight from the request.
+- **Counts** — *Counts → Start count* for a store (or one group). Type what is
+  on each shelf; Enter moves to the next line, and the sheet shows the
+  difference and its value as you go. *Post count* applies the differences to
+  what the store holds now, so parts issued while you counted are kept. Lines
+  left empty are not changed. A store has one open count at a time.
+- **Import** — *Import from spreadsheet* loads parts, bins, reorder points and
+  opening stock from a CSV file. *Check* lists every row's problems; nothing is
+  imported until every row is good. Opening stock is accepted only where that
+  part has no history in that store.
+- **Labels** — *Print labels* prints QR labels for the parts listed; choose a
+  store first to print **bin labels** showing the bin.
+- **Reports** — *Stock valuation* (every part held, per store, at average
+  cost) and *Parts usage* (parts issued to work orders in a period, net of
+  returns, by part and by work order).
 
 ## By role
 
 **Stores** — register incoming items (*+ Register job*), dispatch them to the
 workshop, record stock checks, issue and receive parts, and print **job
 cards**: on a job, *Print job card*; on the register, *Print cards* prints a
-card for every job listed. Scanning a card's QR code opens that job.
+card for every job listed. Scanning a card's QR code opens that job. With
+stock control on, you also keep the catalogue, receive and count stock, and
+raise purchase requests from the reorder list — see *Parts and stock* above.
 
 **Workshop** — record tear-down inspections, raise spares demands, and route
 jobs: quotation, BER, SOR or outside vendor.
@@ -120,3 +169,5 @@ see the [administrator guide](admin-guide.md).
 - *Stage owned by …*: that step belongs to another role.
 - *Mandatory fields missing*: fill in every field the step asks for.
 - *Someone else changed this record first*: reload the page and try again.
+- *Only 2 Each of … in Main store*: there is not enough stock in that store —
+  choose another store, issue fewer, or receive more first.

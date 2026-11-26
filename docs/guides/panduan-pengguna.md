@@ -86,6 +86,60 @@ iPhone ketik **Kongsi**, kemudian **Tambah ke Skrin Utama**.
   dihantar* dipaparkan — anda akan diberi amaran; perubahan yang belum dihantar
   kekal pada telefon untuk anda.
 - **Lagi → Buka laman penuh** menukar ke skrin desktop.
+- Apabila kawalan stok dihidupkan, arahan kerja menunjukkan **Alat ganti
+  digunakan**; *Keluarkan alat ganti* dan *Pulangkan alat ganti* mengambil
+  atau memulangkannya ke stor. Mengimbas **label rak atau tong** membuka alat
+  ganti tersebut: stok setiap stor dan lokasinya, apa yang dalam pesanan, dan
+  *Keluarkan kepada arahan kerja*. Pengeluaran memerlukan sambungan, kerana
+  stok disemak pada saat itu.
+
+## Alat ganti dan stok
+
+*Alat ganti & stok* dipaparkan apabila pentadbir menghidupkan kawalan stok.
+
+- **Alat ganti** — katalog: nombor alat ganti, nama, unit, kumpulan, pengeluar,
+  stok setiap stor, kos purata dan nilai. Klik alat ganti untuk melihat stor,
+  tong dan titik pesanan semula, **lejar**nya (setiap penerimaan, pengeluaran,
+  pemulangan, pelarasan, pemindahan dan kiraan, dengan siapa dan sebabnya) dan
+  permohonan pembelian yang terbuka. Kakitangan stor boleh **menerima** stok
+  yang tidak melalui pembelian (dengan kos dan asalnya), **melaraskan** dengan
+  sebab, **memindahkan** antara stor, dan menetapkan **tong** serta **titik
+  pesanan semula** bagi sesuatu stor.
+- **Mengeluarkan kepada kerja** — pada arahan kerja, *Parts used → + Issue
+  part* (atau dari alat ganti, *Issue to work order*). Stok tidak akan menjadi
+  negatif: jika dua orang mengambil unit terakhir serentak, hanya seorang
+  berjaya. *Return* tidak menerima lebih daripada yang telah dikeluarkan kepada
+  arahan kerja itu. Arahan kerja menunjukkan kos alat ganti, pada kos purata
+  semasa dikeluarkan.
+- **Stok rendah** — apabila stok sesebuah stor jatuh ke titik pesanan semula,
+  mereka yang mengurus stok menerima amaran (sekali, sehingga stok ditambah),
+  dan papan pemuka mengiranya. **Reorder** menyenaraikan semua yang rendah
+  dengan kuantiti cadangan: ubah kuantiti, tanda baris dan *Raise purchase
+  requests*. Permohonan ini tiada arahan kerja; ia melalui sebut harga dan
+  pesanan seperti biasa dan ditutup apabila barang **diterima ke dalam stok**,
+  yang juga mengemas kini kos purata.
+- **Permohonan bagi arahan kerja** — langkah *Request parts* membolehkan juruteknik
+  memilih alat ganti katalog (taip untuk mencari; jika hanya satu sepadan, ia
+  dipilih) atau menerangkan alat ganti yang tiada dalam katalog. Alat ganti
+  katalog yang ada dalam stok boleh dikeluarkan terus daripada permohonan.
+- **Kiraan stok** — *Counts → Start count* bagi sesebuah stor (atau satu
+  kumpulan). Taip kuantiti di setiap rak; Enter bergerak ke baris seterusnya,
+  dan helaian menunjukkan perbezaan serta nilainya. *Post count* menggunakan
+  perbezaan pada stok semasa, jadi alat ganti yang dikeluarkan semasa mengira
+  dikekalkan. Baris yang dibiarkan kosong tidak diubah. Satu stor hanya boleh
+  mempunyai satu kiraan terbuka pada satu masa.
+- **Import** — *Import from spreadsheet* memuatkan alat ganti, tong, titik
+  pesanan semula dan stok pembukaan daripada fail CSV. *Check* menyenaraikan
+  masalah setiap baris; tiada apa yang diimport sehingga semua baris betul.
+  Stok pembukaan hanya diterima jika alat ganti itu belum mempunyai sejarah di
+  stor tersebut.
+- **Label** — *Print labels* mencetak label QR bagi alat ganti yang
+  tersenarai; pilih stor dahulu untuk mencetak **label tong** yang menunjukkan
+  tong.
+- **Laporan** — *Stock valuation* (setiap alat ganti yang dipegang, mengikut
+  stor, pada kos purata) dan *Parts usage* (alat ganti yang dikeluarkan kepada
+  arahan kerja dalam sesuatu tempoh, ditolak pemulangan, mengikut alat ganti
+  dan arahan kerja).
 
 ## Mengikut peranan
 
@@ -93,6 +147,9 @@ iPhone ketik **Kongsi**, kemudian **Tambah ke Skrin Utama**.
 semakan stok, keluarkan dan terima alat ganti, dan cetak **kad kerja**: pada
 kerja, *Print job card*; pada daftar, *Print cards* mencetak kad bagi setiap
 kerja yang tersenarai. Mengimbas kod QR pada kad akan membuka kerja tersebut.
+Apabila kawalan stok dihidupkan, anda juga mengurus katalog, menerima dan
+mengira stok, dan membuat permohonan pembelian daripada senarai pesanan semula
+— lihat *Alat ganti dan stok* di atas.
 
 **Bengkel** — rekod pemeriksaan rombak (TDI), mohon alat ganti, dan salurkan
 kerja: sebut harga, BER, SOR atau vendor luar.
@@ -128,3 +185,5 @@ kerja; lihat [panduan pentadbir](admin-guide.md) (dalam Bahasa Inggeris).
 - *Stage owned by …*: langkah itu milik peranan lain.
 - *Mandatory fields missing*: isi setiap medan yang diminta.
 - *Someone else changed this record first*: muat semula halaman dan cuba lagi.
+- *Only 2 Each of … in Main store*: stok di stor itu tidak mencukupi — pilih
+  stor lain, keluarkan kurang, atau terima stok dahulu.

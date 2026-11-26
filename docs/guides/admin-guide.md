@@ -137,7 +137,43 @@ only exception) — the reverse proxy in this repository provides it.
   with `NEXT_PUBLIC_PWA=0`; phones remove the service worker and its caches on
   their next visit. Data already sent is unaffected.
 
-## 7. Everyday operations
+## 7. Stock control
+
+- **Switching it on**: *Settings → Your sector → Modules → Parts catalogue &
+  stock control*. New organisations from the general-purpose packs have it on;
+  aviation organisations and organisations created before this release have it
+  off. When it is switched on and the organisation has no stores, a *Main
+  store* at the first site and the standard units (each, set, box, metre,
+  litre, kilogram) are created.
+- **Stores, units and part groups** are lists in *Workflow editor → Statuses
+  & lists*. A store belongs to a site; it cannot be made inactive while it
+  still holds stock.
+- **Permissions**: *Manage the parts catalogue and stock* (`stock.manage`) —
+  catalogue, receipts, adjustments, transfers, counts, import, reorder and the
+  stock reports; *Issue parts to work orders* (`stock.issue`). New
+  organisations give both to stores, supervisors and managers, and issuing to
+  technicians. Organisations created before this release have them only for
+  ADMIN until you grant them in *Workflow editor → Roles
+  & permissions*.
+- **Loading the catalogue**: *Parts & stock → Import from spreadsheet* with a
+  CSV of `partNo, name, unit, group, manufacturer, mfrPartNo, store, bin, qty,
+  unitCost, reorderPoint, reorderQty` (up to 2,000 rows / 1 MB per file;
+  semicolon-separated files with decimal commas are accepted). *Check* first;
+  the import is all-or-nothing. Opening stock goes in only where the part has
+  no history in that store — after go-live, use a count.
+- **Labels**: *Print labels* on the catalogue prints QR labels (choose a store
+  first for bin labels). The QR opens the part; on a phone it opens the phone
+  part screen.
+- **Purchasing**: the *Request parts* step of new organisations offers a
+  catalogue part as well as a free description, and *Receive goods* puts
+  catalogue parts into stock at the purchase price. In older organisations, add
+  a field of type *Catalogue part* to the step and name it in the *Raise a
+  parts request* action's part field.
+- **Costing**: moving average per part across all stores; issues, counts and
+  adjustments use the average at that moment. The ledger is never edited — a
+  mistake is put right with an adjustment.
+
+## 8. Everyday operations
 
 - **Health**: `GET /api/v1/health` for monitoring.
 - **Logs**: one JSON line per request in production.
@@ -148,7 +184,7 @@ only exception) — the reverse proxy in this repository provides it.
 - **Upgrades**: pull the new version and rebuild; migrations run on start.
   Take a backup first.
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom | Likely cause |
 |---|---|
@@ -156,4 +192,6 @@ only exception) — the reverse proxy in this repository provides it.
 | *No organisation is configured for this address* | `TENANT_STRICT_HOSTS=true` and the address is not registered — `set-hosts` |
 | SSO returns to the sign-in page with *no account* | The user's email in the identity provider does not match their ERP account |
 | SSO save fails | The issuer URL is wrong or not reachable from the server |
+| *Only N … in …* when issuing | Not enough stock in that store; the decrement is checked in the database so stock never goes negative |
+| *already has stock history — use a count* on import | That part already has movements in that store; correct its quantity with a count or an adjustment |
 | Alerts but no emails | `SMTP_URL` not set, or the mail server refused — see the API log |
