@@ -4,7 +4,8 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import { api } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { photoName, resizePhoto } from "@/lib/images";
-import type { Attachment, StaffMember, StepField } from "@/lib/types";
+import type { Attachment, Part, StaffMember, StepField } from "@/lib/types";
+import { useVocab } from "@/lib/vocab";
 
 let staffCache: Promise<StaffMember[]> | null = null;
 /** Active staff for person pickers, fetched once per page load. */
@@ -14,6 +15,16 @@ export function loadStaff(): Promise<StaffMember[]> {
     throw e;
   });
   return staffCache;
+}
+
+let partsCache: Promise<Part[]> | null = null;
+/** The active parts catalogue, for part pickers, fetched once per page load. */
+export function loadParts(): Promise<Part[]> {
+  partsCache ??= api.get<Part[]>("/stock/parts").catch((e) => {
+    partsCache = null;
+    throw e;
+  });
+  return partsCache;
 }
 
 const T = {
@@ -26,6 +37,10 @@ const T = {
   saveSignature: { en: "Save signature", ms: "Simpan tandatangan" },
   signedBy: { en: "Signed by", ms: "Ditandatangani oleh" },
   choose: { en: "— choose —", ms: "— pilih —" },
+  optional: { en: "optional", ms: "pilihan" },
+  searchParts: { en: "Search part no. or name…", ms: "Cari no. alat ganti atau nama…" },
+  noParts: { en: "No part matches", ms: "Tiada alat ganti yang sepadan" },
+  inStock: { en: "in stock", ms: "dalam stok" },
 } as const;
 
 export interface StepFormProps {
@@ -46,6 +61,7 @@ export interface StepFormProps {
  * signature fields upload straight away and hold the attachment id.
  */
 export function StepForm({ fields, values, onChange, entity, entityId, large, disabled }: StepFormProps) {
+  const { lang } = useLang();
   const set = (key: string, v: string) => onChange({ ...values, [key]: v });
   const input = `mono w-full rounded-md border hairline bg-panel text-fg outline-none transition-colors focus:border-trace disabled:opacity-60 ${
     large ? "px-3 py-3 text-base" : "px-3 py-2 text-xs"
@@ -59,7 +75,7 @@ export function StepForm({ fields, values, onChange, entity, entityId, large, di
           <label key={f.key} className={`block ${wide && !large ? "sm:col-span-2" : ""}`}>
             <span className={`mb-1 block tracking-wide text-steel ${large ? "text-sm" : "mono text-[10.5px] tracking-widest"}`}>
               {f.formNo && <span className="mr-1.5 text-brand-bright">{f.formNo}</span>}
-              {f.label} *
+              {f.label} {f.optional ? <span className="text-dim">({T.optional[lang]})</span> : "*"}
             </span>
             {type === "number" ? (
               <input type="text" inputMode="decimal" value={values[f.key] ?? ""} disabled={disabled} onChange={(e) => set(f.key, e.target.value)} className={input} />
@@ -69,6 +85,10 @@ export function StepForm({ fields, values, onChange, entity, entityId, large, di
               <PersonPicker value={values[f.key] ?? ""} onChange={(v) => set(f.key, v)} className={input} disabled={disabled} />
             ) : type === "photo" ? (
               <PhotoField value={values[f.key]} onChange={(v) => set(f.key, v)} entity={entity} entityId={entityId} large={large} disabled={disabled} caption={f.label} />
+            ) : type === "part" ? (
+              <PartPicker value={values[f.key] ?? ""} onChange={(v) => set(f.key, v)} className={input} disabled={disabled} />
+            ) : type === "store" ? (
+              <StorePicker value={values[f.key] ?? ""} onChange={(v) => set(f.key, v)} className={input} disabled={disabled} />
             ) : type === "signature" ? (
               <SignatureField value={values[f.key]} onChange={(v) => set(f.key, v)} entity={entity} entityId={entityId} large={large} disabled={disabled} />
             ) : (
@@ -81,9 +101,48 @@ export function StepForm({ fields, values, onChange, entity, entityId, large, di
   );
 }
 
-/** True when every field has a value (photos and signatures uploaded). */
+/** True when every mandatory field has a value (photos and signatures uploaded). */
 export function stepComplete(fields: StepField[], values: Record<string, string>): boolean {
-  return fields.every((f) => !!values[f.key]?.trim());
+  return fields.every((f) => f.optional || !!values[f.key]?.trim());
+}
+
+/** Choose a catalogue part: type to narrow the list, then pick. Shows what is in stock. */
+function PartPicker({ value, onChange, className, disabled }: { value: string; onChange: (v: string) => void; className: string; disabled?: boolean }) {
+  const { lang } = useLang();
+  const { label } = useVocab();
+  const [parts, setParts] = useState<Part[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  useEffect(() => { loadParts().then(setParts).catch((e) => setError((e as Error).message)); }, []);
+  const needle = q.trim().toLowerCase();
+  const shown = (parts ?? [])
+    .filter((p) => p.id === value || !needle || `${p.partNo} ${p.name} ${p.manufacturer} ${p.mfrPartNo}`.toLowerCase().includes(needle))
+    .slice(0, 60);
+  // A search that leaves one part chooses it.
+  const only = needle && shown.length === 1 ? shown[0].id : "";
+  useEffect(() => { if (only && only !== value) onChange(only); }, [only]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (error) return <p className="text-sm text-brand-bright">{error}</p>;
+  return (
+    <div className="space-y-1.5">
+      <input value={q} disabled={disabled || !parts} onChange={(e) => setQ(e.target.value)} placeholder={T.searchParts[lang]} className={className} />
+      <select value={value} disabled={disabled || !parts} onChange={(e) => onChange(e.target.value)} className={className}>
+        <option value="">{!parts ? "…" : shown.length ? T.choose[lang] : T.noParts[lang]}</option>
+        {shown.map((p) => <option key={p.id} value={p.id}>{p.partNo} · {p.name} — {p.onHand} {label("unit", p.unit)} {T.inStock[lang]}</option>)}
+      </select>
+    </div>
+  );
+}
+
+/** Choose one of the organisation's stores. */
+function StorePicker({ value, onChange, className, disabled }: { value: string; onChange: (v: string) => void; className: string; disabled?: boolean }) {
+  const { lang } = useLang();
+  const { dict } = useVocab();
+  return (
+    <select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} className={className}>
+      <option value="">{T.choose[lang]}</option>
+      {dict("store").map((s) => <option key={s.key} value={s.key}>{lang === "ms" && s.labelMs ? s.labelMs : s.label}</option>)}
+    </select>
+  );
 }
 
 function PersonPicker({ value, onChange, className, disabled }: { value: string; onChange: (v: string) => void; className: string; disabled?: boolean }) {

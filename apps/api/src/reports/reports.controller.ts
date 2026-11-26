@@ -47,6 +47,21 @@ export class ReportsController {
     return this.send(await this.reports.outstanding(), `outstanding_${new Date().toISOString().slice(0, 10)}`, format, res);
   }
 
+  @Get('stock-valuation')
+  @InModule('stock')
+  @Requires('stock.manage')
+  async stockValuation(@Query('format') format: string, @Res({ passthrough: true }) res: Response) {
+    return this.send(await this.reports.stockValuation(), `stock-valuation_${new Date().toISOString().slice(0, 10)}`, format, res);
+  }
+
+  @Get('parts-usage')
+  @InModule('stock')
+  @Requires('stock.manage')
+  async partsUsage(@Query('from') from: string, @Query('to') to: string, @Query('format') format: string, @Res({ passthrough: true }) res: Response) {
+    const p = parsePeriod(from, to);
+    return this.send(await this.reports.partsUsage(p), `parts-usage_${p.from}_${p.to}`, format, res);
+  }
+
   @Get('audit')
   @Requires('reports.audit')
   async audit(

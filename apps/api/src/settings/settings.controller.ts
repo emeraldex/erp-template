@@ -38,8 +38,10 @@ export class SettingsController {
   /** Switch optional modules (procurement, vendor repair, assets, PM…) on or off. */
   @Patch('modules')
   @Requires('org.admin')
-  modules(@Body() body: Partial<Modules>, @Req() req: { user: AuthUser }) {
-    return this.settings.updateModules(body ?? {}, req.user.name);
+  async modules(@Body() body: Partial<Modules>, @Req() req: { user: AuthUser }) {
+    const modules = await this.settings.updateModules(body ?? {}, req.user.name);
+    await this.store.reloadConfig(); // switching stock on may have added a store and units
+    return modules;
   }
 
   @Patch('defaults')

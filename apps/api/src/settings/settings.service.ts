@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { currentTenant } from '../tenancy/tenant';
 import { AVIATION } from '../packs/aviation';
+import { UNITS } from '../packs/stock-lists';
 import { MODULE_KEYS, type Modules, type Terms } from '../packs/types';
 import { PrismaService } from '../common/prisma.service';
 
@@ -131,8 +132,26 @@ export class SettingsService {
     const next = { ...this.cache.modules };
     for (const k of MODULE_KEYS) if (typeof patch[k] === 'boolean') next[k] = patch[k] as boolean;
     if (next.pm && !next.assets) throw new BadRequestException('Preventive maintenance needs the asset register');
+    if (next.stock && !this.cache.modules.stock) await this.ensureStockLists();
     await this.save('modules', next, by);
     return next;
+  }
+
+  /**
+   * Stock needs somewhere to keep parts and units to count them in. When an
+   * organisation without them switches stock on, add a main store at its first
+   * site and the standard units; existing lists are left alone.
+   */
+  private async ensureStockLists(): Promise<void> {
+    const [stores, units, site] = await Promise.all([
+      this.prisma.dictionaryEntry.count({ where: { kind: 'store' } }),
+      this.prisma.dictionaryEntry.count({ where: { kind: 'unit' } }),
+      this.prisma.dictionaryEntry.findFirst({ where: { kind: 'site', active: true }, orderBy: [{ seq: 'asc' }, { id: 'asc' }] }),
+    ]);
+    const rows: { kind: string; key: string; label: string; labelMs: string; meta: object; seq: number }[] = [];
+    if (!stores) rows.push({ kind: 'store', key: 'MAIN', label: 'Main store', labelMs: 'Stor utama', meta: { site: site?.key ?? 'HQ' }, seq: 0 });
+    if (!units) UNITS.forEach((u, seq) => rows.push({ kind: 'unit', key: u.key, label: u.label, labelMs: u.labelMs ?? '', meta: {}, seq }));
+    if (rows.length) await this.prisma.dictionaryEntry.createMany({ data: rows.map((r) => ({ ...r, meta: r.meta as never })), skipDuplicates: true });
   }
 
   async updateDefaults(patch: Partial<WorkflowDefaults>, by: string): Promise<WorkflowDefaults> {

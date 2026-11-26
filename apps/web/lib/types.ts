@@ -114,7 +114,14 @@ export interface Quotation {
 
 export interface Demand {
   id: string;
-  jobId: string;
+  /** Absent for purchases for stock. */
+  jobId?: string;
+  /** Catalogue part, when one was chosen. */
+  partId?: string;
+  /** The store a purchase for stock is for (or where it was received). */
+  forStore?: string;
+  /** Cost per unit when received into stock. */
+  unitCost?: number;
   partDescription: string;
   partNo: string;
   qty: number;
@@ -290,10 +297,10 @@ export interface TransitionRule<S extends string = string> {
   effects?: { type: string; params?: Record<string, unknown> }[];
 }
 
-export type FieldType = "text" | "number" | "date" | "user" | "photo" | "signature";
+export type FieldType = "text" | "number" | "date" | "user" | "photo" | "signature" | "part" | "store";
 
-/** A mandatory field on a workflow step. Untyped fields are free text. */
-export interface StepField { key: string; label: string; formNo?: string; type?: FieldType }
+/** A field on a workflow step: mandatory unless marked optional. Untyped fields are free text. */
+export interface StepField { key: string; label: string; formNo?: string; type?: FieldType; optional?: boolean }
 
 /** Someone who works here, for person pickers (GET /users/directory). */
 export interface StaffMember { id: string; name: string; role: string; branch: string }
@@ -349,7 +356,7 @@ export interface Terms {
 export interface Modules {
   procurement: boolean; vendorRepair: boolean; priority: boolean; incidents: boolean;
   tools: boolean; training: boolean; invoicing: boolean; registers: boolean;
-  assets: boolean; pm: boolean;
+  assets: boolean; pm: boolean; stock: boolean;
 }
 
 export interface Meter { key: string; label: string; unit: string; value: number; readAt: string | null }
@@ -441,6 +448,8 @@ export interface Kpis {
   byStatus: { status: JobStatus; count: number }[];
   avgJobAgeDays: number;
   weeklyClosures: number[];
+  /** Store places at or below their reorder point; null when stock control is off. */
+  lowStock?: number | null;
 }
 
 export interface Attachment {
@@ -488,4 +497,115 @@ export interface Settings {
   terms?: Terms;
   modules?: Modules;
   defaults?: { jobPrefix: string; initialLocation: string };
+}
+
+// ─── stock ──────────────────────────────────────────────────────────────────
+
+export interface StockLevel {
+  store: string;
+  storeLabel: string;
+  bin: string;
+  qty: number;
+  reorderPoint: number | null;
+  reorderQty: number | null;
+  low: boolean;
+  countedAt: string | null;
+}
+
+export interface StockMovement {
+  id: string;
+  partId: string;
+  store: string;
+  type: "OPENING" | "RECEIPT" | "ISSUE" | "RETURN" | "ADJUST" | "COUNT" | "TRANSFER_OUT" | "TRANSFER_IN";
+  qty: number;
+  unitCost: number;
+  balanceAfter: number;
+  jobId: string | null;
+  demandId: string | null;
+  countId: string | null;
+  transferRef: string | null;
+  reason: string;
+  by: string;
+  at: string;
+}
+
+export interface Part {
+  id: string;
+  partNo: string;
+  name: string;
+  description: string;
+  unit: string;
+  group: string;
+  manufacturer: string;
+  mfrPartNo: string;
+  preferredSupplierId: string | null;
+  avgCost: number;
+  lastCost: number | null;
+  active: boolean;
+  levels: StockLevel[];
+  onHand: number;
+  value: number;
+  low: boolean;
+  movements?: StockMovement[];
+  requests?: { id: string; jobId: string | null; forStore: string | null; qty: number; status: string }[];
+}
+
+export interface ReorderLine {
+  partId: string;
+  partNo: string;
+  name: string;
+  unit: string;
+  store: string;
+  storeLabel: string;
+  bin: string;
+  qty: number;
+  reorderPoint: number;
+  suggested: number;
+  avgCost: number;
+  openRequest: string | null;
+}
+
+export interface JobParts {
+  lines: { partId: string; partNo: string; name: string; unit: string; qty: number; cost: number }[];
+  total: number;
+}
+
+export interface StockCountLine {
+  partId: string;
+  partNo: string;
+  name: string;
+  unit: string;
+  bin: string;
+  systemQty: number;
+  countedQty: number | null;
+  onHand: number;
+  difference: number | null;
+  avgCost: number;
+  value: number | null;
+}
+
+export interface StockCount {
+  id: string;
+  store: string;
+  storeLabel: string;
+  status: "OPEN" | "POSTED" | "CANCELLED";
+  note: string;
+  startedBy: string;
+  startedAt: string;
+  postedBy: string | null;
+  postedAt: string | null;
+  lines: StockCountLine[] | number;
+  counted?: number;
+  total?: number;
+  differenceValue?: number;
+}
+
+export interface ImportResult {
+  dryRun: boolean;
+  rows: number;
+  created: string[];
+  updated: string[];
+  levels: number;
+  openings: number;
+  errors: { row: number; message: string }[];
 }

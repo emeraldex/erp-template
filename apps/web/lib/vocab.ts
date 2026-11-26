@@ -16,7 +16,7 @@ export const DEFAULT_TERMS: Terms = {
 
 const ALL_MODULES: Modules = {
   procurement: true, vendorRepair: true, priority: true, incidents: true, tools: true, training: true,
-  invoicing: true, registers: true, assets: false, pm: false,
+  invoicing: true, registers: true, assets: false, pm: false, stock: false,
 };
 
 export type WorkflowKind = "JOB" | "DEMAND" | "OV" | "INVOICE";

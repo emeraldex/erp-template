@@ -48,7 +48,8 @@ general-purpose packs have one user per role — `admin@`, `helpdesk@`,
   *Priority*.
 - **Modules**: switch off what the client does not use — parts & purchasing,
   vendor repairs, priority escalation, invoicing, supplier register, safety
-  incidents, tool control, training records, assets, preventive maintenance.
+  incidents, tool control, training records, assets, preventive maintenance,
+  parts catalogue & stock control.
   Switched-off modules disappear from the menu and their API answers
   `403 MODULE_OFF`.
 - **Numbering**: the work-order prefix (`WO` → `WO-2026-0001`) and where new
@@ -77,18 +78,20 @@ it takes:
 | Workflow | Actions |
 |---|---|
 | Work orders | Assign to a person · Raise a parts request · Open a vendor repair · Record a meter reading · Copy fields onto the record |
-| Parts requests | Record a stock check · Issue from stock · Evaluate quotations (minimum number, optional bypass approval) · Record receipt |
+| Parts requests | Record a stock check · Issue from stock · Evaluate quotations (minimum number, optional bypass approval) · Record receipt (into a store, at a quantity and cost, when the fields are named) |
 | Vendor repairs | Set the vendor · Record cost and delivery · Move the item · Close the work order |
 | Invoices | Raise the tax invoice · Record payment · Mark outstanding |
 
-A field an action reads must stay mandatory while the action is on the step;
-the editor marks such fields **NEEDED** and refuses to save otherwise.
+Fields are mandatory unless ticked **optional**. A field an action needs must
+stay mandatory while the action is on the step; the editor marks such fields
+**NEEDED** and refuses to save otherwise.
 Removing a step removes its actions with it.
 
 ### Field types and proof of work
 
-A mandatory field can ask for **text** (the default), a **number**, a **date**,
-a **person** (picked from active staff), a **photo** or a **signature**. The
+A field can ask for **text** (the default), a **number**, a **date**, a
+**person** (picked from active staff), a **photo**, a **signature**, a
+**catalogue part** (searchable, showing what is in stock) or a **store**. The
 server checks each type and the audit trail records a readable value — the
 person's name, the photo's file name, "signed by …". A photo or signature
 field must point to an attachment on the same work order, so the technician
@@ -124,10 +127,23 @@ menus and buttons their permissions allow.
   the schedule's. Required items must be ticked before the work order can
   reach a *done* status.
 
+## Parts and stock
+
+With the stock module on, each organisation keeps a parts catalogue and the
+stock in each of its **stores** (a list, each at a site), with bins and reorder
+points. Every change is a line in a ledger. Work orders show the parts used and
+their cost; low stock raises an alert and appears on the reorder list, which
+raises purchase requests for the store; *Record receipt* puts catalogue parts
+into stock; counts correct the quantities. Each general-purpose pack starts
+with two stores, part groups for its trade and, in demo organisations, ten
+parts with stock, a few of them low. See the [user guide](user-guide.md#parts-and-stock)
+and [how stock works](../architecture/stock.md).
+
 ## Existing aviation installations
 
 Upgrading keeps everything as it was: the migrations convert the old fixed
 lists into the organisation's own lists without changing any value, and an
 organisation set up before packs existed gets the aviation vocabulary and step
-actions filled in the first time it starts. Assets and preventive maintenance
-are off for aviation organisations until an administrator switches them on.
+actions filled in the first time it starts. Assets, preventive maintenance and
+stock control are off for aviation organisations until an administrator
+switches them on; aviation's spares-demand workflow is unchanged.

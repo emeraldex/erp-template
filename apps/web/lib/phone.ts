@@ -23,6 +23,8 @@ export function phoneRoute(pathname: string, search: string): string | null {
   if (job) return `/m/job?id=${job[1]}`;
   const asset = new URLSearchParams(search).get("id");
   if (pathname === "/assets" && asset) return `/m/asset?id=${encodeURIComponent(asset)}`;
+  const part = new URLSearchParams(search).get("part");
+  if (pathname === "/stock" && part) return `/m/part?id=${encodeURIComponent(part)}`;
   if (pathname === "/dashboard") return "/m";
   return null;
 }

@@ -11,7 +11,7 @@ export const dynamic = "force-static";
 
 const VERSION = `erp-${Date.now().toString(36)}`;
 const ENABLED = process.env.NEXT_PUBLIC_PWA !== "0";
-const PAGES = ["/m", "/m/job", "/m/asset", "/m/assets", "/m/alerts", "/m/more", "/login"];
+const PAGES = ["/m", "/m/job", "/m/asset", "/m/assets", "/m/part", "/m/alerts", "/m/more", "/login"];
 
 const worker = `
 const CACHE = ${JSON.stringify(VERSION)};

@@ -85,6 +85,7 @@ export class FakeStore {
   newFod(f: FodIncident) { this.fodById.set(f.id, f); return f; }
 
   async save() { this.saves++; }
+  async saveWith() { this.saves++; }
 
   people = [
     { id: 'u-tech', name: 'Ravi Kumar', role: 'WORKSHOP', branch: 'HQ' },

@@ -8,9 +8,10 @@ import { useVocab } from "@/lib/vocab";
 import type { DictEntry, Phase } from "@/lib/types";
 import { Button, PageHeader, Panel } from "@/components/ui";
 
-type Field = { key: string; label: string; formNo?: string; type?: "text" | "number" | "date" | "user" | "photo" | "signature" };
+type Field = { key: string; label: string; formNo?: string; type?: "text" | "number" | "date" | "user" | "photo" | "signature" | "part" | "store"; optional?: boolean };
 const FIELD_TYPES: [NonNullable<Field["type"]>, string][] = [
   ["text", "Text"], ["number", "Number"], ["date", "Date"], ["user", "Person"], ["photo", "Photo"], ["signature", "Signature"],
+  ["part", "Catalogue part"], ["store", "Store"],
 ];
 type Effect = { type: string; params?: Record<string, unknown> };
 type Rule = { from: string; to: string; label: string; labelMs: string; roles: string[]; requires: Field[]; setLocation?: string; effects?: Effect[] };
@@ -129,19 +130,23 @@ function TransitionsEditor({ snap, roles, roleLabel, locations, onSaved }: { sna
                 </div>
               </div>
               <div className="mt-3">
-                <span className="eyebrow mb-1 block">Mandatory fields</span>
+                <span className="eyebrow mb-1 block">Fields <span className="normal-case tracking-normal text-dim">— mandatory unless ticked optional</span></span>
                 {r.requires.map((f, k) => {
                   const needed = (r.effects ?? []).some((e) => snap.actions.find((a) => a.type === e.type)?.needs.some((n) => e.params?.[n] === f.key));
                   const sys = needed || locked?.fields.some((x) => x.key === f.key && (r.effects ?? []).length > 0);
                   const setField = (patch: Partial<Field>) => update(i, { requires: r.requires.map((x, m) => (m === k ? { ...x, ...patch } : x)) });
                   return (
-                    <div key={k} className="mb-1.5 grid grid-cols-[1fr_2fr_96px_90px_auto] items-center gap-1.5">
+                    <div key={k} className="mb-1.5 grid grid-cols-[1fr_2fr_110px_90px_auto_auto] items-center gap-1.5">
                       <input value={f.key} disabled={sys} placeholder="key" onChange={(e) => setField({ key: e.target.value })} className={input} />
                       <input value={f.label} placeholder="Label shown to the user" onChange={(e) => setField({ label: e.target.value })} className={input} />
                       <select value={f.type ?? "text"} title="What is asked for" onChange={(e) => setField({ type: e.target.value === "text" ? undefined : (e.target.value as Field["type"]) })} className={input}>
                         {FIELD_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                       </select>
                       <input value={f.formNo ?? ""} placeholder="Form no." onChange={(e) => setField({ formNo: e.target.value || undefined })} className={input} />
+                      <label className="mono flex items-center gap-1 text-[9.5px] tracking-widest text-steel" title={needed ? "An action on this step reads it, so it must be filled in" : "May be left empty"}>
+                        <input type="checkbox" checked={!!f.optional && !needed} disabled={needed} onChange={(e) => setField({ optional: e.target.checked || undefined })} />
+                        OPTIONAL
+                      </label>
                       {sys ? <span className="mono text-[9px] tracking-widest text-amber">NEEDED</span> : (
                         <button onClick={() => update(i, { requires: r.requires.filter((_, m) => m !== k) })} className="mono text-[10px] text-steel hover:text-brand-bright">✕</button>
                       )}
@@ -211,7 +216,7 @@ function ActionsEditor({ rule, catalogue, locations, onChange }: { rule: Rule; c
                       <select value={String(params[p.name] ?? "")} onChange={(ev) => setParam(p.name, ev.target.value)} className={input}>
                         <option value="">—</option>
                         {rule.requires.filter((f) => f.key).map((f) => <option key={f.key} value={f.key}>{f.label || f.key}</option>)}
-                        {params[p.name] != null && params[p.name] !== "" && !rule.requires.some((f) => f.key === params[p.name]) && <option value={String(params[p.name])}>{String(params[p.name])} (optional field)</option>}
+                        {params[p.name] != null && params[p.name] !== "" && !rule.requires.some((f) => f.key === params[p.name]) && <option value={String(params[p.name])}>{String(params[p.name])} (not on this step)</option>}
                       </select>
                     ) : (
                       <input value={String(params[p.name] ?? "")} onChange={(ev) => setParam(p.name, p.type === "text" ? ev.target.value.toUpperCase() : ev.target.value)} className={input} />

@@ -109,6 +109,38 @@ answers `200 {"duplicate": true}` without applying it again; a refused change
 does not use up its id. Checklist changes and meter readings accept `"at"`, the
 time the change was made (not in the future, at most 30 days ago).
 
+### Parts and stock
+
+All under `/stock`, when the organisation has the stock module on.
+
+- `GET /stock/parts?q=&group=&store=&low=1`, `GET /stock/parts/:id` (with its
+  ledger and open purchase requests), `POST /stock/parts`, `PATCH
+  /stock/parts/:id`, `PUT /stock/parts/:id/levels/:store` `{ bin, reorderPoint,
+  reorderQty }`.
+- `POST /stock/issue` and `POST /stock/return` `{ partId, store, qty, jobId }`
+  (`stock.issue`; accept `X-Client-Op`). `GET /jobs/:id/parts` — the parts on a
+  work order and their cost.
+- `POST /stock/receive` `{ partId, store, qty, unitCost, reason }`, `POST
+  /stock/adjust` `{ partId, store, qty (±), reason }`, `POST /stock/transfer`
+  `{ partId, from, to, qty }`, `GET /stock/movements?partId=&store=&jobId=&from=&to=`.
+- `GET /stock/reorder`; `POST /stock/reorder` `{ items: [{ partId, store, qty }] }`
+  → `{ raised: ["DM-…"] }`.
+- Counts: `POST /stock/counts` `{ store, group?, note? }`, `PATCH
+  /stock/counts/:id` `{ lines: [{ partId, countedQty }] }`, `POST
+  /stock/counts/:id/post`, `POST /stock/counts/:id/cancel`, `GET /stock/counts`.
+- `POST /stock/import?dryRun=1` — multipart field `file`, a CSV; answers
+  `{ rows, created, updated, levels, openings, errors: [{ row, message }] }`.
+  Without `dryRun` it imports, or answers 400 with the same `errors` and
+  changes nothing.
+- `GET /stock/labels?ids=…&store=…` — A4 PDF of QR labels.
+- Reports: `GET /reports/stock-valuation`, `GET /reports/parts-usage?from&to`
+  (`format=xlsx|csv`).
+
+```bash
+curl -s -X POST "https://acme.erp.example.com/api/v1/stock/import?dryRun=1" \
+  -H "Authorization: Bearer $TOKEN" -F "file=@parts.csv"
+```
+
 ## Errors
 
 Errors are JSON: `{"statusCode": 400, "message": "…"}`. The ones to handle:

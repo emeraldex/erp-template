@@ -104,6 +104,18 @@ export class DictionaryService {
       const used = new Set(rules.flatMap((r) => [r.from, r.to]));
       for (const e of entries) if (!e.active && used.has(e.key)) errors.push(`${e.key} is used by workflow steps — remove those steps before deactivating it`);
     }
+    if (kind === 'store') {
+      // A store belongs to a site, and one holding stock stays open.
+      const sites = new Set(this.store.dict('site', true).map((x) => x.key));
+      for (const e of entries) {
+        if (!sites.has(String(e.meta.site ?? ''))) errors.push(`${e.key}: choose the site this store is at`);
+      }
+      const closing = entries.filter((e) => !e.active).map((e) => e.key);
+      if (closing.length) {
+        const held = await this.prisma.stockLevel.findMany({ where: { store: { in: closing }, qty: { gt: 0 } }, select: { store: true }, distinct: ['store'] });
+        for (const h of held) errors.push(`${h.store} still holds stock — transfer or count it out before closing it`);
+      }
+    }
     if (kind === 'role' && !isActive(ADMIN_ROLE)) errors.push(`${ADMIN_ROLE} is required and must stay active`);
     if (kind === 'location') {
       const initial = this.settings.defaults.initialLocation;

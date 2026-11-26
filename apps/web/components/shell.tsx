@@ -42,6 +42,7 @@ const NAV: { group: DictKey; items: NavItem[] }[] = [
   {
     group: "supplyChain",
     items: [
+      { href: "/stock", label: "stock", code: "STK", tag: "STK", module: "stock" },
       { href: "/demands", label: "procurement", term: "demands", code: "QP.14", tag: "PO", module: "procurement" },
       { href: "/registers", label: "registers", term: "registers", code: "QP.13", tag: "SUP", module: "registers" },
     ],

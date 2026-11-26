@@ -67,3 +67,33 @@ describe('workflow validator — field types', () => {
     expect(validateTransitions('JOB', bad, ctxV).errors.join(' ')).toContain('must be a person field');
   });
 });
+
+describe('optional fields and stock field types', () => {
+  const stockCtx: FieldLookups = {
+    ...ctx,
+    part: async (id) => (id === 'PRT-1' ? { partNo: 'OF-1', name: 'Oil filter', active: true } : id === 'PRT-OLD' ? { partNo: 'X', name: 'Old', active: false } : null),
+    store: (key) => (key === 'MAIN' ? 'Main store' : null),
+  };
+  const fields = [
+    { key: 'p', label: 'Part', type: 'part' as const, optional: true },
+    { key: 's', label: 'Store', type: 'store' as const },
+  ];
+
+  it('shows parts and stores by name', async () => {
+    expect(await checkTypedFields(fields, { p: 'PRT-1', s: 'MAIN' }, stockCtx)).toEqual({ p: 'OF-1 — Oil filter', s: 'Main store' });
+  });
+
+  it('refuses inactive parts and unknown stores', async () => {
+    await expect(checkTypedFields(fields, { p: 'PRT-OLD', s: 'VAN9' }, stockCtx)).rejects.toMatchObject({
+      response: { errors: ['Part: choose a part from the catalogue', 'Store: choose a store'] },
+    });
+  });
+
+  it('will not let a field an action needs be optional', () => {
+    const pack = GENERAL;
+    const statuses = pack.statuses.JOB.map((x) => x.key);
+    const v = { statuses, initial: statuses[0], roles: pack.roles.map((r) => r.key), locations: pack.dictionaries.location.map((l) => l.key), final: ['CLOSED', 'CANCELLED'] };
+    const rules = structuredClone(pack.transitions.JOB).map((r, i) => (i === 0 ? { ...r, requires: r.requires.map((f) => ({ ...f, optional: true })) } : r));
+    expect(validateTransitions('JOB', rules, v).errors.join(' ')).toContain('field assignee is needed by the action "Assign to a person" and must stay mandatory');
+  });
+});

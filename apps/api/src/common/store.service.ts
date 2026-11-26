@@ -1,5 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import type { Prisma } from '../generated/prisma/client';
 import { checkTypedFields } from '../workflow/fields';
 import { currentTenant } from '../tenancy/tenant';
 import { ADMIN_ROLE, CAPABILITIES, type Capability, type Kind as WorkflowKind, type Phase, type StatusMeta } from '../packs/types';
@@ -207,6 +208,8 @@ export class StoreService {
     if (!rule.requires.some((f) => f.type && f.type !== 'text')) return;
     const shown = await checkTypedFields(rule.requires, fields, {
       entity, entityId, user: (id) => this.activeUser(id), attachment: (id) => this.attachmentBrief(id),
+      part: (id) => this.prisma.part.findUnique({ where: { id }, select: { partNo: true, name: true, active: true } }),
+      store: (key) => (this.has('store', key) ? this.label('store', key) : null),
     });
     const entry = record.audit.at(-1);
     if (entry?.fields && Object.keys(shown).length) entry.fields = { ...entry.fields, ...shown };
@@ -606,8 +609,9 @@ export class StoreService {
   private async insertDemand(tx: any, dm: Demand): Promise<void> {
     await tx.demand.create({
       data: {
-        id: dm.id, jobId: dm.jobId, partDescription: dm.partDescription, partNo: dm.partNo,
+        id: dm.id, jobId: dm.jobId ?? null, partDescription: dm.partDescription, partNo: dm.partNo,
         qty: dm.qty, status: dm.status, statusSince: new Date(dm.statusSince),
+        partId: dm.partId ?? null, forStore: dm.forStore ?? null, unitCost: dm.unitCost ?? null,
         raisedBy: dm.raisedBy, branch: fromBranch(dm.branch),
         ordinal: await this.ordinalIn(tx.demand),
         records: { create: this.recordCreate(dm.records) },
@@ -679,6 +683,14 @@ export class StoreService {
    * before children so foreign keys resolve within the transaction.
    */
   async save(...entities: object[]): Promise<void> {
+    return this.saveWith(undefined, ...entities);
+  }
+
+  /**
+   * Save records and run `also` in the same transaction (e.g. a stock movement
+   * a workflow step makes), so either everything is committed or nothing is.
+   */
+  async saveWith(also: ((tx: Prisma.TransactionClient) => Promise<void>) | undefined, ...entities: object[]): Promise<void> {
     const order: Kind[] = ['job', 'demand', 'ov', 'partner', 'fod', 'invoice', 'tool'];
     const sorted = [...entities].sort(
       (a, b) => order.indexOf(this.snapOf(a).kind) - order.indexOf(this.snapOf(b).kind),
@@ -712,6 +724,7 @@ export class StoreService {
           }
         }
       }
+      if (also) await also(tx);
     });
 
     // Re-baseline so the same object can be mutated and saved again later.
@@ -826,6 +839,8 @@ export class StoreService {
         poRef: dm.poRef ?? null,
         discF217Ref: dm.discrepancy?.f217Ref ?? null,
         discNote: dm.discrepancy?.note ?? null,
+        forStore: dm.forStore ?? null,
+        unitCost: dm.unitCost ?? null,
         version: { increment: 1 },
       },
     });

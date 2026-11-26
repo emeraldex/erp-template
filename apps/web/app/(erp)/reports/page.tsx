@@ -16,7 +16,7 @@ interface ReportDef {
   /** Permission needed to run it. */
   capability: string;
   /** Only shown when this module is on. */
-  module?: "invoicing";
+  module?: "invoicing" | "stock";
   /** Aviation-only reports. */
   aviationOnly?: boolean;
   period: boolean;
@@ -28,6 +28,8 @@ const REPORTS: ReportDef[] = [
   { key: "sales", title: "Sales Performance Report", description: "Every invoice drafted in the period with tax, status, payment and days outstanding, plus a per-stream summary (FR-14).", path: "/reports/sales-performance", capability: "reports.billing", module: "invoicing", period: true, formats: ["xlsx", "csv"] },
   { key: "epay", title: "e-Payment submission (ACD)", description: "The ACD-stream file for the customer's e-Payment system, flagging invoices not yet keyed into the SPR.", path: "/reports/e-payment", capability: "reports.payments", module: "invoicing", aviationOnly: true, period: true, formats: ["csv", "xlsx"] },
   { key: "outstanding", title: "Outstanding payments", description: "Unpaid invoices by age: 0–30, 31–60, 61–90 and over 90 days.", path: "/reports/outstanding", capability: "reports.billing", module: "invoicing", period: false, formats: ["xlsx", "csv"] },
+  { key: "stockValue", title: "Stock valuation", description: "Every part held, per store and bin, at its moving-average cost, with totals per store.", path: "/reports/stock-valuation", capability: "stock.manage", module: "stock", period: false, formats: ["xlsx", "csv"] },
+  { key: "partsUsage", title: "Parts usage", description: "Parts issued to work orders in the period, net of returns — by part and by work order and asset, with cost.", path: "/reports/parts-usage", capability: "stock.manage", module: "stock", period: true, formats: ["xlsx", "csv"] },
   { key: "audit", title: "Audit trail", description: "Every recorded action in the period — who, role, what and the fields entered (FR-04 / FR-12).", path: "/reports/audit", capability: "reports.audit", period: true, formats: ["xlsx", "csv"], entity: true },
   { key: "retention", title: "Record retention", description: "Closed jobs with their archive and retain-until dates; records past retention are flagged for review, never deleted.", path: "/retention/report", capability: "reports.audit", period: false, formats: ["xlsx", "csv"] },
 ];

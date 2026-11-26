@@ -6,7 +6,7 @@ import type { TransitionRule } from '../common/types';
  * as before; the others are checked by the server, and the audit trail records
  * a readable value (a person's name, "signed by …") instead of an id.
  */
-export const FIELD_TYPES = ['text', 'number', 'date', 'user', 'photo', 'signature'] as const;
+export const FIELD_TYPES = ['text', 'number', 'date', 'user', 'photo', 'signature', 'part', 'store'] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
 
 type Field = TransitionRule['requires'][number];
@@ -17,6 +17,10 @@ export interface FieldLookups {
   entityId: string;
   user(id: string): Promise<{ name: string } | null>;
   attachment(id: string): Promise<{ entity: string; entityId: string; kind: string; contentType: string; filename: string; signedBy: string | null } | null>;
+  /** A catalogue part (stock module). */
+  part?(id: string): Promise<{ partNo: string; name: string; active: boolean } | null>;
+  /** A store's name, or null when it is not an active store. */
+  store?(key: string): string | null;
 }
 
 const isDate = (v: string) => {
@@ -63,6 +67,18 @@ export async function checkTypedFields(requires: Field[], fields: Record<string,
         } else {
           shown[f.key] = type === 'signature' ? `signed by ${a.signedBy}` : `photo ${a.filename}`;
         }
+        break;
+      }
+      case 'part': {
+        const p = ctx.part ? await ctx.part(value) : null;
+        if (!p || !p.active) errors.push(`${f.label}: choose a part from the catalogue`);
+        else shown[f.key] = `${p.partNo} — ${p.name}`;
+        break;
+      }
+      case 'store': {
+        const name = ctx.store ? ctx.store(value) : null;
+        if (!name) errors.push(`${f.label}: choose a store`);
+        else shown[f.key] = name;
         break;
       }
       default:

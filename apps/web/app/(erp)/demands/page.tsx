@@ -4,7 +4,7 @@ import { useSession } from "@/lib/use-session";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, getWithFallback } from "@/lib/api";
-import { Demand, DemandStatus, Partner, Quotation } from "@/lib/types";
+import { Demand, DemandStatus, Part, Partner, Quotation } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
 import { useVocab } from "@/lib/vocab";
 import { useLang } from "@/lib/i18n";
@@ -14,7 +14,7 @@ import { AuditTrail, RecordsList, TransitionActions } from "@/components/workflo
 
 export default function DemandsPage() {
   const cfg = useConfig();
-  const { aviation, terms, can, ref } = useVocab();
+  const { aviation, terms, can, ref, modules, label } = useVocab();
   // Quotations can be recorded in the statuses the organisation marked for it.
   const quoting = (status: string) => !!cfg?.demandStatusMeta?.[status]?.acceptsQuotations;
   const { lang, t } = useLang();
@@ -25,6 +25,8 @@ export default function DemandsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [quote, setQuote] = useState({ supplierId: "", priceMYR: "", eddDays: "" });
+  const [show, setShow] = useState<"all" | "job" | "stock">("all");
+  const [stockOf, setStockOf] = useState<Record<string, Part | null>>({});
 
   const user = useSession()?.user;
 
@@ -36,6 +38,28 @@ export default function DemandsPage() {
       .then((r) => setPartners(r.data.filter((p) => p.type === "SUPPLIER" && p.status === "REGISTERED")))
       .catch(console.error);
   }, []);
+
+  // Open the request named in the link (?id=…), e.g. from a part's page.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("id");
+    if (id) setOpenId(id);
+  }, []);
+  useEffect(() => {
+    if (!openId || !rows.length) return;
+    document.getElementById(`demand-${openId}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [openId, rows.length]);
+
+  // What the store holds of a catalogue part, for the request that is open.
+  const opened = rows.find((d) => d.id === openId);
+  useEffect(() => {
+    const partId = opened?.partId;
+    if (!partId || !modules.stock || partId in stockOf) return;
+    api.get<Part>(`/stock/parts/${encodeURIComponent(partId)}`)
+      .then((p) => setStockOf((m) => ({ ...m, [partId]: p })))
+      .catch(() => setStockOf((m) => ({ ...m, [partId]: null })));
+  }, [opened?.partId, modules.stock, stockOf]);
+
+  const shown = rows.filter((d) => show === "all" || (show === "stock" ? !d.jobId : !!d.jobId));
 
   const patch = (updated: Demand) => setRows((p) => p.map((x) => (x.id === updated.id ? updated : x)));
 
@@ -69,20 +93,33 @@ export default function DemandsPage() {
       <OfflineNotice show={offline} />
       <PageHeader eyebrow={aviation ? "QP.14 · Parts Procurement & Verification" : "Parts requests, quotations and purchase orders"} title={aviation ? t("procurement") : terms.demands} />
       {error && <p className="mb-4 rounded border border-brand-bright/40 bg-brand-bright/10 px-3 py-2 text-sm text-brand-bright">{error}</p>}
+      {modules.stock && (
+        <div className="mb-4 flex flex-wrap items-center gap-1">
+          {([["all", "ALL"], ["job", `FOR ${terms.jobs.toUpperCase()}`], ["stock", "FOR STOCK"]] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setShow(k)} className={`mono rounded-md px-3 py-1.5 text-[11px] tracking-widest ${show === k ? "bg-trace/15 text-trace" : "text-steel hover:text-fg"}`}>{l}</button>
+          ))}
+          <Link href="/stock?view=reorder" className="mono ml-auto text-[11px] tracking-widest text-steel hover:text-trace">REORDER LIST →</Link>
+        </div>
+      )}
 
       <div className="space-y-4">
-        {rows.map((dm, i) => {
+        {shown.map((dm, i) => {
           const open = openId === dm.id;
           const meta = cfg?.demandStatusMeta;
+          const held = dm.partId ? stockOf[dm.partId] : undefined;
           return (
-            <Panel key={dm.id} ticked={quoting(dm.status)} className={`fade-up d${Math.min(i + 1, 5)} p-5`}>
+            <div key={dm.id} id={`demand-${dm.id}`} className="scroll-mt-20"><Panel ticked={quoting(dm.status)} className={`fade-up d${Math.min(i + 1, 5)} p-5`}>
               <button className="flex w-full flex-wrap items-center justify-between gap-3 text-left" onClick={() => setOpenId(open ? null : dm.id)}>
                 <div>
                   <p className="mono text-xs text-trace">
                     {dm.id}
-                    <Link href={`/jobs/${dm.jobId}`} className="ml-3 text-steel hover:text-trace" onClick={(e) => e.stopPropagation()}>
-                      ↳ {dm.jobId}
-                    </Link>
+                    {dm.jobId ? (
+                      <Link href={`/jobs/${dm.jobId}`} className="ml-3 text-steel hover:text-trace" onClick={(e) => e.stopPropagation()}>
+                        ↳ {dm.jobId}
+                      </Link>
+                    ) : (
+                      <span className="ml-3 text-amber">↳ FOR STOCK{dm.forStore ? ` · ${label("store", dm.forStore).toUpperCase()}` : ""}</span>
+                    )}
                   </p>
                   <p className="mt-0.5 text-sm">
                     {dm.partDescription} <span className="mono text-xs text-steel">· {dm.partNo} × {dm.qty} · {dm.branch}</span>
@@ -147,6 +184,16 @@ export default function DemandsPage() {
                     </div>
                   )}
 
+                  {dm.partId && modules.stock && (
+                    <p className="mono mb-4 text-[11px] text-steel">
+                      CATALOGUE PART <Link href={`/stock?part=${encodeURIComponent(dm.partId)}`} className="text-trace hover:underline">{dm.partNo}</Link>
+                      {held && (
+                        <> · in stock: {held.levels.filter((l) => l.qty > 0).map((l) => `${l.qty} ${label("unit", held.unit)} in ${l.storeLabel}`).join(", ") || "none"}</>
+                      )}
+                      {dm.unitCost != null && <> · received{dm.forStore ? ` into ${label("store", dm.forStore)}` : ""} at {fmtMYR(dm.unitCost)} each</>}
+                    </p>
+                  )}
+
                   {dm.stockCheck && (
                     <p className="mono mb-4 text-[10.5px] tracking-widest text-steel">
                       {aviation ? `F244 ${dm.stockCheck.f244Ref} · ` : ""}{dm.stockCheck.available ? `STOCK AT ${dm.stockCheck.holdingUnit}` : "NIL STOCK"}
@@ -174,7 +221,7 @@ export default function DemandsPage() {
                   </div>
                 </div>
               )}
-            </Panel>
+            </Panel></div>
           );
         })}
       </div>

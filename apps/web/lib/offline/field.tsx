@@ -28,6 +28,8 @@ export interface JobPack {
   attachments: { id: string; filename: string; contentType: string; sizeBytes: number; kind: string; caption?: string; signedBy?: string; uploadedBy: string; uploadedAt: string }[];
   steps: { to: string; toLabel: string; label: string; labelMs: string; requires: StepField[] }[];
   locked: boolean;
+  /** Catalogue parts used, when stock control is on. */
+  parts?: { lines: { partId: string; partNo: string; name: string; unit: string; qty: number; cost: number }[]; total: number };
   fetchedAt: string;
 }
 
@@ -72,7 +74,7 @@ export function useField(): FieldApi {
   return v;
 }
 
-const uuid = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+export const uuid = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 /** Send one queued change to the API. */
 async function send(item: OutboxItem): Promise<SendResult> {

@@ -1,6 +1,7 @@
 import type { TransitionRule } from '../common/types';
 import type { InvoiceStreamDef, SlaRule } from '../common/workflow-config';
 import type { Capability, DictKind, Entry, Modules, Pack, RoleMeta, StatusMeta, Terms } from './types';
+import { store, UNITS } from './stock-lists';
 
 /**
  * Building blocks shared by the general-purpose sector packs. Every pack built
@@ -12,6 +13,8 @@ import type { Capability, DictKind, Entry, Modules, Pack, RoleMeta, StatusMeta, 
 
 type Field = TransitionRule['requires'][number];
 export const field = (key: string, label: string, type?: Field['type']): Field => ({ key, label, ...(type ? { type } : {}) });
+/** A field shown on the step but not mandatory. */
+export const optional = (key: string, label: string, type?: Field['type']): Field => ({ ...field(key, label, type), optional: true });
 
 const st = (key: string, label: string, labelMs: string, tone: StatusMeta['tone'], phase: StatusMeta['phase'], extra: Partial<StatusMeta> = {}): Entry<StatusMeta> =>
   ({ key, label, labelMs, meta: { tone, phase, ...(phase === 'closed' ? { final: true } : {}), ...extra } });
@@ -28,12 +31,12 @@ export const ROLE = {
 const CAPS: Record<keyof typeof ROLE, Capability[]> = {
   ADMIN: [],
   HELPDESK: ['jobs.register', 'jobs.assign', 'priority.raise'],
-  SUPERVISOR: ['jobs.register', 'jobs.assign', 'priority.raise', 'priority.close', 'assets.manage', 'meters.record', 'incidents.manage', 'tools.handle', 'reports.audit', 'alerts.escalation'],
-  TECHNICIAN: ['meters.record', 'tools.handle'],
-  STORES: ['tools.handle'],
+  SUPERVISOR: ['jobs.register', 'jobs.assign', 'stock.manage', 'stock.issue', 'priority.raise', 'priority.close', 'assets.manage', 'meters.record', 'incidents.manage', 'tools.handle', 'reports.audit', 'alerts.escalation'],
+  TECHNICIAN: ['meters.record', 'tools.handle', 'stock.issue'],
+  STORES: ['tools.handle', 'stock.manage', 'stock.issue'],
   PURCHASING: ['procurement.quote', 'registers.propose', 'registers.evaluate'],
   FINANCE: ['invoices.create', 'invoices.documents', 'reports.billing', 'reports.payments'],
-  MANAGER: ['workflow.edit', 'jobs.assign', 'priority.raise', 'priority.close', 'registers.evaluate', 'registers.approve', 'assets.manage', 'invoices.documents', 'reports.billing', 'reports.audit', 'alerts.escalation'],
+  MANAGER: ['workflow.edit', 'jobs.assign', 'stock.manage', 'stock.issue', 'priority.raise', 'priority.close', 'registers.evaluate', 'registers.approve', 'assets.manage', 'invoices.documents', 'reports.billing', 'reports.audit', 'alerts.escalation'],
 };
 
 export function roles(titles: Record<keyof typeof ROLE, [string, string]>): Entry<RoleMeta>[] {
@@ -74,7 +77,7 @@ const BASE_TERMS: Terms = {
 
 const BASE_MODULES: Modules = {
   procurement: true, vendorRepair: false, priority: true, incidents: true, tools: false, training: true,
-  invoicing: true, registers: true, assets: true, pm: true,
+  invoicing: true, registers: true, assets: true, pm: true, stock: true,
 };
 
 const { HELPDESK, SUPERVISOR, TECHNICIAN, STORES, PURCHASING, FINANCE, MANAGER } = ROLE;
@@ -103,8 +106,9 @@ function jobWorkflow(o: MaintenanceOptions, modules: Modules) {
   if (modules.procurement) {
     transitions.push(
       step('IN_PROGRESS', 'ON_HOLD_PARTS', 'Request parts', 'Mohon alat ganti', [TECHNICIAN, SUPERVISOR],
-        [field('partDescription', 'Part needed'), field('qty', 'Quantity', 'number')],
-        { effects: [{ type: 'raiseDemand', params: { descriptionField: 'partDescription', partNoField: 'partNo', qtyField: 'qty' } }] }),
+        // A catalogue part if there is one (stock), otherwise a description.
+        [optional('part', 'Part from the catalogue', 'part'), optional('partDescription', 'Or describe the part'), field('qty', 'Quantity', 'number')],
+        { effects: [{ type: 'raiseDemand', params: { partField: 'part', descriptionField: 'partDescription', partNoField: 'partNo', qtyField: 'qty' } }] }),
       step('ON_HOLD_PARTS', 'IN_PROGRESS', 'Parts received — resume', 'Alat ganti diterima — sambung', [TECHNICIAN, SUPERVISOR]),
     );
   }
@@ -143,25 +147,35 @@ function demandWorkflow(o: MaintenanceOptions) {
     st('QUOTING', 'Getting quotations', 'Mendapatkan sebut harga', 'warn', 'waiting_parts', { acceptsQuotations: true }),
     st('ORDERED', 'Ordered', 'Dipesan', 'warn', 'waiting_parts'),
     st('RECEIVED', 'Received', 'Diterima', 'info', 'active'),
-    st('ISSUED', 'Issued', 'Dikeluarkan', 'good', 'closed'),
+    st('ISSUED', 'Fulfilled', 'Dipenuhi', 'good', 'closed'),
     st('REJECTED', 'Rejected', 'Ditolak', 'bad', 'closed', { branch: true }),
   ];
   const transitions = [
     step('RAISED', 'APPROVED', 'Approve', 'Lulus', [SUPERVISOR, MANAGER]),
     step('RAISED', 'REJECTED', 'Reject', 'Tolak', [SUPERVISOR, MANAGER], [field('reason', 'Reason')]),
-    step('APPROVED', 'ISSUED', 'Issue from stock', 'Keluarkan dari stok', [STORES], [field('store', 'Store / bin')],
+    step('APPROVED', 'ISSUED', 'Issue from stock', 'Keluarkan dari stok', [STORES], [field('store', 'Store', 'store')],
       { effects: [{ type: 'issueFromStock', params: { holdingField: 'store' } }] }),
     step('APPROVED', 'QUOTING', 'Request quotations', 'Minta sebut harga', [PURCHASING], [field('rfqRef', 'RFQ ref')],
       { effects: [{ type: 'setAttributes', params: { rfqRef: 'rfqRef' } }] }),
-    step('QUOTING', 'ORDERED', 'Place order', 'Buat pesanan', [PURCHASING], [field('poRef', 'Purchase order no.'), field('selectedSupplierId', 'Supplier chosen')], {
+    step('QUOTING', 'ORDERED', 'Place order', 'Buat pesanan', [PURCHASING],
+      [field('poRef', 'Purchase order no.'), field('selectedSupplierId', 'Supplier chosen'), optional('singleSourceRef', 'Single-source approval ref (if fewer quotations)')], {
       effects: [
         { type: 'evaluateQuotations', params: { min: o.minQuotations, selectionField: 'selectedSupplierId', bypassField: 'singleSourceRef' } },
         { type: 'setAttributes', params: { poRef: 'poRef' } },
       ],
     }),
-    step('ORDERED', 'RECEIVED', 'Receive goods', 'Terima barang', [STORES], [field('grnRef', 'Goods received note')],
-      { effects: [{ type: 'recordReceipt', params: { discrepancyField: 'discrepancyRef', noteField: 'discrepancyNote' } }] }),
-    step('RECEIVED', 'ISSUED', 'Issue to work order', 'Keluarkan untuk arahan kerja', [STORES]),
+    step('ORDERED', 'RECEIVED', 'Receive goods', 'Terima barang', [STORES], [
+      field('grnRef', 'Goods received note'), field('store', 'Received into store', 'store'),
+      optional('receivedQty', 'Quantity received (if not as ordered)', 'number'), optional('unitCost', 'Unit cost (if not from the quotation)', 'number'),
+      optional('discrepancyRef', 'Discrepancy report ref'), optional('discrepancyNote', 'Discrepancy note'),
+    ], {
+      effects: [{
+        type: 'recordReceipt',
+        params: { discrepancyField: 'discrepancyRef', noteField: 'discrepancyNote', storeField: 'store', qtyField: 'receivedQty', costField: 'unitCost' },
+      }],
+    }),
+    step('RECEIVED', 'ISSUED', 'Issue to work order', 'Keluarkan untuk arahan kerja', [STORES], [],
+      { effects: [{ type: 'issueFromStock', params: {} }] }),
   ];
   return { statuses, transitions };
 }
@@ -289,6 +303,9 @@ export function maintenancePack(o: MaintenanceOptions): Pack {
       course: d.course ?? [],
       jobType: d.jobType ?? BASE_JOB_TYPES,
       assetType: d.assetType ?? [],
+      store: d.store ?? [store('MAIN', 'Main store', 'Stor utama', 'HQ'), store('VAN1', 'Service van 1', 'Van servis 1', 'HQ')],
+      unit: d.unit ?? UNITS,
+      partGroup: d.partGroup ?? [],
     },
     slaRules: o.sla ?? BASE_SLA,
     invoiceStreams: o.invoiceStreams ?? BASE_STREAMS,

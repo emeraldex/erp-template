@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BigButton, MHeader, Notice, Section } from "@/components/m/ui";
+import { PhoneJobParts } from "@/components/m/job-parts";
 import { StepForm, stepComplete } from "@/components/step-form";
 import { api } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
@@ -27,7 +28,7 @@ function JobView() {
   const m = useM();
   const { lang } = useLang();
   const me = useSession()?.user;
-  const { terms, label } = useVocab();
+  const { terms, label, modules } = useVocab();
   const [pack, setPack] = useState<JobPack | null>(null);
   const [fromCache, setFromCache] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,6 +161,12 @@ function JobView() {
               </li>
             ))}
           </ul>
+        </Section>
+      )}
+
+      {modules.stock && (
+        <Section title={m("parts")}>
+          <PhoneJobParts jobId={job.id} parts={pack.parts} online={f.online} locked={locked} onChanged={() => void load()} />
         </Section>
       )}
 
