@@ -184,6 +184,7 @@ const TERM_LABELS: [keyof Terms, string][] = [
 
 const MODULE_LABELS: [keyof Modules, string][] = [
   ["assets", "Asset register & meters"], ["pm", "Preventive maintenance (needs assets)"], ["procurement", "Parts requests & purchasing"],
+  ["stock", "Parts catalogue & stock control"],
   ["vendorRepair", "Repairs at vendors / OEMs"], ["priority", "Priority escalation"], ["invoicing", "Invoicing"],
   ["registers", "Supplier & contractor register"], ["incidents", "Safety incidents"], ["tools", "Tool control"], ["training", "Training records"],
 ];
