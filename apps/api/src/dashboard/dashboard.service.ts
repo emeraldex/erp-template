@@ -38,8 +38,19 @@ export class DashboardService {
     return this.breachesOf(await this.store.dashboardSnapshot());
   }
 
+  /** Portal requests waiting for triage, and requesters' average rating over 90 days. */
+  private async requests(): Promise<{ newRequests: number | null; satisfaction: { average: number; ratings: number } | null }> {
+    if (!this.prisma || !this.settings?.modules.requests) return { newRequests: null, satisfaction: null };
+    const [newRequests, rated] = await Promise.all([
+      this.prisma.serviceRequest.count({ where: { status: 'NEW' } }),
+      this.prisma.serviceRequest.aggregate({ where: { ratedAt: { gte: new Date(Date.now() - 90 * 86_400_000) } }, _avg: { rating: true }, _count: { rating: true } }),
+    ]);
+    const ratings = rated._count.rating;
+    return { newRequests, satisfaction: ratings ? { average: Math.round((rated._avg.rating ?? 0) * 10) / 10, ratings } : { average: 0, ratings: 0 } };
+  }
+
   async kpis() {
-    const [snap, lowStock] = await Promise.all([this.store.dashboardSnapshot(), this.lowStock()]);
+    const [snap, lowStock, portal] = await Promise.all([this.store.dashboardSnapshot(), this.lowStock(), this.requests()]);
     const jobs = snap.jobs;
     // Counts work from status phases, so they hold for any sector's workflow.
     const final = new Set(this.store.finalStatuses('JOB'));
@@ -96,6 +107,7 @@ export class DashboardService {
       avgJobAgeDays: ageing.length ? Math.round(ageing.reduce((s, a) => s + a.days, 0) / ageing.length) : 0,
       weeklyClosures: snap.closures,
       lowStock,
+      ...portal,
     };
   }
 }

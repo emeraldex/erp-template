@@ -285,6 +285,80 @@ export class ReportsService {
     };
   }
 
+  /** Portal requests in a period: outcome, work order, time to accept and complete, rating. */
+  async requestsReport(period: Period): Promise<Report> {
+    const rows = await this.prisma.serviceRequest.findMany({
+      where: { createdAt: { gte: new Date(`${period.from}T00:00:00Z`), lt: new Date(Date.parse(`${period.to}T00:00:00Z`) + DAY) } },
+      orderBy: { createdAt: 'asc' },
+    });
+    const jobIds = [...new Set(rows.map((r) => r.jobId).filter((j): j is string => !!j))];
+    const jobs = new Map((await this.prisma.job.findMany({ where: { id: { in: jobIds } }, select: { id: true, status: true, audit: true } })).map((j) => [j.id, j]));
+    // When the work order first reached a done phase, from its audit trail.
+    const doneKeys = new Set(this.store.statusesInPhase('JOB', 'done', 'closed'));
+    const doneAt = (jobId: string | null) => {
+      const job = jobId ? jobs.get(jobId) : undefined;
+      const entry = (job?.audit as { action: string; at: string }[] | undefined)?.find((a) => [...doneKeys].some((k) => a.action.startsWith(`Status → ${k}`)));
+      return entry ? new Date(entry.at) : null;
+    };
+    const hours = (a: Date | null, b: Date | null) => (a && b ? Math.round(((b.getTime() - a.getTime()) / 3_600_000) * 10) / 10 : null);
+    const outcome: Record<string, string> = { NEW: 'Waiting', ACCEPTED: 'Accepted', DECLINED: 'Declined', CANCELLED: 'Cancelled by requester' };
+    const detail: Row[] = rows.map((r) => {
+      const done = doneAt(r.jobId);
+      return {
+        id: r.id, date: r.createdAt.toISOString().slice(0, 10), source: r.source === 'POSTER' ? 'QR poster' : r.source === 'STAFF' ? 'Logged by staff' : 'Portal',
+        site: r.site ? this.store.label('site', r.site) : '', category: r.category ? this.store.label('category', r.category) : '',
+        place: r.place, urgent: r.urgent ? 'Yes' : '', outcome: r.merged ? 'Added to a work order' : r.spam ? 'Spam' : outcome[r.status] ?? r.status,
+        jobId: r.jobId ?? '', hoursToDecide: hours(r.createdAt, r.decidedAt), daysToComplete: done ? Math.round(((hours(r.createdAt, done) ?? 0) / 24) * 10) / 10 : null,
+        rating: r.rating, comment: r.ratingComment,
+      };
+    });
+    // Summary by site and type.
+    const groups = new Map<string, { site: string; category: string; requests: number; accepted: number; declined: number; ratings: number[]; decide: number[] }>();
+    for (const [i, r] of rows.entries()) {
+      const key = `${detail[i].site}\u0000${detail[i].category}`;
+      const g = groups.get(key) ?? { site: String(detail[i].site), category: String(detail[i].category), requests: 0, accepted: 0, declined: 0, ratings: [], decide: [] };
+      g.requests += 1;
+      if (r.status === 'ACCEPTED') g.accepted += 1;
+      if (r.status === 'DECLINED') g.declined += 1;
+      if (r.rating) g.ratings.push(r.rating);
+      if (detail[i].hoursToDecide !== null) g.decide.push(Number(detail[i].hoursToDecide));
+      groups.set(key, g);
+    }
+    const avg = (xs: number[]) => (xs.length ? Math.round((xs.reduce((s, x) => s + x, 0) / xs.length) * 10) / 10 : null);
+    const summary: Row[] = [...groups.values()].sort((a, b) => b.requests - a.requests).map((g) => ({
+      site: g.site, category: g.category, requests: g.requests, accepted: g.accepted, declined: g.declined, avgHoursToDecide: avg(g.decide), avgRating: avg(g.ratings), ratings: g.ratings.length,
+    }));
+    const allRatings = rows.map((r) => r.rating).filter((x): x is number => !!x);
+    return {
+      title: 'Requests and satisfaction',
+      subtitle: `${period.from} to ${period.to} — requests from the portal, QR posters and callers`,
+      sheets: [
+        {
+          name: 'Requests',
+          columns: [
+            { key: 'id', header: 'Request', width: 16 }, { key: 'date', header: 'Date', type: 'date', width: 12 }, { key: 'source', header: 'From', width: 14 },
+            { key: 'site', header: 'Site', width: 20 }, { key: 'category', header: 'Type', width: 22 }, { key: 'place', header: 'Where', width: 26 },
+            { key: 'urgent', header: 'Urgent', width: 8 }, { key: 'outcome', header: 'Outcome', width: 22 }, { key: 'jobId', header: 'Work order', width: 16 },
+            { key: 'hoursToDecide', header: 'Hours to decide', type: 'qty', width: 14 }, { key: 'daysToComplete', header: 'Days to complete', type: 'qty', width: 15 },
+            { key: 'rating', header: 'Rating', type: 'int', width: 8 }, { key: 'comment', header: 'Comment', width: 40 },
+          ],
+          rows: detail,
+          totals: { id: `TOTAL (${detail.length})`, rating: avg(allRatings) },
+        },
+        {
+          name: 'By site and type',
+          columns: [
+            { key: 'site', header: 'Site', width: 22 }, { key: 'category', header: 'Type', width: 24 }, { key: 'requests', header: 'Requests', type: 'int' },
+            { key: 'accepted', header: 'Accepted', type: 'int' }, { key: 'declined', header: 'Declined', type: 'int' },
+            { key: 'avgHoursToDecide', header: 'Avg hours to decide', type: 'qty', width: 18 }, { key: 'avgRating', header: 'Avg rating', type: 'qty', width: 11 }, { key: 'ratings', header: 'Ratings', type: 'int' },
+          ],
+          rows: summary,
+          totals: { site: 'TOTAL', requests: rows.length, avgRating: avg(allRatings), ratings: allRatings.length },
+        },
+      ],
+    };
+  }
+
   /** FR-04 / FR-12 — the audit trail for a period, optionally for one kind of record. */
   async auditTrail(period: Period, entity?: string): Promise<Report> {
     if (entity && !(entity in AUDIT_ENTITIES)) {

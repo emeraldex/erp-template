@@ -169,4 +169,22 @@ describe('Request portal: triage, messages, completion and rating (integration)'
     expect((await get('/notifications')).body.items.find((n: { title: string }) => n.title === `${req.id} has been waiting more than 4 h`)).toBeDefined();
     expect((await send('post', '/requests/remind', {}, 'admin').then(st(200))).body.reminded).toBe(0);
   });
+
+  it('counts new requests and satisfaction on the dashboard, and reports requests', async () => {
+    const k = (await get('/dashboard/kpis', 'admin').then(st(200))).body;
+    expect(k.newRequests).toBeGreaterThan(0);
+    expect(k.satisfaction).toEqual({ average: 2, ratings: 1 }); // the 2★ rating above
+    expect((await http.get(`${API}/dashboard/kpis`).set('Host', 'acme.test').set('Cookie', await login(app, 'aisyah', undefined, 'acme.test'))).body.newRequests).toBeNull();
+
+    const today = new Date().toISOString().slice(0, 10);
+    expect((await get(`/reports/requests?from=${today}&to=${today}&format=csv`, 'technician')).status).toBe(403);
+    const csv = (await get(`/reports/requests?from=${today}&to=${today}&format=csv`).then(st(200))).text;
+    const lines = csv.split('\r\n');
+    expect(lines[0]).toBe('\uFEFFRequest,Date,From,Site,Type,Where,Urgent,Outcome,Work order,Hours to decide,Days to complete,Rating,Comment');
+    expect(csv).toMatch(/,Logged by staff,Head office tower,/);
+    expect(csv).toMatch(/,Spam,/);
+    expect(csv).toMatch(/,Added to a work order,HD-/);
+    expect(csv).toMatch(/,Accepted,HD-\d{4}-\d{4},0(\.\d)?,0(\.\d)?,2,Took three days/);
+    expect((await get(`/reports/requests?from=${today}&to=${today}`).then(st(200))).headers['content-type']).toContain('spreadsheetml');
+  });
 });

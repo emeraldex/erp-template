@@ -62,6 +62,14 @@ export class ReportsController {
     return this.send(await this.reports.partsUsage(p), `parts-usage_${p.from}_${p.to}`, format, res);
   }
 
+  @Get('requests')
+  @InModule('requests')
+  @Requires('requests.manage')
+  async requests(@Query('from') from: string, @Query('to') to: string, @Query('format') format: string, @Res({ passthrough: true }) res: Response) {
+    const p = parsePeriod(from, to);
+    return this.send(await this.reports.requestsReport(p), `requests_${p.from}_${p.to}`, format, res);
+  }
+
   @Get('audit')
   @Requires('reports.audit')
   async audit(
