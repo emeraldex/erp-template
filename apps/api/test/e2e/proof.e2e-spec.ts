@@ -3,6 +3,8 @@ import request = require('supertest');
 import { createApp, login } from './app';
 
 const API = '/api/v1';
+// PDFs, images and first sign-ins (scrypt) can exceed Jest's 5 s default on a busy CI runner.
+jest.setTimeout(20_000);
 // Created with `tenants-cli create fm --pack facilities --demo`.
 const HOST = 'fm.test';
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 1)]);

@@ -4,6 +4,8 @@ import { createApp, login } from './app';
 import { pdfLines, pdfPageCount } from './pdf-text';
 
 const API = '/api/v1';
+// PDFs, images and first sign-ins (scrypt) can exceed Jest's 5 s default on a busy CI runner.
+jest.setTimeout(20_000);
 const HOST = 'fm.test'; // facilities pack, demo data
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(100, 1)]);
 const binary = (res: request.Response, cb: (err: Error | null, body: Buffer) => void) => {
