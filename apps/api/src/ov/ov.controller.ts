@@ -1,9 +1,11 @@
 import { Body, Controller, Get, Param, Patch, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
+import { InModule } from '../auth/roles.decorator';
 import { OvService } from './ov.service';
 import { OvStatus } from '../common/types';
 
 @Controller('ov')
+@InModule('vendorRepair')
 @UseGuards(AuthGuard)
 export class OvController {
   constructor(private readonly svc: OvService) {}

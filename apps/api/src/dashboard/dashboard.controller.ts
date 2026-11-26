@@ -1,16 +1,14 @@
 import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
-import { Roles } from '../auth/roles.decorator';
+import { Requires } from '../auth/roles.decorator';
 import { DashboardService } from './dashboard.service';
 import { StoreService } from '../common/store.service';
-import {
-  DEMAND_STATUS_META, INVOICE_STATUS_META, JOB_STATUS_META, OV_STATUS_META,
-  PRIORITY_META, REPAIR_ROUTE_META,
-} from '../common/workflow-config';
+import { SettingsService } from '../settings/settings.service';
+import { CAPABILITIES, PHASES } from '../packs/types';
 
 @Controller()
 export class DashboardController {
-  constructor(private readonly svc: DashboardService, private readonly store: StoreService) {}
+  constructor(private readonly svc: DashboardService, private readonly store: StoreService, private readonly settings: SettingsService) {}
 
   @Get('dashboard/kpis')
   @UseGuards(AuthGuard)
@@ -26,13 +24,21 @@ export class DashboardController {
   @Get('config')
   @UseGuards(AuthGuard)
   config() {
+    const s = this.store;
     return {
-      jobStatusMeta: JOB_STATUS_META,
-      demandStatusMeta: DEMAND_STATUS_META,
-      ovStatusMeta: OV_STATUS_META,
-      invoiceStatusMeta: INVOICE_STATUS_META,
-      priorityMeta: PRIORITY_META,
-      repairRouteMeta: REPAIR_ROUTE_META,
+      pack: this.settings.get().pack,
+      terms: this.settings.terms,
+      modules: this.settings.modules,
+      phases: PHASES,
+      capabilities: CAPABILITIES,
+      // Every vocabulary the organisation has defined, in display order.
+      dictionary: s.dictionaryAll(),
+      jobStatusMeta: s.statusMeta('JOB'),
+      demandStatusMeta: s.statusMeta('DEMAND'),
+      ovStatusMeta: s.statusMeta('OV'),
+      invoiceStatusMeta: s.statusMeta('INVOICE'),
+      priorityMeta: s.dictMeta('priority'),
+      repairRouteMeta: s.dictMeta('route'),
       jobTransitions: this.store.jobTransitions,
       demandTransitions: this.store.demandTransitions,
       ovTransitions: this.store.ovTransitions,
@@ -45,7 +51,7 @@ export class DashboardController {
   /** Change a rule at runtime — no redeploy. Now persisted, so it survives one. */
   @Patch('config/sla/:id')
   @UseGuards(AuthGuard)
-  @Roles('ADMIN', 'QUALITY')
+  @Requires('workflow.edit')
   patchSla(@Param('id') id: string, @Body() b: { days: number }) {
     return this.store.patchSla(id, b?.days);
   }

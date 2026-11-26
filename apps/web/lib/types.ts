@@ -1,8 +1,11 @@
 // ─── CO-RFP-IT-001 client types (mirror of apps/api/src/common/types.ts) ───
 
-export type Role =
-  | "ADMIN" | "STORES" | "WORKSHOP" | "MIS" | "MM"
-  | "PURCHASING" | "PCE" | "QUALITY" | "FINANCE" | "BILLING";
+// Statuses, roles, sites, locations, categories and priorities are each
+// organisation's own lists (GET /config → dictionary), so they are strings here.
+// The aviation pack's keys (STORES, AWAITING_TDI, AOG…) are just one set of values.
+
+/** Role key, e.g. ADMIN, TECHNICIAN — see config.dictionary.role. */
+export type Role = string;
 
 export interface SessionUser {
   id: string;
@@ -12,14 +15,16 @@ export interface SessionUser {
   designation: string;
   branch: string;
   mustChangePassword?: boolean;
+  /** What this person may do (org.admin, jobs.register…). */
+  capabilities?: string[];
 }
 
-export type Branch = "HQ" | "CENTRAL" | "EAST" | "NORTH" | "NORTHEAST" | "OFFSHORE";
-export type Location = "LOGISTIC" | "BAY" | "HQ" | "VENDOR" | "CUSTOMER";
-
-export type JobStatus =
-  | "REGISTERED" | "AWAITING_TDI" | "TDI" | "AWAITING_SPARE" | "AWAITING_INDENT"
-  | "WIP" | "REC_OV" | "BER" | "SOR" | "SERVICEABLE" | "DELIVERED" | "CLOSED";
+/** Site key (config.dictionary.site). */
+export type Branch = string;
+/** Location key (config.dictionary.location). */
+export type Location = string;
+/** Status keys of each workflow (config.jobStatusMeta etc.). */
+export type JobStatus = string;
 
 export interface AuditEntry {
   at: string;
@@ -44,7 +49,7 @@ export interface Job {
   component: string;
   partNo: string;
   serialNo: string;
-  category: "MILITARY" | "NAS";
+  category: string;
   originUnit: string;
   repairUnit: Branch;
   status: JobStatus;
@@ -56,13 +61,27 @@ export interface Job {
   invoiceIds?: string[];
   priority?: JobPriority;
   indentRef?: string;
+  jobType?: string;
+  assetId?: string;
+  pmScheduleId?: string;
+  checklist?: ChecklistItem[];
   records: FormRecord[];
   audit: AuditEntry[];
 }
 
-// QP.56 AOG / ROA / Critical priority overlay (5.9) — FR-15
-export type PriorityType = "AOG" | "ROA" | "CRITICAL";
-export type RepairRoute = "COE_UNIT" | "OV" | "POOLEX" | "AW_SPARE" | "UNIT_PROCEED";
+export interface ChecklistItem {
+  key: string;
+  label: string;
+  required: boolean;
+  done: boolean;
+  by?: string;
+  at?: string;
+  note?: string;
+}
+
+// Priority overlay (AOG / ROA in the aviation pack) AOG / ROA / Critical priority overlay (5.9) — FR-15
+export type PriorityType = string;
+export type RepairRoute = string;
 
 export interface JobPriority {
   type: PriorityType;
@@ -80,9 +99,7 @@ export interface JobPriority {
   audit: AuditEntry[];
 }
 
-export type DemandStatus =
-  | "RAISED" | "APPROVED" | "STOCK_CHECK" | "ISSUED_FROM_STOCK"
-  | "RFQ_ISSUED" | "EVALUATED" | "PO_ISSUED" | "RECEIVED" | "ISSUED";
+export type DemandStatus = string;
 
 export interface Quotation {
   supplierId: string;
@@ -112,9 +129,7 @@ export interface Demand {
   audit: AuditEntry[];
 }
 
-export type OvStatus =
-  | "RECEIVED_HQ" | "VENDOR_IDENTIFIED" | "F134_SUBMITTED" | "APPROVED" | "REJECTED"
-  | "PO_ISSUED" | "AT_VENDOR" | "COST_ADVISED" | "QUOTE_APPROVED" | "RECEIVED_BACK" | "RETURNED";
+export type OvStatus = string;
 
 export interface OvRepair {
   id: string;
@@ -170,7 +185,7 @@ export interface FodIncident {
   partName: string;
   typeModel: string;
   serialNo: string;
-  area: "AWARENESS" | "CONTROL" | "CRITICAL";
+  area: string;
   location: string;
   discovered: string;
   rootCause?: string;
@@ -192,16 +207,14 @@ export interface Tool {
 
 export interface TrainingRecord {
   person: string;
-  course: "FOD_INITIAL" | "FOD_RECURRENT";
+  course: string;
   date: string;
   nextDue: string;
 }
 
 // QP.51 Invoicing & Revenue Billing (5.8) — FR-13 / FR-14
-export type InvoiceStream = "PBC" | "BRANCH_REPAIR" | "COE_MRA" | "ACD";
-export type InvoiceStatus =
-  | "DRAFTED" | "CERTIFIED" | "TAX_RAISED" | "CORRECTNESS_CHECK"
-  | "SUBMITTED" | "REJECTED" | "PAID";
+export type InvoiceStream = string;
+export type InvoiceStatus = string;
 
 export interface Invoice {
   id: string;
@@ -241,10 +254,20 @@ export interface InvoiceStreamDef {
 }
 
 // ─── /config — the workflow served as data (FR-02) ───────────────────────────
+export type Phase = "new" | "active" | "waiting_parts" | "waiting_customer" | "external" | "done" | "closed";
+
 export interface StatusMeta {
   en: string;
   ms: string;
   tone: "neutral" | "info" | "warn" | "good" | "bad";
+  /** What the status means, whatever it is called. */
+  phase?: Phase;
+  /** Locked: no further changes. */
+  final?: boolean;
+  draftDocuments?: boolean;
+  acceptsQuotations?: boolean;
+  /** Shown off the main progress line. */
+  branch?: boolean;
 }
 
 export interface RepairRouteMeta {
@@ -285,6 +308,87 @@ export interface WorkflowConfig {
   invoiceTransitions: TransitionRule<InvoiceStatus>[];
   invoiceStreams: InvoiceStreamDef[];
   slaRules: SlaRule[];
+  pack?: { id: string; name: string };
+  terms?: Terms;
+  modules?: Modules;
+  phases?: Phase[];
+  capabilities?: Record<string, string>;
+  /** Every list the organisation keeps: status:JOB, role, site, location, category, assetType… */
+  dictionary?: Record<string, DictEntry[]>;
+}
+
+export interface DictEntry {
+  key: string;
+  label: string;
+  labelMs: string;
+  meta: Record<string, unknown>;
+  active: boolean;
+}
+
+/** Words the interface uses, so each sector sees its own vocabulary. */
+export interface Terms {
+  job: string; jobs: string; jobNo: string; jobRegister: string;
+  component: string; originUnit: string; site: string; sites: string;
+  demand: string; demands: string; vendorRepair: string; vendorRepairs: string;
+  priority: string; incident: string; incidents: string; registers: string;
+  asset: string; assets: string; pm: string;
+}
+
+export interface Modules {
+  procurement: boolean; vendorRepair: boolean; priority: boolean; incidents: boolean;
+  tools: boolean; training: boolean; invoicing: boolean; registers: boolean;
+  assets: boolean; pm: boolean;
+}
+
+export interface Meter { key: string; label: string; unit: string; value: number; readAt: string | null }
+
+export interface Asset {
+  id: string;
+  tag: string;
+  name: string;
+  type: string;
+  site: string;
+  location: string;
+  parentId: string | null;
+  make: string;
+  model: string;
+  serialNo: string;
+  status: "IN_SERVICE" | "OUT_OF_SERVICE" | "RETIRED";
+  criticality: "HIGH" | "MEDIUM" | "LOW";
+  commissionedOn: string | null;
+  attributes: Record<string, unknown>;
+  createdAt: string;
+  meters: Meter[];
+  children?: number | { id: string; tag: string; name: string; type: string; status: string }[];
+  schedules?: number | PmSchedule[];
+  openJobs?: number;
+  parent?: { id: string; tag: string; name: string } | null;
+  jobs?: { id: string; psDate: string; status: string; jobType: string; category: string; statusSince: string; pmScheduleId: string | null }[];
+}
+
+export interface PmSchedule {
+  id: string;
+  assetId: string;
+  title: string;
+  active: boolean;
+  intervalDays: number | null;
+  meterKey: string | null;
+  intervalMeter: number | null;
+  leadDays: number;
+  leadMeter: number;
+  jobType: string;
+  category: string;
+  instructions: string;
+  checklist: { key: string; label: string; required: boolean }[];
+  lastDoneAt: string | null;
+  lastDoneMeter: number | null;
+  nextDueAt: string | null;
+  nextDueMeter: number | null;
+  openJobId: string | null;
+  asset?: { tag: string; name: string; site: string };
+  meterValue?: number | null;
+  meterUnit?: string | null;
+  overdue?: boolean;
 }
 
 export interface SlaBreach {
@@ -365,4 +469,8 @@ export interface CompanyProfile {
 export interface Settings {
   company: CompanyProfile;
   tax: { label: string; ratePct: number };
+  pack?: { id: string; name: string };
+  terms?: Terms;
+  modules?: Modules;
+  defaults?: { jobPrefix: string; initialLocation: string };
 }

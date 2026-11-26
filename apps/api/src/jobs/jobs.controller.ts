@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
-import { Roles } from '../auth/roles.decorator';
+import { InModule, Requires } from '../auth/roles.decorator';
 import { JobsService } from './jobs.service';
 import { Branch, JobStatus, PriorityType, RepairRoute } from '../common/types';
 
@@ -24,12 +24,21 @@ export class JobsController {
   }
 
   @Post()
-  @Roles('STORES')
+  @Requires('jobs.register')
   register(
-    @Body() dto: { component: string; partNo: string; serialNo: string; category: 'MILITARY' | 'NAS'; originUnit: string; repairUnit: Branch },
+    @Body() dto: { component?: string; partNo?: string; serialNo?: string; category: string; originUnit: string; repairUnit?: Branch; assetId?: string; jobType?: string },
     @Req() req: any,
   ) {
     return this.svc.register(dto, { name: req.user.name, role: req.user.role });
+  }
+
+  @Patch(':id/checklist')
+  checklist(
+    @Param('id') id: string,
+    @Body() body: { items?: { key: string; done?: boolean; note?: string }[]; add?: { label: string; required?: boolean }[] },
+    @Req() req: any,
+  ) {
+    return this.svc.updateChecklist(id, body ?? {}, { name: req.user.name, role: req.user.role });
   }
 
   @Patch(':id/transition')
@@ -43,7 +52,8 @@ export class JobsController {
 
   // QP.56 AOG / ROA / Critical priority overlay (5.9) — Mgr PC / CsE (PCE) own the COL column
   @Post(':id/priority')
-  @Roles('PCE', 'MM', 'STORES')
+  @InModule('priority')
+  @Requires('priority.raise')
   raisePriority(
     @Param('id') id: string,
     @Body() dto: { type: PriorityType; quantity?: number; route: RepairRoute; suffixK?: boolean; colRef: string; edd?: string; remark?: string },
@@ -53,7 +63,8 @@ export class JobsController {
   }
 
   @Patch(':id/priority')
-  @Roles('PCE', 'MM', 'STORES')
+  @InModule('priority')
+  @Requires('priority.raise')
   updatePriority(
     @Param('id') id: string,
     @Body() dto: { route?: RepairRoute; edd?: string; remark?: string },
@@ -63,7 +74,8 @@ export class JobsController {
   }
 
   @Post(':id/priority/close')
-  @Roles('PCE', 'MM')
+  @InModule('priority')
+  @Requires('priority.close')
   closePriority(
     @Param('id') id: string,
     @Body() dto: { reason: 'DELIVERED' | 'DOWNGRADED'; note?: string },

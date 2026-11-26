@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, getWithFallback } from "@/lib/api";
 import { Partner, PartnerType, Rating } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
+import { useVocab } from "@/lib/vocab";
 import { Button, FormChip, OfflineNotice, PageHeader, Panel, StatusPill, Table, Td, Tr } from "@/components/ui";
 import { AuditTrail } from "@/components/workflow";
 
@@ -30,8 +31,9 @@ export default function RegistersPage() {
   const [reassess, setReassess] = useState({ rating: "3", nonConformances: "0", factorsEvaluated: "20", monitoringRef: "" });
 
   const user = useSession()?.user;
-  const canQuality = user?.role === "QUALITY" || user?.role === "ADMIN";
-  const canPurchasing = user?.role === "PURCHASING" || user?.role === "PCE" || user?.role === "ADMIN";
+  const { aviation, terms, can, ref } = useVocab();
+  const canQuality = can("registers.approve");
+  const canPurchasing = can("registers.evaluate");
 
   useEffect(() => {
     getWithFallback<Partner[]>("/registers/partners", "partners")
@@ -58,7 +60,7 @@ export default function RegistersPage() {
   return (
     <div>
       <OfflineNotice show={offline} />
-      <PageHeader eyebrow="QP.13 Suppliers · QP.34 Sub-contractors · JTP approval · 3-year reassessment" title={t("registers")} />
+      <PageHeader eyebrow={aviation ? "QP.13 Suppliers · QP.34 Sub-contractors · JTP approval · 3-year reassessment" : "Approved suppliers and contractors · evaluation · periodic reassessment"} title={aviation ? t("registers") : terms.registers} />
       {error && <p className="mb-4 rounded border border-brand-bright/40 bg-brand-bright/10 px-3 py-2 text-sm text-brand-bright">{error}</p>}
 
       <div className="fade-up mb-4 flex gap-2">
@@ -70,7 +72,7 @@ export default function RegistersPage() {
               tab === tp ? "border-brand bg-brand/15 text-fg" : "hairline text-steel hover:border-steel/50 hover:text-fg"
             }`}
           >
-            {tp === "SUPPLIER" ? "SUPPLIERS · F224" : "SUB-CONTRACTORS · AVL / MSN / F229"}
+            {tp === "SUPPLIER" ? `SUPPLIERS${ref(" · F224")}` : aviation ? "SUB-CONTRACTORS · AVL / MSN / F229" : "CONTRACTORS"}
           </button>
         ))}
       </div>
@@ -118,9 +120,9 @@ export default function RegistersPage() {
             <div className="space-y-4">
               {canQuality && open.status !== "DROPPED" && (
                 <div className="rounded-md border hairline bg-ink-deep/40 p-4">
-                  <p className="eyebrow mb-2">Issue CAR (F516) — 2nd CAR drops the partner from the lists</p>
+                  <p className="eyebrow mb-2">Issue CAR{ref(" (F516)")} — 2nd CAR drops the partner from the lists</p>
                   <div className="flex flex-wrap items-end gap-2">
-                    <input placeholder="F516 ref" value={car.ref} onChange={(e) => setCar({ ...car, ref: e.target.value })} className="mono w-36 rounded-md border hairline bg-panel px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
+                    <input placeholder={aviation ? "F516 ref" : "CAR ref"} value={car.ref} onChange={(e) => setCar({ ...car, ref: e.target.value })} className="mono w-36 rounded-md border hairline bg-panel px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
                     <input placeholder="Reason" value={car.reason} onChange={(e) => setCar({ ...car, reason: e.target.value })} className="mono min-w-52 flex-1 rounded-md border hairline bg-panel px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
                     <Button variant="danger" disabled={busy || !car.ref || !car.reason} onClick={() => { act(`/registers/partners/${open.id}/car`, car); setCar({ ref: "", reason: "" }); }}>
                       Issue CAR
@@ -131,7 +133,7 @@ export default function RegistersPage() {
 
               {canPurchasing && open.status === "REGISTERED" && (
                 <div className="rounded-md border hairline bg-ink-deep/40 p-4">
-                  <p className="eyebrow mb-2">3-year reassessment ({open.type === "SUPPLIER" ? "F226" : "F230"}) — quality · delivery/TAT · capability · quantity</p>
+                  <p className="eyebrow mb-2">3-year reassessment{ref(open.type === "SUPPLIER" ? " (F226)" : " (F230)")} — quality · delivery/TAT · capability · quantity</p>
                   <div className="flex flex-wrap items-end gap-2">
                     <label className="block">
                       <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Rating</span>

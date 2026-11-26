@@ -15,7 +15,6 @@ interface Ctx {
   stream: InvoiceStreamDef | undefined;
 }
 
-const DRAFT_STATUSES = new Set(['DRAFTED', 'CERTIFIED']);
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** FR-13 — billing documents generated from the invoice, its job and the stream's document set. */
@@ -33,7 +32,7 @@ export class DocumentsService {
 
     const ctx: Ctx = { inv, job, stream: this.store.invoiceStreams.find((s) => s.id === inv.stream) };
     const marks: Marks = {
-      watermark: DRAFT_STATUSES.has(inv.status) && kind !== 'delivery-note' ? 'DRAFT' : undefined,
+      watermark: this.store.status('INVOICE', inv.status)?.draftDocuments && kind !== 'delivery-note' ? 'DRAFT' : undefined,
       ctc: opts.ctc ? `Ref ${inv.ctcRef}${inv.customerSignRef ? `  ·  Signed ${inv.customerSignRef}` : ''}` : undefined,
     };
     const ref = inv.f311Ref ?? inv.id;
@@ -150,7 +149,7 @@ export class DocumentsService {
       { header: 'Serial no.', width: 90 },
       { header: 'Qty', width: 40, align: 'right' },
       { header: 'Condition', width: 95 },
-    ], [[j.component, j.partNo, j.serialNo, '1', j.status === 'BER' ? 'BER' : 'Serviceable']]);
+    ], [[j.component, j.partNo, j.serialNo, '1', this.store.status('JOB', j.status)?.label ?? j.status]]);
     doc.moveDown(2);
     const y = doc.y;
     signature(doc, 'Released by (Stores)', undefined, undefined, MARGIN);

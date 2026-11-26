@@ -46,6 +46,7 @@ export const JOB_TRANSITIONS: TransitionRule<JobStatus>[] = [
     label: "Raise spares demand", labelMs: "Mohon alat ganti",
     roles: ["WORKSHOP"],
     requires: [{ key: "f212Ref", label: "Internal Demand & Issue Voucher ref", formNo: "F212" }],
+    effects: [{ type: "raiseDemand", params: { refField: "f212Ref", descriptionField: "partDescription", partNoField: "partNo", qtyField: "qty" } }],
   },
   {
     from: "TDI", to: "AWAITING_INDENT",
@@ -73,6 +74,7 @@ export const JOB_TRANSITIONS: TransitionRule<JobStatus>[] = [
     label: "Route to Outside Vendor (beyond capability)", labelMs: "Salurkan kepada Vendor Luar",
     roles: ["WORKSHOP", "PCE"], setLocation: "HQ",
     requires: [{ key: "f135Ref", label: "Defect Report ref", formNo: "F135" }],
+    effects: [{ type: "openVendorRepair", params: { refField: "f135Ref", workOrderField: "am75Ref" } }],
   },
   {
     from: "AWAITING_SPARE", to: "AWAITING_INDENT",
@@ -164,6 +166,7 @@ export const DEMAND_TRANSITIONS: TransitionRule<DemandStatus>[] = [
     label: "Run stock check", labelMs: "Jalankan semakan stok",
     roles: ["STORES"],
     requires: [{ key: "f244Ref", label: "Stock Check form ref", formNo: "F244" }],
+    effects: [{ type: "recordStockCheck", params: { refField: "f244Ref" } }],
   },
   {
     from: "STOCK_CHECK", to: "ISSUED_FROM_STOCK",
@@ -173,12 +176,14 @@ export const DEMAND_TRANSITIONS: TransitionRule<DemandStatus>[] = [
       { key: "f213Ref", label: "External Demand & Issue Voucher ref", formNo: "F213" },
       { key: "holdingUnit", label: "Holding unit" },
     ],
+    effects: [{ type: "issueFromStock", params: { holdingField: "holdingUnit" } }],
   },
   {
     from: "STOCK_CHECK", to: "RFQ_ISSUED",
     label: "NIL stock — raise RFQ to approved suppliers", labelMs: "Stok NIL — keluarkan RFQ",
     roles: ["PURCHASING"],
     requires: [{ key: "f220Ref", label: "RFQ ref", formNo: "F220" }],
+    effects: [{ type: "setAttributes", params: { rfqRef: "f220Ref" } }],
   },
   {
     from: "RFQ_ISSUED", to: "EVALUATED",
@@ -188,17 +193,20 @@ export const DEMAND_TRANSITIONS: TransitionRule<DemandStatus>[] = [
       { key: "f221Ref", label: "Quotation Evaluation Proforma ref", formNo: "F221" },
       { key: "selectedSupplierId", label: "Selected supplier" },
     ],
+    effects: [{ type: "evaluateQuotations", params: { min: 3, refField: "f221Ref", selectionField: "selectedSupplierId", bypassField: "f241Ref" } }],
   },
   {
     from: "EVALUATED", to: "PO_ISSUED",
     label: "Issue PO (authorised by Mgr Pu)", labelMs: "Keluarkan PO",
     roles: ["PURCHASING"],
     requires: [{ key: "f312Ref", label: "Purchase Order ref", formNo: "F312" }],
+    effects: [{ type: "setAttributes", params: { poRef: "f312Ref" } }],
   },
   {
     from: "PO_ISSUED", to: "RECEIVED",
     label: "Receive at Central Stores & inspect (QP.15)", labelMs: "Terima di Stor Pusat & periksa",
     roles: ["STORES"], requires: [],
+    effects: [{ type: "recordReceipt", params: { discrepancyField: "f217Ref", noteField: "discrepancyNote" } }],
   },
   {
     from: "RECEIVED", to: "ISSUED",
@@ -228,12 +236,14 @@ export const OV_TRANSITIONS: TransitionRule<OvStatus>[] = [
     label: "Identify capable outside vendor", labelMs: "Kenal pasti vendor luar",
     roles: ["PCE"],
     requires: [{ key: "vendorId", label: "Vendor (from approved lists)" }],
+    effects: [{ type: "setVendor", params: { field: "vendorId" } }],
   },
   {
     from: "VENDOR_IDENTIFIED", to: "F134_SUBMITTED",
     label: "Submit Request for OV Approval to customer", labelMs: "Hantar F134 kepada pelanggan",
     roles: ["PCE"],
     requires: [{ key: "f134Ref", label: "Request for OV Approval ref", formNo: "F134" }],
+    effects: [{ type: "setAttributes", params: { f134Ref: "f134Ref" } }],
   },
   {
     from: "F134_SUBMITTED", to: "APPROVED",
@@ -245,18 +255,21 @@ export const OV_TRANSITIONS: TransitionRule<OvStatus>[] = [
     from: "F134_SUBMITTED", to: "REJECTED",
     label: "Not approved — return item to customer", labelMs: "Tidak diluluskan — pulangkan",
     roles: ["PCE", "MM"], requires: [],
+    effects: [{ type: "closeParentJob", params: { location: "CUSTOMER" } }],
   },
   {
     from: "APPROVED", to: "PO_ISSUED",
     label: "Issue Purchase/Repair Order (Mgr PC)", labelMs: "Keluarkan Pesanan Baik Pulih",
     roles: ["PCE"],
     requires: [{ key: "f312Ref", label: "Purchase / Repair Order ref", formNo: "F312" }],
+    effects: [{ type: "setAttributes", params: { poRef: "f312Ref" } }],
   },
   {
     from: "PO_ISSUED", to: "AT_VENDOR",
     label: "Dispatch item to contractor", labelMs: "Hantar item kepada kontraktor",
     roles: ["STORES", "PCE"],
     requires: [{ key: "f218Ref", label: "Delivery Note ref", formNo: "F218" }],
+    effects: [{ type: "setParentLocation", params: { location: "VENDOR" } }],
   },
   {
     from: "AT_VENDOR", to: "COST_ADVISED",
@@ -266,6 +279,7 @@ export const OV_TRANSITIONS: TransitionRule<OvStatus>[] = [
       { key: "costMYR", label: "Repair cost (MYR)" },
       { key: "eddDays", label: "EDD (days)" },
     ],
+    effects: [{ type: "recordCost", params: { costField: "costMYR", eddField: "eddDays", aboveIndentField: "aboveIndent", quoteField: "f119Ref" } }],
   },
   {
     from: "COST_ADVISED", to: "QUOTE_APPROVED",
@@ -278,6 +292,7 @@ export const OV_TRANSITIONS: TransitionRule<OvStatus>[] = [
     label: "Receive repaired item & inspect (QP.15)", labelMs: "Terima item & periksa",
     roles: ["STORES", "QUALITY"],
     requires: [{ key: "relCertRef", label: "Release / Calibration Certificate ref" }],
+    effects: [{ type: "setParentLocation", params: { location: "HQ" } }],
   },
   {
     from: "RECEIVED_BACK", to: "RETURNED",
@@ -312,6 +327,7 @@ export const INVOICE_TRANSITIONS: TransitionRule<InvoiceStatus>[] = [
       { key: "customerSignRef", label: "Customer / CAO signature ref" },
       { key: "ctcRef", label: "Certified True Copy ref", formNo: "CTC" },
     ],
+    effects: [{ type: "setAttributes", params: { customerSignRef: "customerSignRef", ctcRef: "ctcRef" } }],
   },
   {
     from: "CERTIFIED", to: "TAX_RAISED",
@@ -321,6 +337,7 @@ export const INVOICE_TRANSITIONS: TransitionRule<InvoiceStatus>[] = [
       { key: "f311Ref", label: "Tax Invoice no", formNo: "F311" },
       { key: "amountMYR", label: "Invoice amount before tax (MYR)" },
     ],
+    effects: [{ type: "raiseTaxInvoice", params: { numberField: "f311Ref", amountField: "amountMYR" } }],
   },
   {
     from: "TAX_RAISED", to: "CORRECTNESS_CHECK",
@@ -332,30 +349,35 @@ export const INVOICE_TRANSITIONS: TransitionRule<InvoiceStatus>[] = [
     label: "Correct & complete — submit to CPU (Finance)", labelMs: "Tepat & lengkap — hantar ke CPU (Finance)",
     roles: ["BILLING"],
     requires: [{ key: "correctnessBy", label: "CoE checked-by (correctness gate)" }],
+    effects: [{ type: "setAttributes", params: { correctnessBy: "correctnessBy", salesPerfRef: "salesPerfRef" } }],
   },
   {
     from: "CORRECTNESS_CHECK", to: "REJECTED",
     label: "Incomplete — return for correction", labelMs: "Tidak lengkap — pulangkan untuk pembetulan",
     roles: ["BILLING"],
     requires: [{ key: "reason", label: "Reason / missing items" }],
+    effects: [{ type: "markOutstanding" }],
   },
   {
     from: "SUBMITTED", to: "REJECTED",
     label: "Rejected by CPU / MRA", labelMs: "Ditolak oleh CPU / MRA",
     roles: ["FINANCE", "BILLING"],
     requires: [{ key: "reason", label: "Rejection reason" }],
+    effects: [{ type: "markOutstanding" }],
   },
   {
     from: "REJECTED", to: "TAX_RAISED",
     label: "Corrected — re-raise tax invoice", labelMs: "Diperbetulkan — keluarkan semula invois",
     roles: ["BILLING"],
     requires: [{ key: "f311Ref", label: "Corrected Tax Invoice no", formNo: "F311" }],
+    effects: [{ type: "raiseTaxInvoice", params: { numberField: "f311Ref", amountField: "amountMYR" } }],
   },
   {
     from: "SUBMITTED", to: "PAID",
     label: "Payment received & recorded", labelMs: "Bayaran diterima & direkodkan",
     roles: ["FINANCE"],
     requires: [{ key: "paymentRef", label: "Payment reference" }],
+    effects: [{ type: "markPaid", params: { refField: "paymentRef" } }],
   },
 ];
 
@@ -368,6 +390,8 @@ export interface InvoiceStreamDef {
   perJob: boolean;             // false = periodic (PBC monthly)
   docSet: string[];           // supporting document set
   deadlines: { label: string; note: string }[];
+  /** Fields this stream needs before reaching a status, e.g. { SUBMITTED: ["salesPerfRef"] }. */
+  requiredFields?: Record<string, string[]>;
 }
 
 export const INVOICE_STREAMS: InvoiceStreamDef[] = [
@@ -403,6 +427,7 @@ export const INVOICE_STREAMS: InvoiceStreamDef[] = [
   },
   {
     id: "ACD", label: "Accounts Dept (ACD)", labelMs: "Jabatan Akaun (ACD)",
+    requiredFields: { SUBMITTED: ["salesPerfRef"] },
     customer: "Accounts Dept (Payments) · e-Payment", perJob: true,
     docSet: ["Completed invoice", "Company Sales Performance Report (SPR)", "Local Order (LO)"],
     deadlines: [

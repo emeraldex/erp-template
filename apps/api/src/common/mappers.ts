@@ -92,6 +92,10 @@ export function mapJob(r: any): Job {
     invoiceIds: invoiceIds.length ? invoiceIds : undefined,
     priority: r.priority ? mapPriority(r.priority) : undefined,
     indentRef: r.indentRef ?? undefined,
+    jobType: r.jobType ?? undefined,
+    assetId: r.assetId ?? undefined,
+    pmScheduleId: r.pmScheduleId ?? undefined,
+    checklist: Array.isArray(r.checklist) && r.checklist.length ? r.checklist : undefined,
     records: mapRecords(r.records ?? []),
     audit: mapAudit(r.audit ?? []),
   }) as Job;
@@ -254,6 +258,7 @@ export const mapStream = (r: any): InvoiceStreamDef => ({
   perJob: r.perJob,
   docSet: r.docSet ?? [],
   deadlines: (r.deadlines ?? []) as { label: string; note: string }[],
+  requiredFields: (r.requiredFields ?? {}) as Record<string, string[]>,
 });
 
 export const mapTransition = (r: any) =>
@@ -265,4 +270,5 @@ export const mapTransition = (r: any) =>
     roles: r.roles as Role[],
     requires: (r.requires ?? []) as { key: string; label: string; formNo?: string }[],
     setLocation: r.setLocation ?? undefined,
+    effects: Array.isArray(r.effects) && r.effects.length ? (r.effects as { type: string; params?: Record<string, unknown> }[]) : undefined,
   });

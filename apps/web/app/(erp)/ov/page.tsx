@@ -6,18 +6,16 @@ import Link from "next/link";
 import { api, getWithFallback } from "@/lib/api";
 import { OvRepair, OvStatus } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
+import { railOf, useVocab } from "@/lib/vocab";
 import { useLang } from "@/lib/i18n";
 import { fmtMYR } from "@/lib/format";
 import { MetaPill, OfflineNotice, PageHeader, Panel } from "@/components/ui";
 import { AuditTrail, RecordsList, StageRail, TransitionActions } from "@/components/workflow";
 
-const OV_RAIL: OvStatus[] = [
-  "RECEIVED_HQ", "VENDOR_IDENTIFIED", "F134_SUBMITTED", "APPROVED",
-  "PO_ISSUED", "AT_VENDOR", "COST_ADVISED", "QUOTE_APPROVED", "RECEIVED_BACK", "RETURNED",
-];
-
 export default function OvPage() {
   const cfg = useConfig();
+  const { aviation, terms } = useVocab();
+  const rail = railOf(cfg?.ovStatusMeta);
   const { lang, t } = useLang();
   const [rows, setRows] = useState<OvRepair[]>([]);
   const [offline, setOffline] = useState(false);
@@ -46,7 +44,7 @@ export default function OvPage() {
   return (
     <div>
       <OfflineNotice show={offline} />
-      <PageHeader eyebrow="QP.33 · Beyond in-house capability — dual customer approvals" title={t("ov")} />
+      <PageHeader eyebrow={aviation ? "QP.33 · Beyond in-house capability — dual customer approvals" : "Repairs sent to vendors and OEMs"} title={aviation ? t("ov") : terms.vendorRepairs} />
       {error && <p className="mb-4 rounded border border-brand-bright/40 bg-brand-bright/10 px-3 py-2 text-sm text-brand-bright">{error}</p>}
 
       <div className="space-y-4">
@@ -82,7 +80,7 @@ export default function OvPage() {
                 <div className="fade-up mt-4 border-t hairline pt-4">
                   {cfg && (
                     <div className="mb-4">
-                      <StageRail order={OV_RAIL} current={ov.status} meta={cfg.ovStatusMeta} branches={["REJECTED"]} />
+                      <StageRail order={rail.order} current={ov.status} meta={cfg.ovStatusMeta} branches={rail.branches} />
                     </div>
                   )}
 

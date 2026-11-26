@@ -1,7 +1,7 @@
 import { Controller, Get, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { AuthUser } from '../auth/auth.service';
-import { Roles } from '../auth/roles.decorator';
+import { Requires } from '../auth/roles.decorator';
 import { NotificationsService } from './notifications.service';
 
 @Controller()
@@ -29,7 +29,7 @@ export class NotificationsController {
   /** Run the alert check now instead of waiting for the schedule. */
   @Post('alerts/run')
   @HttpCode(200)
-  @Roles('ADMIN')
+  @Requires('org.admin')
   run() {
     return this.svc.runAlerts();
   }

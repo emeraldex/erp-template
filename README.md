@@ -1,10 +1,19 @@
 # Maintenance ERP — Integrated Maintenance, Procurement & Job-Tracking System
 
-Prototype implementation of **CO-RFP-IT-001** (Business Workflow & System Requirements
-Specification) for Company Name Sdn. Bhd. — an approved maintenance organisation (AMO)
-servicing military and non-airborne electronic components for the Customer.
+A maintenance ERP for **any maintenance organisation, in any sector**: work orders,
+assets and meters, preventive maintenance, parts and purchasing, vendor repairs,
+invoicing, safety incidents and supplier registers — multi-client, bilingual (EN/BM),
+with each client's statuses, steps, roles, permissions, terminology and modules held
+as data they can change themselves.
 
-Every module, status, form reference, role and timer below is traceable to the RFP:
+Clients start from a **sector pack** — General maintenance, Facilities & buildings,
+Fleet & vehicles, Industrial plant, Medical equipment, or Aviation MRO — see
+[Setting up for any sector](docs/guides/sectors.md).
+
+The **Aviation MRO** pack is the reference configuration and the default: it implements
+**CO-RFP-IT-001** (Business Workflow & System Requirements Specification) for an approved
+maintenance organisation servicing military and non-airborne electronic components.
+Its modules, statuses, form references, roles and timers below are traceable to the RFP:
 Section 4 (actors), Section 5 (workflows), Section 6 (forms register), Section 7
 (functional requirements FR-01…FR-15) and Section 8 (mandatory demonstration scenario).
 
@@ -13,6 +22,7 @@ Section 4 (actors), Section 5 (workflows), Section 6 (forms register), Section 7
 | For | Read |
 |---|---|
 | Installing and running client organisations | [Administrator guide](docs/guides/admin-guide.md) |
+| Setting a client up for its sector (packs, terms, statuses, actions, permissions, assets, PM) | [Setting up for any sector](docs/guides/sectors.md) |
 | Daily use, by role | [User guide](docs/guides/user-guide.md) · [Panduan pengguna](docs/guides/panduan-pengguna.md) |
 | Integrations | [API guide](docs/api/README.md) and the generated reference at `/api/docs` |
 | Security reviews | [Security overview](docs/security-overview.md) |
@@ -46,10 +56,13 @@ pnpm --filter api build && node apps/api/dist/seed-db.js   # reference dataset
 pnpm dev                      # web on :3000, api on :4000
 ```
 
-The seed is idempotent — it no-ops once users exist, so it is safe to re-run.
+The seed is idempotent — it no-ops once users exist, so it is safe to re-run. It loads the
+Aviation MRO pack; set `SEED_PACK` (`general`, `facilities`, `fleet`, `industrial` or
+`medical`) to start from another sector. Those packs' demo users are `admin@`, `helpdesk@`,
+`supervisor@`, `technician@`, `stores@`, `purchasing@`, `finance@` and `manager@company.example`.
 
-Sign in with any Section 4 actor — password `demo123`, or whatever `SEED_PASSWORD`
-was set to when the database was first seeded (see *Before going live*):
+With the aviation pack, sign in with any Section 4 actor — password `demo123`, or whatever
+`SEED_PASSWORD` was set to when the database was first seeded (see *Before going live*):
 
 | Email | Role | Spec actor | Owns |
 |---|---|---|---|
@@ -92,12 +105,15 @@ dependency audit, on every push and pull request.
 ## How the requirements are met
 
 - **FR-01** — every job is a single PS-numbered record tracked receipt-to-return (`/jobs`).
-- **FR-02 (configurability)** — statuses, transitions, role gates, mandatory fields and SLA
-  timers are **data, not code** (`apps/api/src/common/workflow-config.ts`), served at
-  `GET /config`. The web client renders its status pills, action buttons and forms from
-  this config; `PATCH /config/sla/:id` changes a timer at runtime with no redeploy.
+- **FR-02 (configurability)** — statuses (with their meaning, or *phase*), transitions, role
+  gates, mandatory fields, step actions, permissions, lists, terminology, modules and SLA
+  timers are **data, not code**, per organisation, seeded from a sector pack
+  (`apps/api/src/packs/`) and served at `GET /config`. The web client renders its menus,
+  status pills, progress rails, action buttons and forms from this config; the workflow
+  editor and settings change it at runtime with no redeploy.
 - **FR-03** — every transition is gated to its QP "process owner" role; wrong role → 403
-  with the owning roles named.
+  with the owning roles named. Everything else is gated by permissions each organisation
+  assigns to its roles (`@Requires('invoices.create')`…).
 - **FR-04** — every change appends a timestamped audit entry (who/role/action/field values);
   status + location history is visible on each record.
 - **FR-05** — mandatory fields per transition (e.g. certification identity, capacity/stamp on
@@ -136,6 +152,9 @@ dependency audit, on every push and pull request.
   on every download; stored on a volume or any S3-compatible bucket; never deletable.
 - **§7.2 bilingual** — EN/BM toggle; status names and workflow action labels are bilingual
   in the config itself.
+- **Beyond the RFP** — asset register with hierarchy and meters, preventive maintenance by
+  calendar and/or meter with automatic work orders, job checklists that gate completion,
+  and five more sector packs ([guide](docs/guides/sectors.md)).
 
 ## Section 8 demonstration script
 
@@ -160,10 +179,10 @@ demo or staging database, not one holding live records.
 GET   /health                          liveness + database check (no sign-in)
 POST  /auth/login                      sets the session cookie
 POST  /auth/logout · GET /auth/me · POST /auth/change-password
-GET   /config                          workflow-as-data (FR-02)
-PATCH /config/sla/:id                  runtime rule change (ADMIN/QUALITY)
+GET   /config                          workflow-as-data (FR-02): statuses, steps, lists, terms, modules, permissions
+PATCH /config/sla/:id                  runtime rule change (workflow.edit)
 GET   /dashboard/kpis
-GET|POST /jobs · GET /jobs/:id · PATCH /jobs/:id/transition
+GET|POST /jobs · GET /jobs/:id · PATCH /jobs/:id/transition · PATCH /jobs/:id/checklist
 POST  /jobs/:id/priority · PATCH /jobs/:id/priority · POST /jobs/:id/priority/close
                                        AOG/ROA/Critical overlay (QP.56)
 GET   /demands · /demands/:id · POST /demands/:id/quotations · PATCH /demands/:id/transition
@@ -179,11 +198,16 @@ GET   /reports/{sales-performance|e-payment|outstanding|audit}?from&to&format=xl
 GET   /retention/report · POST /retention/archive (ADMIN)
 GET|POST /attachments/:entity/:id · GET /attachments/file/:id[/verify]
 GET   /notifications · POST /notifications/:id/read · /notifications/read-all · POST /alerts/run (ADMIN)
-GET   /settings · PATCH /settings/company · /settings/tax (ADMIN)
+GET   /settings · PATCH /settings/{company,tax,terms,modules,defaults} (org.admin)
+GET|POST /assets · GET|PATCH /assets/:id · POST /assets/:id/meters
+GET|POST /assets/:id/meters/:key/readings
+GET   /pm/schedules[?due=1] · /pm/schedules/:id · /pm/forecast · POST /pm/schedules · PATCH /pm/schedules/:id
+POST  /pm/schedules/:id/skip · POST /pm/run
 GET   /tenant                          which organisation this address belongs to (no sign-in)
 GET   /auth/sso · /auth/sso/start · /auth/sso/callback · GET|PUT /auth/sso/settings (ADMIN)
 GET|POST /users · PATCH /users/:id · POST /users/:id/{reset-password,unlock,deactivate,reactivate} (ADMIN)
-GET   /workflow · /workflow/history · PUT /workflow/{transitions/:kind,sla,streams/:id} (ADMIN, QUALITY)
+GET   /workflow · /workflow/history · PUT /workflow/{transitions/:kind,sla,streams/:id,dictionary/:kind} (workflow.edit)
+PUT   /workflow/roles                  roles and their permissions (org.admin)
 GET   /job-cards?ids=…                 printable A6 job cards with QR codes
 
 The generated OpenAPI reference is served at /api/docs (API_DOCS).
@@ -248,7 +272,7 @@ FR-02 runtime change such as `PATCH /config/sla/:id` now survives a restart.
 
 One installation can serve several client organisations, each in its own
 PostgreSQL schema, found by the address used to reach it. Create them with
-`node dist/tenants-cli.js create <id> --name … --host … --admin-email …`; see the
+`node dist/tenants-cli.js create <id> --name … --host … [--pack fleet] --admin-email …`; see the
 [administrator guide](docs/guides/admin-guide.md). A single-client install
 needs none of this: everything lives in the default organisation
 (`DATABASE_URL`'s schema). For several organisations, serve each address
@@ -256,7 +280,8 @@ through the reverse proxy (`--profile proxy`, `deploy/Caddyfile.example`) and
 build the web app with `NEXT_PUBLIC_API_URL=/api/v1`.
 
 Each organisation has its own users (Users screen), settings, single sign-on,
-workflow rules (Workflow editor) and alert schedule.
+sector pack, vocabulary, permissions, workflow rules (Workflow editor), assets and
+alert schedule.
 
 ### Security
 

@@ -2,7 +2,6 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import QRCode = require('qrcode');
 import { StoreService } from '../common/store.service';
 import type { Job } from '../common/types';
-import { JOB_STATUS_META, REPAIR_ROUTE_META } from '../common/workflow-config';
 import { SettingsService } from '../settings/settings.service';
 import { Doc, newDoc, pdfText } from './pdf';
 
@@ -42,7 +41,7 @@ export class JobCardService {
     const qr = await QRCode.toBuffer(url, { type: 'png', margin: 0, width: 300, errorCorrectionLevel: 'M' });
 
     doc.font('Helvetica').fontSize(7).fillColor('#666666').text(pdfText(company), m, m, { width: width - 2 * m });
-    doc.font('Helvetica-Bold').fontSize(8).fillColor('#111111').text('JOB CARD · QP.44', m, doc.y + 1);
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#111111').text(`JOB CARD${this.store.procedureRef(' · QP.44')}`, m, doc.y + 1);
 
     const qrSize = 96;
     doc.image(qr, width - m - qrSize, m, { width: qrSize, height: qrSize });
@@ -53,16 +52,16 @@ export class JobCardService {
     if (job.priority?.state === 'OPEN') {
       doc.rect(m, y, width - 2 * m, 18).fill('#c8102e');
       doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(10)
-        .text(pdfText(`${job.priority.type} · ${REPAIR_ROUTE_META[job.priority.route]?.en ?? job.priority.route}${job.priority.edd ? ` · EDD ${job.priority.edd}` : ''}`),
+        .text(pdfText(`${job.priority.type} · ${this.store.label('route', job.priority.route)}${job.priority.edd ? ` · EDD ${job.priority.edd}` : ''}`),
           m + 6, y + 4.5, { width: width - 2 * m - 12 });
       doc.fillColor('#111111');
       y += 24;
     }
 
     const rows: [string, string | undefined][] = [
-      ['Part no.', job.partNo], ['Serial no.', job.serialNo], ['Category', job.category === 'NAS' ? 'Non-airborne system' : 'Military'],
-      ['From', job.originUnit], ['Repair unit', job.repairUnit], ['Received', job.psDate], ['Indent', job.indentRef],
-      ['Status now', JOB_STATUS_META[job.status]?.en ?? job.status], ['Location now', job.location],
+      ['Part no.', job.partNo], ['Serial no.', job.serialNo], ['Category', this.store.label('category', job.category)],
+      ['From', job.originUnit], ['Repair unit', this.store.label('site', job.repairUnit)], ['Received', job.psDate], ['Indent', job.indentRef],
+      ['Status now', this.store.label('status:JOB', job.status)], ['Location now', this.store.label('location', job.location)],
     ];
     for (const [label, value] of rows) {
       doc.font('Helvetica').fontSize(7.5).fillColor('#666666').text(pdfText(label), m, y, { width: 62 });

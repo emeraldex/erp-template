@@ -24,6 +24,8 @@ export default async function globalSetup(): Promise<void> {
   // Two client organisations, created the way an operator would.
   execSync('npx ts-node --transpile-only src/tenants-cli.ts create acme --name "Acme Aero" --host acme.test --host acme.test:3000 --demo', opts);
   execSync('npx ts-node --transpile-only src/tenants-cli.ts create beta --name "Beta Engineering" --host beta.test --admin-email ops@beta.test', opts);
+  // A fleet operator set up from the fleet pack, for the multi-sector tests.
+  execSync('npx ts-node --transpile-only src/tenants-cli.ts create fleet --name "Metro Fleet" --host fleet.test --pack fleet --demo', opts);
   // Used only by the SSO tests, which change how its users may sign in.
   execSync('npx ts-node --transpile-only src/tenants-cli.ts create gamma --name "Gamma Avionics" --host gamma.test --host gamma.test:3000 --demo', opts);
 }

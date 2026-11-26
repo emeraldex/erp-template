@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
+import { StoreService } from '../common/store.service';
 import { Report } from '../reports/tabular';
 
 const DAY = 86_400_000;
@@ -23,12 +24,12 @@ export function retainUntil(closed: Date, years = retentionYears()): Date {
 export class RetentionService {
   private readonly log = new Logger(RetentionService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly store: StoreService) {}
 
   async archiveClosedJobs(now = Date.now()): Promise<{ archived: number }> {
     const cutoff = new Date(now - archiveAfterDays() * DAY);
     const res = await this.prisma.job.updateMany({
-      where: { status: 'CLOSED', archivedAt: null, statusSince: { lt: cutoff } },
+      where: { status: { in: this.store.finalStatuses('JOB') }, archivedAt: null, statusSince: { lt: cutoff } },
       data: { archivedAt: new Date(now) },
     });
     if (res.count) this.log.log(`Archived ${res.count} job(s) closed before ${cutoff.toISOString().slice(0, 10)}`);
@@ -37,7 +38,7 @@ export class RetentionService {
 
   async report(now = Date.now()): Promise<Report> {
     const closed = await this.prisma.job.findMany({
-      where: { status: 'CLOSED' },
+      where: { status: { in: this.store.finalStatuses('JOB') } },
       select: { id: true, component: true, serialNo: true, statusSince: true, archivedAt: true },
       orderBy: { statusSince: 'asc' },
     });

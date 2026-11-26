@@ -1,11 +1,12 @@
 import { Controller, Get, Param, Query, Res, StreamableFile, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
-import { Roles } from '../auth/roles.decorator';
+import { InModule, Requires } from '../auth/roles.decorator';
 import { DocumentsService, InvoiceDocument } from './documents.service';
 
 
 @Controller('invoicing')
+@InModule('invoicing')
 @UseGuards(AuthGuard)
 export class DocumentsController {
   constructor(private readonly docs: DocumentsService) {}
@@ -15,7 +16,7 @@ export class DocumentsController {
    * `ctc=1` stamps every page "Certified True Copy" with the recorded CTC reference.
    */
   @Get(':id/documents/:kind')
-  @Roles('BILLING', 'FINANCE', 'PCE', 'MM')
+  @Requires('invoices.documents')
   async document(
     @Param('id') id: string,
     @Param('kind') kind: InvoiceDocument,

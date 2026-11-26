@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { AuthUser } from '../auth/auth.service';
-import { Roles } from '../auth/roles.decorator';
+import { Requires } from '../auth/roles.decorator';
 import { UsersService } from './users.service';
 
 type Req = { user: AuthUser };
@@ -9,7 +9,7 @@ const actor = (r: Req) => ({ sub: r.user.sub, name: r.user.name, role: r.user.ro
 
 @Controller('users')
 @UseGuards(AuthGuard)
-@Roles('ADMIN')
+@Requires('org.admin')
 export class UsersController {
   constructor(private readonly users: UsersService) {}
 

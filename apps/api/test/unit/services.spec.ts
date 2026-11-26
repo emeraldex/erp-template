@@ -3,7 +3,7 @@ import { DemandsService } from '../../src/demands/demands.service';
 import { InvoicingService } from '../../src/invoicing/invoicing.service';
 import { JobsService } from '../../src/jobs/jobs.service';
 import { RegistersService } from '../../src/registers/registers.service';
-import { actor, FakeStore, makeDemand, makeJob, makePartner } from './fake-store';
+import { actor, FakeStore, fakeSettings, makeDemand, makeJob, makePartner } from './fake-store';
 
 const quote = (n: number) => ({ supplierId: `SUP-${n}`, supplier: `Supplier ${n}`, priceMYR: 1000 * n, eddDays: 30 });
 
@@ -156,7 +156,7 @@ describe('JobsService — lifecycle guards and side effects', () => {
 
   beforeEach(() => {
     store = new FakeStore();
-    svc = new JobsService(store.asStore());
+    svc = new JobsService(store.asStore(), fakeSettings());
   });
 
   it('locks a closed job against further transitions (FR-12)', async () => {

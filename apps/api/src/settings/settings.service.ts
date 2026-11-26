@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { currentTenant } from '../tenancy/tenant';
+import { AVIATION } from '../packs/aviation';
+import { MODULE_KEYS, type Modules, type Terms } from '../packs/types';
 import { PrismaService } from '../common/prisma.service';
 
 export interface CompanyProfile {
@@ -21,9 +23,16 @@ export interface TaxSettings {
   ratePct: number;
 }
 
+export interface WorkflowDefaults { jobPrefix: string; initialLocation: string }
+
 export interface Settings {
   company: CompanyProfile;
   tax: TaxSettings;
+  /** The sector pack the organisation started from (informational). */
+  pack: { id: string; name: string };
+  terms: Terms;
+  modules: Modules;
+  defaults: WorkflowDefaults;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -40,6 +49,11 @@ export const DEFAULT_SETTINGS: Settings = {
   // CO-RFP-IT-001 specifies 6% GST. Malaysia's current regime is SST; change
   // both here without a redeploy.
   tax: { label: 'GST', ratePct: 6 },
+  // Organisations created before sector packs existed are aviation ones.
+  pack: { id: AVIATION.id, name: AVIATION.name },
+  terms: AVIATION.terms,
+  modules: AVIATION.modules,
+  defaults: { jobPrefix: AVIATION.defaults.jobPrefix, initialLocation: AVIATION.defaults.initialLocation },
 };
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : undefined);
@@ -70,6 +84,10 @@ export class SettingsService {
       settings: {
         company: { ...DEFAULT_SETTINGS.company, ...(byKey.company ?? {}) },
         tax: { ...DEFAULT_SETTINGS.tax, ...(byKey.tax ?? {}) },
+        pack: { ...DEFAULT_SETTINGS.pack, ...(byKey.pack ?? {}) },
+        terms: { ...DEFAULT_SETTINGS.terms, ...(byKey.terms ?? {}) },
+        modules: { ...DEFAULT_SETTINGS.modules, ...(byKey.modules ?? {}) },
+        defaults: { ...DEFAULT_SETTINGS.defaults, ...(byKey.defaults ?? {}) },
       },
       loadedAt: Date.now(),
     });
@@ -85,6 +103,44 @@ export class SettingsService {
 
   get tax(): TaxSettings {
     return { ...this.cache.tax };
+  }
+
+  get terms(): Terms {
+    return { ...this.cache.terms };
+  }
+
+  get modules(): Modules {
+    return { ...this.cache.modules };
+  }
+
+  get defaults(): WorkflowDefaults {
+    return { ...this.cache.defaults };
+  }
+
+  async updateTerms(patch: Partial<Terms>, by: string): Promise<Terms> {
+    const next = { ...this.cache.terms };
+    for (const k of Object.keys(next) as (keyof Terms)[]) {
+      const v = str(patch[k], 60);
+      if (v) next[k] = v;
+    }
+    await this.save('terms', next, by);
+    return next;
+  }
+
+  async updateModules(patch: Partial<Modules>, by: string): Promise<Modules> {
+    const next = { ...this.cache.modules };
+    for (const k of MODULE_KEYS) if (typeof patch[k] === 'boolean') next[k] = patch[k] as boolean;
+    if (next.pm && !next.assets) throw new BadRequestException('Preventive maintenance needs the asset register');
+    await this.save('modules', next, by);
+    return next;
+  }
+
+  async updateDefaults(patch: Partial<WorkflowDefaults>, by: string): Promise<WorkflowDefaults> {
+    const jobPrefix = (str(patch.jobPrefix, 8) ?? this.cache.defaults.jobPrefix).toUpperCase();
+    if (!/^[A-Z][A-Z0-9]{0,7}$/.test(jobPrefix)) throw new BadRequestException('Number prefix: 1–8 letters or digits, starting with a letter');
+    const next = { jobPrefix, initialLocation: str(patch.initialLocation, 40) || this.cache.defaults.initialLocation };
+    await this.save('defaults', next, by);
+    return next;
   }
 
   async updateCompany(patch: Partial<CompanyProfile>, by: string): Promise<CompanyProfile> {

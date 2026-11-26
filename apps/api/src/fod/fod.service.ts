@@ -37,9 +37,9 @@ export class FodService {
       date: dto.date ?? new Date().toISOString().slice(0, 10),
       reporter: dto.reporter ?? actor.name,
       id: await this.store.nextFodId(),
-      focalPoint: 'Qistina Yusof',
+      focalPoint: this.store.focalPoint(),
       status: 'OPEN',
-      audit: [this.store.audit(actor.name, actor.role, 'FOD incident reported — routed to Focal Point')],
+      audit: [this.store.audit(actor.name, actor.role, this.store.packId() === 'aviation' ? 'FOD incident reported — routed to Focal Point' : 'Incident reported — routed to the safety focal point')],
     };
     return this.store.newFod(incident);
   }
@@ -54,7 +54,7 @@ export class FodService {
     const inc = await this.store.fodIncident(id);
     if (!inc) throw new NotFoundException(`Incident ${id} not found`);
     if (fields.status === 'CLOSED' && !(fields.rootCause ?? inc.rootCause)) {
-      throw new BadRequestException('Root cause is mandatory before closing (QP.46 §10)');
+      throw new BadRequestException(`Root cause is mandatory before closing${this.store.procedureRef(' (QP.46 §10)')}`);
     }
     if (fields.rootCause) inc.rootCause = fields.rootCause;
     if (fields.correctiveAction) inc.correctiveAction = fields.correctiveAction;

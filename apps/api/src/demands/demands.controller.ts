@@ -1,10 +1,11 @@
 import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
-import { Roles } from '../auth/roles.decorator';
+import { InModule, Requires } from '../auth/roles.decorator';
 import { DemandsService } from './demands.service';
 import { DemandStatus, Quotation } from '../common/types';
 
 @Controller('demands')
+@InModule('procurement')
 @UseGuards(AuthGuard)
 export class DemandsController {
   constructor(private readonly svc: DemandsService) {}
@@ -20,7 +21,7 @@ export class DemandsController {
   }
 
   @Post(':id/quotations')
-  @Roles('PURCHASING')
+  @Requires('procurement.quote')
   addQuotation(@Param('id') id: string, @Body() q: Quotation, @Req() req: any) {
     return this.svc.addQuotation(id, q, { name: req.user.name, role: req.user.role });
   }

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getWithFallback } from "@/lib/api";
-import { Job, Kpis } from "@/lib/types";
+import { api, getWithFallback } from "@/lib/api";
+import { Job, Kpis, PmSchedule } from "@/lib/types";
+import { useVocab } from "@/lib/vocab";
 import { useConfig } from "@/lib/use-config";
 import { useLang } from "@/lib/i18n";
 import { fmtMYR } from "@/lib/format";
@@ -18,6 +19,8 @@ export default function DashboardPage() {
   const [kpis, setKpis] = useState<Kpis | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [offline, setOffline] = useState(false);
+  const [pmDue, setPmDue] = useState<PmSchedule[] | null>(null);
+  const { aviation, terms, modules, isFinal, ref } = useVocab();
 
   useEffect(() => {
     getWithFallback<Kpis>("/dashboard/kpis", "kpis")
@@ -27,10 +30,24 @@ export default function DashboardPage() {
       .then((r) => setJobs(r.data))
       .catch(console.error);
   }, []);
+  useEffect(() => {
+    if (modules.pm) api.get<PmSchedule[]>("/pm/schedules?due=1").then(setPmDue).catch(() => setPmDue(null));
+  }, [modules.pm]);
 
   if (!kpis) return <p className="eyebrow py-20 text-center">LOADING…</p>;
 
-  const distribution = kpis.byStatus.filter((s) => s.count > 0 && s.status !== "CLOSED");
+  const distribution = kpis.byStatus.filter((s) => s.count > 0 && !isFinal("JOB", s.status));
+  const J = terms.jobs.toUpperCase();
+  const ticker = [
+    `OPEN ${J} ${kpis.openJobs}`, `WIP ${kpis.wip}`,
+    modules.priority && `${aviation ? "AOG/ROA" : "PRIORITY"} ${kpis.aogOpen}`,
+    `AWAITING CUSTOMER ${kpis.awaitingCustomer}`, `AT VENDOR ${kpis.atVendor}`, `SLA BREACHES ${kpis.slaBreaches}`,
+    modules.pm && pmDue && `PM DUE ${pmDue.length}`,
+    modules.invoicing && `OPEN INVOICES ${kpis.openInvoices}`, modules.invoicing && `REVENUE ${fmtMYR(kpis.revenueBilledMYR)}`,
+    modules.invoicing && `TAX ${fmtMYR(kpis.gstCollectedMYR)}`,
+    modules.incidents && `${aviation ? "FOD" : "INCIDENTS"} OPEN ${kpis.openFod}`, modules.tools && `TOOLS OUT ${kpis.toolsUnaccounted}`,
+    modules.registers && `PARTNERS DUE REASSESSMENT ${kpis.partnersDueReassessment}`, `AVG ${terms.job.toUpperCase()} AGE ${kpis.avgJobAgeDays}D`,
+  ].filter(Boolean).join(" · ") + " · ";
 
   return (
     <div>
@@ -39,12 +56,12 @@ export default function DashboardPage() {
       {/* telemetry ticker */}
       <div className="fade-up mb-6 overflow-hidden rounded-md border hairline bg-ink-deep/60">
         <div className="ticker mono whitespace-nowrap py-1.5 text-[10.5px] tracking-widest text-steel">
-          {`OPEN JOBS ${kpis.openJobs} · WIP ${kpis.wip} · AOG/ROA ${kpis.aogOpen} · AWAITING CUSTOMER ${kpis.awaitingCustomer} · AT VENDOR ${kpis.atVendor} · SLA BREACHES ${kpis.slaBreaches} · OPEN INVOICES ${kpis.openInvoices} · REVENUE ${fmtMYR(kpis.revenueBilledMYR)} · GST ${fmtMYR(kpis.gstCollectedMYR)} · FOD OPEN ${kpis.openFod} · TOOLS OUT ${kpis.toolsUnaccounted} · PARTNERS DUE REASSESSMENT ${kpis.partnersDueReassessment} · AVG JOB AGE ${kpis.avgJobAgeDays}D · `.repeat(2)}
+          {ticker.repeat(2)}
         </div>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Open jobs" value={kpis.openJobs} delayClass="d1" />
+        <StatCard label={`Open ${terms.jobs.toLowerCase()}`} value={kpis.openJobs} delayClass="d1" />
         <StatCard label="Work in progress" value={kpis.wip} delayClass="d2" />
         <StatCard
           label="SLA breaches"
@@ -52,18 +69,24 @@ export default function DashboardPage() {
           tone={kpis.slaBreaches ? "critical" : "good"}
           delayClass="d3"
         />
-        <StatCard
-          label="AOG / ROA open · QP.56"
-          value={kpis.aogOpen}
-          tone={kpis.aogOpen ? "critical" : "good"}
-          delayClass="d4"
-        />
+        {modules.pm && pmDue && !aviation ? (
+          <StatCard label={`${terms.pm} due`} value={pmDue.length} tone={pmDue.some((p) => p.overdue) ? "critical" : "good"} delayClass="d4" />
+        ) : modules.priority ? (
+          <StatCard
+            label={aviation ? "AOG / ROA open · QP.56" : `${terms.priority} open`}
+            value={kpis.aogOpen}
+            tone={kpis.aogOpen ? "critical" : "good"}
+            delayClass="d4"
+          />
+        ) : (
+          <StatCard label="Awaiting customer" value={kpis.awaitingCustomer} delayClass="d4" />
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel ticked className="fade-up d2 p-5">
           <div className="mb-2 flex items-center justify-between">
-            <p className="eyebrow">Operations radar · open jobs by branch</p>
+            <p className="eyebrow">Operations radar · open {terms.jobs.toLowerCase()} by {terms.site.toLowerCase()}</p>
           </div>
           <RadarScope jobs={jobs} cfg={cfg} />
           <div className="mt-3 flex justify-center">
@@ -72,7 +95,7 @@ export default function DashboardPage() {
         </Panel>
 
         <Panel className="fade-up d3 p-5">
-          <p className="eyebrow mb-4">JTS status distribution</p>
+          <p className="eyebrow mb-4">{aviation ? "JTS status distribution" : `${terms.job} status distribution`}</p>
           <ul className="space-y-2.5">
             {distribution.map((s) => {
               const max = Math.max(...distribution.map((x) => x.count));
@@ -96,16 +119,16 @@ export default function DashboardPage() {
 
         <div className="space-y-4">
           <Panel ticked={kpis.slaBreaches > 0} className="fade-up d4 p-5">
-            <p className="eyebrow mb-3">SLA breach board · FR-10</p>
+            <p className="eyebrow mb-3">SLA breach board{ref(" · FR-10")}</p>
             {kpis.breaches.length === 0 ? (
-              <p className="text-sm text-phosphor">All milestones inside QP timers.</p>
+              <p className="text-sm text-phosphor">{aviation ? "All milestones inside QP timers." : "All milestones inside their timers."}</p>
             ) : (
               <ul className="space-y-2.5">
                 {kpis.breaches.map((b) => (
                   <li key={`${b.entity}-${b.ref}`} className="rounded-md border border-brand-bright/25 bg-brand-bright/5 px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <Link
-                        href={b.entity === "JOB" ? `/jobs/${b.ref}` : b.entity === "DEMAND" ? "/demands" : "/ov"}
+                        href={b.entity === "JOB" ? `/jobs/${b.ref}` : b.entity === "DEMAND" ? "/demands" : b.entity === "INVOICE" ? "/invoicing" : "/ov"}
                         className="mono text-xs text-brand-bright hover:underline"
                       >
                         {b.ref}
@@ -121,21 +144,21 @@ export default function DashboardPage() {
           </Panel>
 
           <Panel className="fade-up d5 p-5">
-            <p className="eyebrow mb-3">Weekly job closures</p>
-            <Bars data={kpis.weeklyClosures} label="Jobs closed per week" />
+            <p className="eyebrow mb-3">Weekly {aviation ? "job" : terms.job.toLowerCase()} closures</p>
+            <Bars data={kpis.weeklyClosures} label={`${terms.jobs} closed per week`} />
           </Panel>
         </div>
       </div>
 
       {/* QP.56 priority overlay + QP.51 revenue */}
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        <Panel ticked={kpis.aogOpen > 0} className="fade-up p-5 lg:col-span-2">
+        {modules.priority && <Panel ticked={kpis.aogOpen > 0} className="fade-up p-5 lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
-            <p className="eyebrow">AOG / ROA / Critical priority board · COL · FR-15</p>
-            <Link href="/aog" className="mono text-[10px] tracking-widest text-steel hover:text-trace">QP.56 · MANAGE ON COL →</Link>
+            <p className="eyebrow">{aviation ? "AOG / ROA / Critical priority board · COL · FR-15" : `${terms.priority} board`}</p>
+            <Link href="/aog" className="mono text-[10px] tracking-widest text-steel hover:text-trace">{aviation ? "QP.56 · MANAGE ON COL →" : "MANAGE →"}</Link>
           </div>
           {kpis.priorityBoard.length === 0 ? (
-            <p className="text-sm text-phosphor">No component currently flagged AOG / ROA / Critical.</p>
+            <p className="text-sm text-phosphor">{aviation ? "No component currently flagged AOG / ROA / Critical." : `No ${terms.job.toLowerCase()} is currently prioritised.`}</p>
           ) : (
             <ul className="space-y-2">
               {kpis.priorityBoard.map((p) => (
@@ -146,26 +169,26 @@ export default function DashboardPage() {
                     <span className="text-xs text-steel">{p.component}</span>
                   </div>
                   <span className="mono text-[10px] tracking-widest text-dim">
-                    ROUTE {cfg?.repairRouteMeta?.[p.route]?.[lang] ?? p.route} · COL {p.colRef}{p.edd ? ` · EDD ${p.edd}` : ""} · {p.daysOpen}D OPEN
+                    ROUTE {cfg?.repairRouteMeta?.[p.route]?.[lang] ?? p.route} · {aviation ? "COL" : "REF"} {p.colRef}{p.edd ? ` · EDD ${p.edd}` : ""} · {p.daysOpen}D OPEN
                   </span>
                 </li>
               ))}
             </ul>
           )}
-        </Panel>
+        </Panel>}
 
-        <Panel className="fade-up p-5">
+        {modules.invoicing && <Panel className="fade-up p-5">
           <div className="mb-3 flex items-center justify-between">
-            <p className="eyebrow">Revenue & billing · QP.51 · FR-14</p>
+            <p className="eyebrow">Revenue & billing{ref(" · QP.51 · FR-14")}</p>
             <Link href="/invoicing" className="mono text-[10px] tracking-widest text-steel hover:text-trace">→</Link>
           </div>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="mono text-[10.5px] tracking-widest text-steel">BILLED (incl. GST)</span>
+              <span className="mono text-[10.5px] tracking-widest text-steel">BILLED (incl. tax)</span>
               <span className="mono text-sm text-phosphor">{fmtMYR(kpis.revenueBilledMYR)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="mono text-[10.5px] tracking-widest text-steel">GST @ 6%</span>
+              <span className="mono text-[10.5px] tracking-widest text-steel">TAX COLLECTED</span>
               <span className="mono text-sm text-trace">{fmtMYR(kpis.gstCollectedMYR)}</span>
             </div>
             <div className="flex items-center justify-between">
@@ -177,7 +200,7 @@ export default function DashboardPage() {
               <span className="mono text-sm text-fg">{kpis.openInvoices}</span>
             </div>
           </div>
-        </Panel>
+        </Panel>}
       </div>
     </div>
   );

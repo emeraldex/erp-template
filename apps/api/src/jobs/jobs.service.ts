@@ -1,11 +1,28 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { AssetsService } from '../assets/assets.service';
+import { PmService } from '../assets/pm.service';
 import { StoreService } from '../common/store.service';
 import { applyTransition } from '../common/transition.engine';
-import { Branch, Job, JobStatus, PriorityType, RepairRoute, Role } from '../common/types';
+import { Branch, ChecklistItem, Job, JobStatus, PriorityType, RepairRoute, Role } from '../common/types';
+import { SettingsService } from '../settings/settings.service';
+import type { Effect } from '../workflow/effects';
+
+type Actor = { name: string; role: Role };
+const str = (v: unknown) => (typeof v === 'string' ? v : v === undefined || v === null ? undefined : String(v));
 
 @Injectable()
 export class JobsService {
-  constructor(private readonly store: StoreService) {}
+  constructor(
+    private readonly store: StoreService,
+    private readonly settings: SettingsService,
+    @Optional() private readonly assets?: AssetsService,
+    @Optional() private readonly pm?: PmService,
+  ) {}
+
+  /** Aviation keeps its COL (AOG/ROA column) wording; other sectors get plain words. */
+  private get aviation(): boolean {
+    return this.store.packId() === 'aviation';
+  }
 
   list(archived: 'exclude' | 'include' | 'only' = 'exclude'): Promise<Job[]> {
     return this.store.jobs(archived);
@@ -17,23 +34,47 @@ export class JobsService {
     return job;
   }
 
-  /** Stage 1 (QP.44) — Logistic registers the job; receiving inspection per QP.20. */
-  async register(dto: {
-    component: string; partNo: string; serialNo: string;
-    category: 'MILITARY' | 'NAS'; originUnit: string; repairUnit: Branch;
-  }, actor: { name: string; role: Role }): Promise<Job> {
+  /** Register a work order at the JOB workflow's first status (QP.44 stage 1 in the aviation pack). */
+  async register(input: {
+    component?: string; partNo?: string; serialNo?: string;
+    category: string; originUnit: string; repairUnit?: Branch;
+    assetId?: string; jobType?: string;
+  }, actor: Actor): Promise<Job> {
+    const { assetId, jobType: requestedType, ...rest } = input;
+    // A registered asset fills in what the job is about and where.
+    const asset = assetId ? await this.assets?.brief(assetId) : undefined;
+    if (assetId && !asset) throw new BadRequestException(`Asset ${assetId} not found`);
+    if (asset?.status === 'RETIRED') throw new BadRequestException(`Asset ${asset.tag} is retired`);
+    const dto = {
+      ...rest,
+      component: rest.component?.trim() || asset?.name || '',
+      partNo: rest.partNo?.trim() || asset?.model || '-',
+      serialNo: rest.serialNo?.trim() || asset?.tag || '',
+      repairUnit: (rest.repairUnit || asset?.site || '') as Branch,
+    };
+    if (!dto.component || !dto.serialNo) throw new BadRequestException('Say what is to be worked on (component and serial / tag), or pick an asset');
+    const types = this.store.dict('jobType', true);
+    if (requestedType && types.length && !this.store.has('jobType', requestedType)) throw new BadRequestException(`Unknown job type ${requestedType}`);
+    const jobType = requestedType || (types.some((t) => t.key === 'CORRECTIVE') ? 'CORRECTIVE' : types[0]?.key ?? 'CORRECTIVE');
+    if (!this.store.has('site', dto.repairUnit)) throw new BadRequestException(`Unknown site ${dto.repairUnit}`);
+    if (this.store.dict('category', true).length && !this.store.has('category', dto.category)) {
+      throw new BadRequestException(`Unknown category ${dto.category}`);
+    }
     const now = new Date().toISOString();
+    const { jobPrefix, initialLocation } = this.settings.defaults;
     const job: Job = {
-      id: await this.store.nextJobId(),
+      id: await this.store.nextJobId(jobPrefix),
       psDate: now.slice(0, 10),
       ...dto,
-      status: 'REGISTERED',
-      location: 'LOGISTIC',
+      jobType,
+      ...(asset ? { assetId: asset.id } : {}),
+      status: this.store.initialStatus('JOB'),
+      location: initialLocation,
       receivedAt: now,
       statusSince: now,
       demandIds: [],
       records: [],
-      audit: [this.store.audit(actor.name, actor.role, 'Job registered — receiving inspection per QP.20', {
+      audit: [this.store.audit(actor.name, actor.role, `Job registered${this.store.procedureRef(' — receiving inspection per QP.20')}`, {
         partNo: dto.partNo, serialNo: dto.serialNo, originUnit: dto.originUnit,
       })],
     };
@@ -42,56 +83,130 @@ export class JobsService {
     return job;
   }
 
-  async transition(id: string, to: JobStatus, fields: Record<string, string>, actor: { name: string; role: Role }): Promise<Job> {
-    const job = await this.get(id);
+  private assertEditable(job: Job): void {
     if (job.archivedAt) throw new BadRequestException('Job is archived — read-only (FR-12)');
-    if (job.status === 'CLOSED') throw new BadRequestException('Job is closed — editing locked (QP.44 stage 10)');
-    applyTransition(job, this.store.jobTransitions, to, fields ?? {}, actor);
+    if (this.store.isFinal('JOB', job.status)) throw new BadRequestException(`Job is closed — editing locked${this.store.procedureRef(' (QP.44 stage 10)')}`);
+  }
+
+  async transition(id: string, to: JobStatus, fields: Record<string, string>, actor: Actor): Promise<Job> {
+    const job = await this.get(id);
+    this.assertEditable(job);
+    const fromPhase = this.store.phaseOf('JOB', job.status);
+    const toPhase = this.store.phaseOf('JOB', to);
+    if (toPhase === 'done' && fromPhase !== 'done') {
+      const open = (job.checklist ?? []).filter((c) => c.required && !c.done);
+      if (open.length) throw new BadRequestException(`Checklist incomplete: ${open.map((c) => c.label).join('; ')}`);
+    }
+    const rule = applyTransition(job, this.store.jobTransitions, to, fields ?? {}, actor);
     if (fields?.indentRef) job.indentRef = fields.indentRef;
 
-    // Side effects mandated by the workflows — committed with the job itself.
+    // The step's actions — committed together with the job itself.
     const alsoSave: object[] = [];
-
-    if (to === 'AWAITING_SPARE' && fields?.f212Ref) {
-      if (!(await this.store.demandExists(fields.f212Ref))) {
-        alsoSave.push(this.store.newDemand({
-          id: fields.f212Ref, jobId: job.id,
-          partDescription: fields.partDescription ?? 'Spare per TDI', partNo: fields.partNo ?? '-',
-          qty: Number(fields.qty ?? 1), status: 'RAISED', statusSince: new Date().toISOString(),
-          raisedBy: actor.name, branch: job.repairUnit, quotations: [], records: [],
-          audit: [this.store.audit(actor.name, actor.role, 'Demand raised from TDI (F212)')],
-        }));
-      }
-      if (!job.demandIds.includes(fields.f212Ref)) job.demandIds.push(fields.f212Ref);
-    }
-
-    if (to === 'REC_OV' && fields?.f135Ref && !job.ovId) {
-      const ov = this.store.newOv({
-        id: await this.store.nextOvId(),
-        jobId: job.id, defectReportRef: fields.f135Ref, am75Ref: fields.am75Ref ?? '-',
-        status: 'RECEIVED_HQ', statusSince: new Date().toISOString(),
-        records: [], audit: [this.store.audit(actor.name, actor.role, 'Registered in OV Job-in Register (F125)')],
-      });
-      job.ovId = ov.id;
-      alsoSave.push(ov);
-    }
+    for (const effect of rule.effects ?? []) await this.runEffect(effect, job, fields ?? {}, actor, alsoSave);
 
     await this.store.save(job, ...alsoSave);
+
+    // Preventive maintenance rolls forward when its job is done; a job cancelled
+    // before the work was done leaves the cycle due.
+    if (this.pm && job.pmScheduleId) {
+      if (toPhase === 'done' && fromPhase !== 'done') await this.pm.completed(job);
+      else if (this.store.isFinal('JOB', to) && fromPhase !== 'done') await this.pm.cancelled(job);
+    }
     return job;
   }
 
-  // ─── QP.56 AOG / ROA / Critical priority overlay (5.9) — FR-15 ───────────────
+  /** Tick checklist items off (or add a check found on the job). Locked once the job is closed. */
+  async updateChecklist(id: string, body: { items?: { key: string; done?: boolean; note?: string }[]; add?: { label: string; required?: boolean }[] }, actor: Actor): Promise<Job> {
+    const job = await this.get(id);
+    this.assertEditable(job);
+    const list: ChecklistItem[] = [...(job.checklist ?? [])];
+    const now = new Date().toISOString();
+    for (const u of body.items ?? []) {
+      const item = list.find((c) => c.key === u?.key);
+      if (!item) throw new BadRequestException(`No checklist item ${u?.key}`);
+      if (u.done !== undefined) {
+        item.done = !!u.done;
+        if (item.done) Object.assign(item, { by: actor.name, at: now });
+        else { delete item.by; delete item.at; }
+      }
+      if (u.note !== undefined) item.note = String(u.note).trim().slice(0, 300) || undefined;
+    }
+    for (const a of body.add ?? []) {
+      const label = String(a?.label ?? '').trim().slice(0, 160);
+      if (!label) throw new BadRequestException('Describe the check to add');
+      if (list.length >= 60) throw new BadRequestException('At most 60 checklist items');
+      let n = list.length + 1;
+      while (list.some((c) => c.key === `c${n}`)) n++;
+      list.push({ key: `c${n}`, label, required: a.required !== false, done: false });
+    }
+    const done = list.filter((c) => c.done).length;
+    job.checklist = list;
+    job.audit.push(this.store.audit(actor.name, actor.role, `Checklist updated — ${done}/${list.length} done`));
+    await this.store.save(job);
+    return job;
+  }
 
-  /** Raise a job to AOG / ROA / Critical priority and route the expedite path. */
+  private async runEffect(effect: Effect, job: Job, fields: Record<string, string>, actor: Actor, alsoSave: object[]): Promise<void> {
+    const p = (effect.params ?? {}) as Record<string, string>;
+    switch (effect.type) {
+      case 'setAttributes':
+        if (p.indentRef && fields[p.indentRef]) job.indentRef = fields[p.indentRef];
+        return;
+      case 'raiseDemand': {
+        const ref = str(fields[p.refField]) || (await this.store.nextDemandId());
+        if (!(await this.store.demandExists(ref))) {
+          alsoSave.push(this.store.newDemand({
+            id: ref, jobId: job.id,
+            partDescription: (p.descriptionField && fields[p.descriptionField]) || 'Spare per inspection',
+            partNo: (p.partNoField && fields[p.partNoField]) || '-',
+            qty: Number((p.qtyField && fields[p.qtyField]) || 1),
+            status: this.store.initialStatus('DEMAND'), statusSince: new Date().toISOString(),
+            raisedBy: actor.name, branch: job.repairUnit, quotations: [], records: [],
+            audit: [this.store.audit(actor.name, actor.role, `Demand raised from ${job.id}`)],
+          }));
+        }
+        if (!job.demandIds.includes(ref)) job.demandIds.push(ref);
+        return;
+      }
+      case 'recordMeter': {
+        // Jobs on registered assets with that meter only; a lower reading stops the step.
+        if (!job.assetId || !this.assets || !fields[p.field]) return;
+        try {
+          await this.assets.recordReading(job.assetId, p.meterKey, { value: fields[p.field] }, actor, `job:${job.id}`);
+        } catch (err) {
+          if (err instanceof NotFoundException) return;
+          throw err;
+        }
+        return;
+      }
+      case 'openVendorRepair': {
+        if (job.ovId) return;
+        const ov = this.store.newOv({
+          id: await this.store.nextOvId(),
+          jobId: job.id, defectReportRef: fields[p.refField] ?? '-', am75Ref: (p.workOrderField && fields[p.workOrderField]) || '-',
+          status: this.store.initialStatus('OV'), statusSince: new Date().toISOString(),
+          records: [], audit: [this.store.audit(actor.name, actor.role, 'Registered in the vendor repair register')],
+        });
+        job.ovId = ov.id;
+        alsoSave.push(ov);
+        return;
+      }
+    }
+  }
+
+  // ─── Priority overlay (QP.56 AOG / ROA in the aviation pack) — FR-15 ─────────
+
   async raisePriority(
     id: string,
     dto: { type: PriorityType; quantity?: number; route: RepairRoute; suffixK?: boolean; colRef: string; edd?: string; remark?: string },
-    actor: { name: string; role: Role },
+    actor: Actor,
   ): Promise<Job> {
     const job = await this.get(id);
-    if (job.status === 'CLOSED') throw new BadRequestException('Job is closed — priority cannot be raised (QP.44 stage 10)');
-    if (job.priority?.state === 'OPEN') throw new BadRequestException(`Job already flagged ${job.priority.type} (COL ${job.priority.colRef})`);
-    if (!dto.colRef?.trim()) throw new BadRequestException('COL AOG/ROA column reference is required');
+    if (this.store.isFinal('JOB', job.status)) throw new BadRequestException(`Job is closed — priority cannot be raised${this.store.procedureRef(' (QP.44 stage 10)')}`);
+    if (job.priority?.state === 'OPEN') throw new BadRequestException(`Job already flagged ${job.priority.type} (${this.aviation ? 'COL ' : 'ref '}${job.priority.colRef})`);
+    if (!dto.colRef?.trim()) throw new BadRequestException(this.aviation ? 'COL AOG/ROA column reference is required' : 'A priority reference (call log / ticket no.) is required');
+    if (!this.store.has('priority', dto.type)) throw new BadRequestException(`Unknown priority ${dto.type}`);
+    if (this.store.dict('route', true).length && !this.store.has('route', dto.route)) throw new BadRequestException(`Unknown route ${dto.route}`);
 
     const now = new Date().toISOString();
     job.priority = {
@@ -105,39 +220,37 @@ export class JobsService {
       raisedBy: actor.name,
       edd: dto.edd,
       remark: dto.remark,
-      audit: [this.store.audit(actor.name, actor.role, `${dto.type} raised on COL — expedite ${dto.route} route`, {
+      audit: [this.store.audit(actor.name, actor.role, `${dto.type} raised${this.aviation ? ' on COL' : ''} — expedite ${dto.route} route`, {
         colRef: dto.colRef, type: dto.type, route: dto.route, quantity: String(dto.quantity ?? 1),
         ...(dto.suffixK ? { suffixK: 'K' } : {}),
       })],
     };
-    job.audit.push(this.store.audit(actor.name, actor.role, `Priority ${dto.type} raised (COL ${dto.colRef}) — QP.56 expedite ${dto.route}`));
+    job.audit.push(this.store.audit(actor.name, actor.role, this.aviation ? `Priority ${dto.type} raised (COL ${dto.colRef}) — QP.56 expedite ${dto.route}` : `Priority ${dto.type} raised (ref ${dto.colRef}) — expedite ${dto.route}`));
     await this.store.save(job);
     return job;
   }
 
-  /** Update the COL remark / EDD / route while the priority is open. */
-  async updatePriority(id: string, dto: { route?: RepairRoute; edd?: string; remark?: string }, actor: { name: string; role: Role }): Promise<Job> {
+  async updatePriority(id: string, dto: { route?: RepairRoute; edd?: string; remark?: string }, actor: Actor): Promise<Job> {
     const job = await this.get(id);
     if (!job.priority || job.priority.state !== 'OPEN') throw new BadRequestException('No open priority on this job');
     if (dto.route) job.priority.route = dto.route;
     if (dto.edd !== undefined) job.priority.edd = dto.edd;
     if (dto.remark !== undefined) job.priority.remark = dto.remark;
-    job.priority.audit.push(this.store.audit(actor.name, actor.role, 'COL AOG/ROA remark updated', {
+    job.priority.audit.push(this.store.audit(actor.name, actor.role, this.aviation ? 'COL AOG/ROA remark updated' : 'Priority updated', {
       ...(dto.route ? { route: dto.route } : {}), ...(dto.edd ? { edd: dto.edd } : {}), ...(dto.remark ? { remark: dto.remark } : {}),
     }));
     await this.store.save(job);
     return job;
   }
 
-  /** Close the AOG/ROA status — on delivery, or on CAO/CPU downgrade to normal. */
-  async closePriority(id: string, dto: { reason: 'DELIVERED' | 'DOWNGRADED'; note?: string }, actor: { name: string; role: Role }): Promise<Job> {
+  async closePriority(id: string, dto: { reason: 'DELIVERED' | 'DOWNGRADED'; note?: string }, actor: Actor): Promise<Job> {
     const job = await this.get(id);
     if (!job.priority || job.priority.state !== 'OPEN') throw new BadRequestException('No open priority to close');
     job.priority.state = 'CLOSED';
     job.priority.closedAt = new Date().toISOString();
     job.priority.closeReason = dto.reason;
-    const label = dto.reason === 'DELIVERED' ? 'delivered' : 'downgraded to normal by CAO/CPU';
-    job.priority.audit.push(this.store.audit(actor.name, actor.role, `COL AOG/ROA column set to 'closed' — ${label}`, dto.note ? { note: dto.note } : undefined));
+    const label = dto.reason === 'DELIVERED' ? 'delivered' : `downgraded to normal${this.aviation ? ' by CAO/CPU' : ''}`;
+    job.priority.audit.push(this.store.audit(actor.name, actor.role, this.aviation ? `COL AOG/ROA column set to 'closed' — ${label}` : `Priority closed — ${label}`, dto.note ? { note: dto.note } : undefined));
     job.audit.push(this.store.audit(actor.name, actor.role, `Priority ${job.priority.type} closed (${label})`));
     await this.store.save(job);
     return job;

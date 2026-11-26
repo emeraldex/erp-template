@@ -2,7 +2,9 @@
  * Manage client organisations (tenants). Each lives in its own PostgreSQL schema.
  *
  *   node dist/tenants-cli.js create <id> --name "Acme Aero" --host acme.erp.example.com \
- *        [--host …] [--admin-email ops@acme.example --admin-name "Ops Lead"] [--demo]
+ *        [--host …] [--pack general|aviation|facilities|fleet|industrial|medical]
+ *        [--admin-email ops@acme.example --admin-name "Ops Lead"] [--demo]
+ *   node dist/tenants-cli.js packs                  # the sector packs a client can start from
  *   node dist/tenants-cli.js list
  *   node dist/tenants-cli.js migrate-all            # default schema + every tenant
  *   node dist/tenants-cli.js set-hosts <id> <host> […]
@@ -23,6 +25,8 @@ import { parseDatabaseUrl } from './tenancy/database';
 import { schemaFor, TENANT_ID } from './tenancy/tenant';
 import { CONTROL_SCHEMA, ensureControlSchema } from './tenancy/tenant-registry';
 import { seedReferenceData, seedWorkflow } from './seed-db';
+import { DEFAULT_PACK, getPack, PACKS } from './packs';
+import { seedPackDemo } from './packs/demo';
 
 const APP_ROOT = resolve(__dirname, '..');
 const HOST = /^[a-z0-9.-]+(:\d{1,5})?$/;
@@ -75,6 +79,7 @@ async function create(pool: Pool, args: Args): Promise<void> {
   if (!name) throw new Error('--name is required');
   const hosts = normaliseHosts(args.flags.host ?? []);
   if (!hosts.length) throw new Error('At least one --host is required (the address its users will open)');
+  const pack = getPack(args.flags.pack?.[0] ?? DEFAULT_PACK);
   const schema = schemaFor(id);
 
   const { rows: clash } = await pool.query(
@@ -89,10 +94,12 @@ async function create(pool: Pool, args: Args): Promise<void> {
   const prisma = client(schema);
   try {
     if (await prisma.user.count()) throw new Error(`Schema ${schema} already has users — refusing to seed over it`);
-    await seedWorkflow(prisma);
+    console.log(`→ setting up from the ${pack.name} pack`);
+    await seedWorkflow(prisma, pack);
     if (args.flags.demo) {
-      console.log('→ loading the demo dataset (ten demo users, password demo123 unless SEED_PASSWORD is set)');
-      await seedReferenceData(prisma);
+      console.log('→ loading the demo dataset (password demo123 unless SEED_PASSWORD is set)');
+      if (pack.id === 'aviation') await seedReferenceData(prisma);
+      else await seedPackDemo(prisma, pack);
     } else {
       const email = args.flags['admin-email']?.[0]?.toLowerCase();
       if (!email || !/^[^@\s]+@[^@\s]+$/.test(email)) throw new Error('--admin-email is required (or pass --demo)');
@@ -100,7 +107,7 @@ async function create(pool: Pool, args: Args): Promise<void> {
       await prisma.user.create({
         data: {
           id: `u-${randomBytes(4).toString('hex')}`, name: args.flags['admin-name']?.[0] ?? 'Administrator', email,
-          passwordHash: await hashPassword(password), role: 'ADMIN', designation: 'IT', branch: 'HQ', mustChangePassword: true,
+          passwordHash: await hashPassword(password), role: 'ADMIN', designation: 'IT', branch: pack.dictionaries.site[0].key, mustChangePassword: true,
         },
       });
       console.log(`\n  First administrator: ${email}\n  Temporary password:  ${password}\n  (shown once; they must change it at first sign-in)\n`);
@@ -141,6 +148,10 @@ async function main(): Promise<void> {
         }
         return;
       }
+      case 'packs': {
+        for (const p of Object.values(PACKS)) console.log(`${p.id.padEnd(11)} ${p.name}\n            ${p.description}`);
+        return;
+      }
       case 'set-hosts': {
         const [id, ...hosts] = args.positional;
         const res = await pool.query(`UPDATE ${CONTROL_SCHEMA}.tenants SET hosts = $2 WHERE id = $1`, [id, normaliseHosts(hosts)]);
@@ -157,7 +168,7 @@ async function main(): Promise<void> {
         return;
       }
       default:
-        console.log('Usage: tenants-cli create|list|migrate-all|set-hosts|suspend|activate (see the header of src/tenants-cli.ts)');
+        console.log('Usage: tenants-cli create|list|packs|migrate-all|set-hosts|suspend|activate (see the header of src/tenants-cli.ts)');
         process.exitCode = command ? 1 : 0;
     }
   } finally {

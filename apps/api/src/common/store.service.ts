@@ -1,5 +1,8 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { currentTenant } from '../tenancy/tenant';
+import { ADMIN_ROLE, CAPABILITIES, type Capability, type Kind as WorkflowKind, type Phase, type StatusMeta } from '../packs/types';
+import { AVIATION } from '../packs/aviation';
+import { dictionaryRows } from '../seed-db';
 import { PrismaService } from './prisma.service';
 import {
   fromBranch, mapDemand, mapFod, mapInvoice, mapJob, mapOv, mapPartner, mapSla,
@@ -61,8 +64,16 @@ interface WorkflowConfig {
   invoiceTransitions: TransitionRule<InvoiceStatus>[];
   invoiceStreams: InvoiceStreamDef[];
   slaRules: SlaRule[];
+  dictionary: Map<string, DictRow[]>;
+  /** The sector pack the organisation started from. */
+  packId: string;
+  /** Active people and their roles, for routing (e.g. the incident focal point). */
+  users: { name: string; role: string }[];
   loadedAt: number;
 }
+
+/** One vocabulary entry as the API serves it. */
+export interface DictRow { key: string; label: string; labelMs: string; meta: Record<string, unknown>; active: boolean }
 
 /** How long a tenant's cached workflow config is trusted before re-reading it. */
 const CONFIG_TTL_MS = 30_000;
@@ -91,6 +102,98 @@ export class StoreService {
   get invoiceStreams() { return this.cfg().invoiceStreams; }
   get slaRules() { return this.cfg().slaRules; }
 
+  // ─── per-organisation vocabulary ────────────────────────────────────────────
+
+  /** Entries of one dictionary kind (e.g. "site", "status:JOB"), in display order. */
+  dict(kind: string, activeOnly = false): DictRow[] {
+    const rows = this.cfg().dictionary.get(kind) ?? [];
+    return activeOnly ? rows.filter((r) => r.active) : rows;
+  }
+
+  dictionaryAll(): Record<string, DictRow[]> {
+    return Object.fromEntries(this.cfg().dictionary);
+  }
+
+  has(kind: string, key: string): boolean {
+    return this.dict(kind, true).some((r) => r.key === key);
+  }
+
+  statusKeys(kind: WorkflowKind): string[] {
+    return this.dict(`status:${kind}`).map((r) => r.key);
+  }
+
+  /** A workflow's starting status: the first in its list. */
+  initialStatus(kind: WorkflowKind): string {
+    const first = this.dict(`status:${kind}`)[0]?.key;
+    if (!first) throw new Error(`The ${kind} workflow has no statuses`);
+    return first;
+  }
+
+  finalStatuses(kind: WorkflowKind): string[] {
+    return this.dict(`status:${kind}`).filter((r) => (r.meta as { final?: boolean }).final).map((r) => r.key);
+  }
+
+  statusesInPhase(kind: WorkflowKind, ...phases: Phase[]): string[] {
+    return this.dict(`status:${kind}`).filter((r) => phases.includes((r.meta as { phase?: Phase }).phase as Phase)).map((r) => r.key);
+  }
+
+  status(kind: WorkflowKind, key: string): (StatusMeta & { label: string; labelMs: string }) | undefined {
+    const r = this.dict(`status:${kind}`).find((s) => s.key === key);
+    return r ? { ...(r.meta as unknown as StatusMeta), label: r.label, labelMs: r.labelMs } : undefined;
+  }
+
+  phaseOf(kind: WorkflowKind, key: string): Phase | undefined {
+    return this.status(kind, key)?.phase;
+  }
+
+  isFinal(kind: WorkflowKind, key: string): boolean {
+    return !!this.status(kind, key)?.final;
+  }
+
+  /** The {key: {en, ms, tone, phase…}} shape the web client renders status pills from. */
+  statusMeta(kind: WorkflowKind): Record<string, StatusMeta & { en: string; ms: string }> {
+    return this.dictMeta(`status:${kind}`) as unknown as Record<string, StatusMeta & { en: string; ms: string }>;
+  }
+
+  /** A dictionary as `{ KEY: { en, ms, ...meta } }`, the shape the web client renders from. */
+  dictMeta(kind: string): Record<string, Record<string, unknown> & { en: string; ms: string }> {
+    return Object.fromEntries(this.dict(kind).map((r) => [r.key, { ...r.meta, en: r.label, ms: r.labelMs || r.label }]));
+  }
+
+  label(kind: string, key: string): string {
+    return this.dict(kind).find((r) => r.key === key)?.label ?? key;
+  }
+
+  /** The sector pack the organisation started from (aviation for older ones). */
+  packId(): string {
+    return this.cfg().packId;
+  }
+
+  /**
+   * A citation of the aviation procedures (e.g. " (QP.44 stage 10)"). Other
+   * sectors have their own procedures, so messages leave it out for them.
+   */
+  procedureRef(text: string): string {
+    return this.cfg().packId === 'aviation' ? text : '';
+  }
+
+  /** Who incidents are routed to: the first active person (not IT) allowed to manage them. */
+  focalPoint(): string {
+    const roles = this.rolesWith('incidents.manage').filter((r) => r !== ADMIN_ROLE);
+    return this.cfg().users.find((u) => roles.includes(u.role))?.name ?? 'Safety focal point';
+  }
+
+  /** What a role may do; ADMIN may do everything. */
+  capabilitiesOf(role: string): Capability[] {
+    if (role === ADMIN_ROLE) return Object.keys(CAPABILITIES) as Capability[];
+    const meta = this.dict('role').find((r) => r.key === role)?.meta as { capabilities?: Capability[] } | undefined;
+    return meta?.capabilities ?? [];
+  }
+
+  rolesWith(capability: Capability): string[] {
+    return this.dict('role', true).map((r) => r.key).filter((k) => this.capabilitiesOf(k).includes(capability));
+  }
+
   /** Load the current tenant's config if missing or stale. */
   async ensureConfig(): Promise<void> {
     const c = this.configs.get(currentTenant().id);
@@ -98,11 +201,26 @@ export class StoreService {
   }
 
   async reloadConfig(): Promise<void> {
-    const [rules, streams, sla] = await Promise.all([
+    // Organisations created before dictionaries existed all ran the aviation
+    // configuration: give them its vocabulary once, so nothing changes for them.
+    if ((await this.prisma.dictionaryEntry.count()) === 0) {
+      await this.prisma.dictionaryEntry.createMany({ data: dictionaryRows(AVIATION).map((r) => ({ ...r, meta: r.meta as never })), skipDuplicates: true });
+    }
+    await this.backfillAviationActions();
+    const [rules, streams, sla, entries, pack, focal] = await Promise.all([
       this.prisma.transitionRuleRow.findMany({ orderBy: { seq: 'asc' } }),
       this.prisma.invoiceStreamDef.findMany({ orderBy: { seq: 'asc' } }),
       this.prisma.slaRule.findMany({ orderBy: { seq: 'asc' } }),
+      this.prisma.dictionaryEntry.findMany({ orderBy: [{ kind: 'asc' }, { seq: 'asc' }, { id: 'asc' }] }),
+      this.prisma.setting.findUnique({ where: { key: 'pack' } }),
+      this.prisma.user.findMany({ where: { deactivatedAt: null }, select: { name: true, role: true }, orderBy: { createdAt: 'asc' } }),
     ]);
+    const dictionary = new Map<string, DictRow[]>();
+    for (const e of entries) {
+      const list = dictionary.get(e.kind) ?? [];
+      list.push({ key: e.key, label: e.label, labelMs: e.labelMs, meta: (e.meta ?? {}) as Record<string, unknown>, active: e.active });
+      dictionary.set(e.kind, list);
+    }
     const of = (kind: string) => rules.filter((r) => r.kind === kind).map(mapTransition);
     this.configs.set(currentTenant().id, {
       jobTransitions: of('JOB') as TransitionRule<JobStatus>[],
@@ -111,8 +229,31 @@ export class StoreService {
       invoiceTransitions: of('INVOICE') as TransitionRule<InvoiceStatus>[],
       invoiceStreams: streams.map(mapStream),
       slaRules: sla.map(mapSla),
+      dictionary,
+      // Organisations from before packs existed ran the aviation configuration.
+      packId: ((pack?.value ?? {}) as { id?: string }).id ?? 'aviation',
+      users: focal,
       loadedAt: Date.now(),
     });
+  }
+
+  /**
+   * Before step actions existed, the aviation behaviour was built into the
+   * services. Give such organisations the equivalent actions once: only when
+   * no step has any action yet, and only on steps matching the aviation ones.
+   */
+  private async backfillAviationActions(): Promise<void> {
+    if (await this.prisma.setting.count({ where: { key: 'pack' } })) return; // set up from a pack: nothing to infer
+    const withActions = await this.prisma.transitionRuleRow.count({ where: { NOT: { effects: { equals: [] } } } });
+    if (withActions > 0) return;
+    for (const kind of ['JOB', 'DEMAND', 'OV', 'INVOICE'] as const) {
+      for (const r of AVIATION.transitions[kind].filter((t) => t.effects?.length)) {
+        await this.prisma.transitionRuleRow.updateMany({ where: { kind, from: r.from, to: r.to }, data: { effects: r.effects as never } });
+      }
+    }
+    for (const s of AVIATION.invoiceStreams.filter((x) => x.requiredFields)) {
+      await this.prisma.invoiceStreamDef.updateMany({ where: { id: s.id, requiredFields: { equals: {} } }, data: { requiredFields: s.requiredFields as never } });
+    }
   }
 
   // ─── helpers carried over from the in-memory store ──────────────────────────
@@ -136,8 +277,13 @@ export class StoreService {
     return `${prefix}-${year}-${String(max + 1).padStart(4, '0')}`;
   }
 
-  async nextJobId(): Promise<string> {
-    return this.idFrom('PS', (await this.prisma.job.findMany({ select: { id: true } })).map((r) => r.id));
+  async nextJobId(prefix = 'PS'): Promise<string> {
+    const ids = (await this.prisma.job.findMany({ where: { id: { startsWith: `${prefix}-` } }, select: { id: true } })).map((r) => r.id);
+    return this.idFrom(prefix, ids);
+  }
+
+  async nextDemandId(): Promise<string> {
+    return this.idFrom('DM', (await this.prisma.demand.findMany({ where: { id: { startsWith: 'DM-' } }, select: { id: true } })).map((r) => r.id));
   }
   async nextOvId(): Promise<string> {
     return this.idFrom('OV', (await this.prisma.ovRepair.findMany({ select: { id: true } })).map((r) => r.id));
@@ -402,6 +548,8 @@ export class StoreService {
         repairUnit: fromBranch(job.repairUnit), status: job.status, location: job.location,
         receivedAt: new Date(job.receivedAt), statusSince: new Date(job.statusSince),
         indentRef: job.indentRef ?? null, ovId: job.ovId ?? null,
+        jobType: job.jobType ?? 'CORRECTIVE', assetId: job.assetId ?? null, pmScheduleId: job.pmScheduleId ?? null,
+        checklist: (job.checklist ?? []) as never,
         ordinal: await this.ordinalIn(tx.job),
         records: { create: this.recordCreate(job.records) },
         audit: { create: this.auditCreate(job.audit) },
@@ -577,6 +725,7 @@ export class StoreService {
         statusSince: new Date(job.statusSince),
         indentRef: job.indentRef ?? null,
         ovId: job.ovId ?? null,
+        checklist: (job.checklist ?? []) as never,
         version: { increment: 1 },
       },
     });

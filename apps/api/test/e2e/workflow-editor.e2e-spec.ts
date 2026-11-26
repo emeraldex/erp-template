@@ -27,7 +27,8 @@ describe('Workflow editor (integration)', () => {
     const job = snap.kinds.find((k: { kind: string }) => k.kind === 'JOB');
     expect(job).toEqual(expect.objectContaining({ initial: 'REGISTERED', version: expect.any(String) }));
     expect(job.statuses).toContain('AWAITING_SPARE');
-    expect(job.protected).toEqual(expect.arrayContaining([{ from: 'TDI', to: 'AWAITING_SPARE', keys: ['f212Ref'] }]));
+    expect(job.protected).toEqual(expect.arrayContaining([{ from: 'TDI', to: 'AWAITING_SPARE', fields: [{ key: 'f212Ref', by: 'Raise a parts demand' }] }]));
+    expect(job.actions.map((a: { type: string }) => a.type)).toEqual(expect.arrayContaining(['raiseDemand', 'openVendorRepair']));
     expect(snap.roles).toContain('QUALITY');
     expect(snap.sla.version).toEqual(expect.any(String));
   });
@@ -62,12 +63,13 @@ describe('Workflow editor (integration)', () => {
     await send('put', '/workflow/transitions/ov', { version: 'stale', transitions: ov.transitions }).expect(409);
   });
 
-  it('refuses to remove what the system depends on, listing every problem', async () => {
+  it('refuses to drop a field a step\'s action needs, listing every problem', async () => {
     const snap = (await get('/workflow')).body;
     const inv = snap.kinds.find((k: { kind: string }) => k.kind === 'INVOICE');
-    const broken = inv.transitions.filter((r: { to: string }) => r.to !== 'PAID');
+    const at = inv.transitions.findIndex((r: { to: string }) => r.to === 'PAID') + 1;
+    const broken = inv.transitions.map((r: { to: string }) => (r.to === 'PAID' ? { ...r, requires: [] } : r));
     const res = await send('put', '/workflow/transitions/invoice', { version: inv.version, transitions: broken }).expect(400);
-    expect(res.body.errors).toContain('SUBMITTED → PAID is used by the system and cannot be removed');
+    expect(res.body.errors).toContain(`Transition ${at} (SUBMITTED → PAID): field paymentRef is needed by the action "Record payment" and must stay mandatory`);
     const preview = (await send('post', '/workflow/transitions/invoice/preview', { transitions: broken }).expect(200)).body;
     expect(preview.ok).toBe(false);
   });

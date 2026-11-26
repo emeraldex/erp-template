@@ -5,14 +5,18 @@ import { useEffect, useState } from "react";
 import { api, getWithFallback } from "@/lib/api";
 import { FodIncident, Tool, TrainingRecord } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
+import { useVocab } from "@/lib/vocab";
 import { Button, OfflineNotice, PageHeader, Panel, StatusPill, Table, Td, Tr } from "@/components/ui";
 
-const AREA_TONE = { AWARENESS: "info", CONTROL: "warn", CRITICAL: "bad" } as const;
+const AREA_TONES = ["info", "warn", "bad"] as const;
 const INC_TONE = { OPEN: "bad", UNDER_REVIEW: "warn", CLOSED: "good" } as const;
 const TOOL_TONE = { IN: "good", OUT: "warn", MISSING: "bad" } as const;
 
 export default function FodPage() {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const { terms, modules, dict, label, aviation } = useVocab();
+  const areas = dict("incidentArea");
+  const areaTone = (key: string) => AREA_TONES[Math.min(Math.max(areas.findIndex((a) => a.key === key), 0), 2)];
   const [incidents, setIncidents] = useState<FodIncident[]>([]);
   const [tools, setTools] = useState<Tool[]>([]);
   const [training, setTraining] = useState<TrainingRecord[]>([]);
@@ -31,9 +35,9 @@ export default function FodPage() {
     getWithFallback<FodIncident[]>("/fod/incidents", "fodIncidents")
       .then((r) => { setIncidents(r.data); setOffline(r.offline); })
       .catch(console.error);
-    getWithFallback<Tool[]>("/fod/tools", "tools").then((r) => setTools(r.data)).catch(console.error);
-    getWithFallback<TrainingRecord[]>("/fod/training", "training").then((r) => setTraining(r.data)).catch(console.error);
-  }, []);
+    if (modules.tools) getWithFallback<Tool[]>("/fod/tools", "tools").then((r) => setTools(r.data)).catch(console.error);
+    if (modules.training) getWithFallback<TrainingRecord[]>("/fod/training", "training").then((r) => setTraining(r.data)).catch(console.error);
+  }, [modules.tools, modules.training]);
 
   async function report() {
     setBusy(true); setError(null);
@@ -63,15 +67,15 @@ export default function FodPage() {
     <div>
       <OfflineNotice show={offline} />
       <PageHeader
-        eyebrow="QP.46 · Foreign Object Control & Quality Compliance"
-        title={t("fod")}
-        actions={<Button onClick={() => setShowNew(!showNew)} variant={showNew ? "ghost" : "primary"}>{showNew ? "Cancel" : "+ Report FOD incident"}</Button>}
+        eyebrow={aviation ? "QP.46 · Foreign Object Control & Quality Compliance" : "Incidents, near misses and corrective action"}
+        title={aviation ? t("fod") : terms.incidents}
+        actions={<Button onClick={() => setShowNew(!showNew)} variant={showNew ? "ghost" : "primary"}>{showNew ? "Cancel" : `+ Report ${terms.incident.toLowerCase()}`}</Button>}
       />
       {error && <p className="mb-4 rounded border border-brand-bright/40 bg-brand-bright/10 px-3 py-2 text-sm text-brand-bright">{error}</p>}
 
       {showNew && (
         <div className="panel ticked fade-up mb-6 p-5">
-          <p className="eyebrow mb-3">FOD incident / near-mishap — routed to the FOD Focal Point for trend analysis</p>
+          <p className="eyebrow mb-3">{aviation ? "FOD incident / near-mishap — routed to the FOD Focal Point for trend analysis" : `${terms.incident} — routed to the safety focal point for review`}</p>
           <div className="grid gap-3 sm:grid-cols-3">
             {(
               [
@@ -90,14 +94,12 @@ export default function FodPage() {
             <label className="block">
               <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Area designation</span>
               <select value={form.area} onChange={(e) => setForm({ ...form, area: e.target.value as FodIncident["area"] })} className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace">
-                <option value="AWARENESS">FOD AWARENESS</option>
-                <option value="CONTROL">FOD CONTROL</option>
-                <option value="CRITICAL">FOD CRITICAL</option>
+                {areas.map((a) => <option key={a.key} value={a.key}>{aviation ? `FOD ${a.key}` : lang === "ms" && a.labelMs ? a.labelMs : a.label}</option>)}
               </select>
             </label>
           </div>
           <div className="mt-4">
-            <Button disabled={busy || Object.values(form).some((v) => !v)} onClick={report}>Submit to FOD Focal Point</Button>
+            <Button disabled={busy || Object.values(form).some((v) => !v)} onClick={report}>{aviation ? "Submit to FOD Focal Point" : "Submit to the focal point"}</Button>
           </div>
         </div>
       )}
@@ -114,7 +116,7 @@ export default function FodPage() {
                     {inc.partName}
                     <span className="mono ml-2 text-xs text-steel">{inc.typeModel} · {inc.serialNo}</span>
                   </Td>
-                  <Td><StatusPill value={inc.area} tone={AREA_TONE[inc.area]} /></Td>
+                  <Td><StatusPill value={aviation ? inc.area : label("incidentArea", inc.area)} tone={areaTone(inc.area)} /></Td>
                   <Td className="mono text-xs text-steel">{inc.location}</Td>
                   <Td className="mono text-xs text-steel">{inc.reporter}</Td>
                   <Td><StatusPill value={inc.status} tone={INC_TONE[inc.status]} /></Td>
@@ -123,16 +125,16 @@ export default function FodPage() {
             </Table>
           </div>
 
-          <Panel className="fade-up d3 mt-4 p-5">
-            <p className="eyebrow mb-3">FOD training records · initial + annual recurrent (QP.10)</p>
+          {modules.training && <Panel className="fade-up d3 mt-4 p-5">
+            <p className="eyebrow mb-3">{aviation ? "FOD training records · initial + annual recurrent (QP.10)" : "Training records"}</p>
             <div className="grid gap-2 sm:grid-cols-2">
               {training.map((tr, i) => {
-                const due = tr.nextDue <= "2026-08-31";
+                const due = new Date(tr.nextDue).getTime() - Date.now() < 60 * 86_400_000;
                 return (
                   <div key={i} className="flex items-center justify-between rounded-md border hairline bg-ink-deep/40 px-3 py-2">
                     <div>
                       <p className="text-sm">{tr.person}</p>
-                      <p className="mono text-[10px] tracking-widest text-dim">{tr.course.replaceAll("_", " ")}</p>
+                      <p className="mono text-[10px] tracking-widest text-dim">{aviation ? tr.course.replaceAll("_", " ") : label("course", tr.course)}</p>
                     </div>
                     <p className={`mono text-[10.5px] tracking-widest ${due ? "text-amber" : "text-steel"}`}>
                       NEXT {tr.nextDue}{due && " ▲"}
@@ -141,10 +143,10 @@ export default function FodPage() {
                 );
               })}
             </div>
-          </Panel>
+          </Panel>}
         </div>
 
-        <Panel ticked={tools.some((tl) => tl.status === "MISSING")} className="fade-up d2 p-5">
+        {modules.tools && <Panel ticked={tools.some((tl) => tl.status === "MISSING")} className="fade-up d2 p-5">
           <p className="eyebrow mb-3">Tool / TPME accountability · shadow boards</p>
           <div className="space-y-4">
             {boards.map((b) => (
@@ -177,7 +179,7 @@ export default function FodPage() {
               </div>
             ))}
           </div>
-        </Panel>
+        </Panel>}
       </div>
     </div>
   );

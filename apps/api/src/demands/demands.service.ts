@@ -20,7 +20,7 @@ export class DemandsService {
   /** Suppliers respond to the RFQ — quotations accumulate before evaluation. */
   async addQuotation(id: string, q: Quotation, actor: { name: string; role: Role }): Promise<Demand> {
     const dm = await this.get(id);
-    if (dm.status !== 'RFQ_ISSUED') throw new BadRequestException('Quotations are recorded while the RFQ is open');
+    if (!this.store.status('DEMAND', dm.status)?.acceptsQuotations) throw new BadRequestException('Quotations are recorded while the RFQ is open');
     dm.quotations.push(q);
     dm.audit.push(this.store.audit(actor.name, actor.role, `Quotation received — ${q.supplier} (RM ${q.priceMYR.toLocaleString()})`));
     await this.store.save(dm);
@@ -29,40 +29,63 @@ export class DemandsService {
 
   async transition(id: string, to: DemandStatus, fields: Record<string, string>, actor: { name: string; role: Role }): Promise<Demand> {
     const dm = await this.get(id);
+    if (this.store.isFinal('DEMAND', dm.status)) throw new BadRequestException('Demand is closed');
+    const f = fields ?? {};
+    const rule = this.store.demandTransitions.find((r) => r.from === dm.status && r.to === to);
 
-    // QP.14 §5 — minimum three quotations compared, unless local purchase (F241)
-    if (to === 'EVALUATED') {
-      const local = !!fields?.f241Ref;
-      if (!local && dm.quotations.length < 3) {
-        throw new BadRequestException(
-          `QP.14 requires a minimum of three quotations (${dm.quotations.length} received). ` +
-          'Record more quotations, or record a local-purchase approval (Borang Kelulusan Pembelian F241).',
-        );
+    // Checks that must pass before the step is taken.
+    for (const e of rule?.effects ?? []) {
+      const p = (e.params ?? {}) as Record<string, string | number>;
+      if (e.type === 'evaluateQuotations') {
+        const bypass = !!(p.bypassField && f[p.bypassField as string]);
+        const min = Number(p.min ?? 3);
+        if (!bypass && dm.quotations.length < min) {
+          const word = ['zero', 'one', 'two', 'three', 'four', 'five'][min] ?? String(min);
+          const bypassLabel = rule?.requires.find((r) => r.key === p.bypassField)?.label;
+          throw new BadRequestException(this.store.packId() === 'aviation'
+            ? `QP.14 requires a minimum of ${word} quotations (${dm.quotations.length} received). ` +
+              'Record more quotations, or record a local-purchase approval (Borang Kelulusan Pembelian F241).'
+            : `This purchase needs a minimum of ${word} quotations (${dm.quotations.length} received). Record more quotations` +
+              (p.bypassField ? `, or record a single-source approval${bypassLabel ? ` (${bypassLabel})` : ''}.` : '.'));
+        }
+        const selected = p.selectionField ? f[p.selectionField as string] : undefined;
+        if (selected && !bypass && !dm.quotations.some((q) => q.supplierId === selected)) {
+          throw new BadRequestException('Selected supplier has no quotation on file');
+        }
       }
-      if (fields?.selectedSupplierId && !dm.quotations.some((q) => q.supplierId === fields.selectedSupplierId) && !local) {
-        throw new BadRequestException('Selected supplier has no quotation on file');
+    }
+
+    applyTransition(dm, this.store.demandTransitions, to, f, actor);
+
+    for (const e of rule?.effects ?? []) {
+      const p = (e.params ?? {}) as Record<string, string>;
+      switch (e.type) {
+        case 'recordStockCheck':
+          dm.stockCheck = { f244Ref: f[p.refField], available: false };
+          break;
+        case 'issueFromStock':
+          dm.stockCheck = { ...(dm.stockCheck ?? { f244Ref: '-' }), available: true, holdingUnit: p.holdingField ? f[p.holdingField] : undefined };
+          break;
+        case 'setAttributes':
+          if (p.rfqRef && f[p.rfqRef]) dm.rfqRef = f[p.rfqRef];
+          if (p.poRef && f[p.poRef]) dm.poRef = f[p.poRef];
+          break;
+        case 'evaluateQuotations': {
+          const bypass = p.bypassField ? f[p.bypassField] : undefined;
+          dm.evaluation = {
+            f221Ref: (p.refField && f[p.refField]) || '-',
+            selectedSupplierId: (p.selectionField && f[p.selectionField]) || '',
+            ...(bypass ? { localPurchase: true, f241Ref: bypass } : {}),
+          };
+          break;
+        }
+        case 'recordReceipt':
+          if (p.discrepancyField && f[p.discrepancyField]) {
+            dm.discrepancy = { f217Ref: f[p.discrepancyField], note: (p.noteField && f[p.noteField]) || 'Stores Discrepancy Report raised' };
+            dm.records.push({ formNo: 'F217', refNo: f[p.discrepancyField], date: new Date().toISOString().slice(0, 10), by: actor.name });
+          }
+          break;
       }
-    }
-
-    applyTransition(dm, this.store.demandTransitions, to, fields ?? {}, actor);
-
-    if (to === 'STOCK_CHECK') dm.stockCheck = { f244Ref: fields.f244Ref, available: false };
-    if (to === 'ISSUED_FROM_STOCK' && dm.stockCheck) {
-      dm.stockCheck.available = true;
-      dm.stockCheck.holdingUnit = fields.holdingUnit;
-    }
-    if (to === 'RFQ_ISSUED') dm.rfqRef = fields.f220Ref;
-    if (to === 'EVALUATED') {
-      dm.evaluation = {
-        f221Ref: fields.f221Ref,
-        selectedSupplierId: fields.selectedSupplierId,
-        ...(fields.f241Ref ? { localPurchase: true, f241Ref: fields.f241Ref } : {}),
-      };
-    }
-    if (to === 'PO_ISSUED') dm.poRef = fields.f312Ref;
-    if (to === 'RECEIVED' && fields?.f217Ref) {
-      dm.discrepancy = { f217Ref: fields.f217Ref, note: fields.discrepancyNote ?? 'Stores Discrepancy Report raised' };
-      dm.records.push({ formNo: 'F217', refNo: fields.f217Ref, date: new Date().toISOString().slice(0, 10), by: actor.name });
     }
 
     await this.store.save(dm);

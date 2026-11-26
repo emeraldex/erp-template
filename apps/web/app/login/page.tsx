@@ -10,7 +10,7 @@ import { Button } from "@/components/ui";
 const SHOW_DEMO_ACCOUNTS = DEMO_MODE || process.env.NODE_ENV !== "production";
 
 // Section 4 actors — every role a "process owner" of specific JTS stages
-const DEMO_USERS: [string, string][] = [
+const AVIATION_DEMO_USERS: [string, string][] = [
   ["aisyah@company.example", "ADMIN · IT"],
   ["rahim@company.example", "STORES · StS"],
   ["meiling@company.example", "WORKSHOP · Tst"],
@@ -21,6 +21,13 @@ const DEMO_USERS: [string, string][] = [
   ["qistina@company.example", "QUALITY · QAD"],
   ["farah@company.example", "FINANCE"],
   ["zara@company.example", "BILLING"],
+];
+
+// Organisations started from the other sector packs: one demo person per standard role.
+const PACK_DEMO_USERS: [string, string][] = [
+  ["admin@company.example", "ADMIN"], ["helpdesk@company.example", "HELPDESK"], ["supervisor@company.example", "SUPERVISOR"],
+  ["technician@company.example", "TECHNICIAN"], ["stores@company.example", "STORES"], ["purchasing@company.example", "PURCHASING"],
+  ["finance@company.example", "FINANCE"], ["manager@company.example", "MANAGER"],
 ];
 
 const SSO_ERRORS: Record<string, string> = {
@@ -36,11 +43,18 @@ const SSO_ERRORS: Record<string, string> = {
 export default function LoginPage() {
   const router = useRouter();
   const [org, setOrg] = useState<string | null>(null);
+  const [demoUsers, setDemoUsers] = useState(AVIATION_DEMO_USERS);
   const [sso, setSso] = useState<{ enabled: boolean; label: string; passwordLogin: boolean } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    api.get<{ name: string }>("/tenant").then((t) => setOrg(t.name)).catch(() => {});
+    api.get<{ name: string; pack?: string }>("/tenant").then((t) => {
+      setOrg(t.name);
+      if (t.pack && t.pack !== "aviation") {
+        setDemoUsers(PACK_DEMO_USERS);
+        setEmail((e) => (e === "aisyah@company.example" ? "admin@company.example" : e));
+      }
+    }).catch(() => {});
     api.get<{ enabled: boolean; label: string; passwordLogin: boolean }>("/auth/sso").then(setSso).catch(() => {});
     const q = new URLSearchParams(window.location.search);
     if (q.get("sso") === "ok") {
@@ -149,7 +163,7 @@ export default function LoginPage() {
         <div className="fade-up d3 mt-6">
           <p className="eyebrow mb-2">Demo accounts · password demo123</p>
           <div className="grid grid-cols-2 gap-1.5">
-            {DEMO_USERS.map(([mail, role]) => (
+            {demoUsers.map(([mail, role]) => (
               <button
                 key={mail}
                 onClick={() => setEmail(mail)}

@@ -1,20 +1,49 @@
-import {
-  DEMAND_TRANSITIONS, INVOICE_STREAMS, INVOICE_TRANSITIONS, JOB_TRANSITIONS, OV_TRANSITIONS, SLA_RULES,
-} from '../../src/common/workflow-config';
 import type { AuditEntry, Demand, FodIncident, Invoice, Job, OvRepair, Partner, Role, Tool } from '../../src/common/types';
-import type { StoreService } from '../../src/common/store.service';
+import { StoreService, type DictRow } from '../../src/common/store.service';
+import type { Pack } from '../../src/packs/types';
+import type { SettingsService } from '../../src/settings/settings.service';
+import { AVIATION } from '../../src/packs/aviation';
+import { dictionaryRows } from '../../src/seed-db';
+
+/** The vocabulary lookups are pure, so the fake borrows the real ones. */
+const BORROWED = [
+  'dict', 'dictionaryAll', 'has', 'statusKeys', 'initialStatus', 'finalStatuses', 'statusesInPhase', 'status',
+  'phaseOf', 'isFinal', 'statusMeta', 'dictMeta', 'label', 'capabilitiesOf', 'rolesWith', 'packId', 'procedureRef', 'focalPoint',
+] as const;
 
 /**
  * In-memory stand-in for StoreService, loaded with the shipped workflow config.
  * Lets the domain services run their real rules without a database.
  */
 export class FakeStore {
-  jobTransitions = structuredClone(JOB_TRANSITIONS);
-  demandTransitions = structuredClone(DEMAND_TRANSITIONS);
-  ovTransitions = structuredClone(OV_TRANSITIONS);
-  invoiceTransitions = structuredClone(INVOICE_TRANSITIONS);
-  invoiceStreams = structuredClone(INVOICE_STREAMS);
-  slaRules = structuredClone(SLA_RULES);
+  jobTransitions;
+  demandTransitions;
+  ovTransitions;
+  invoiceTransitions;
+  invoiceStreams;
+  slaRules;
+  dictionary = new Map<string, DictRow[]>();
+
+  constructor(pack: Pack = AVIATION) {
+    this.packIdValue = pack.id;
+    this.jobTransitions = structuredClone(pack.transitions.JOB);
+    this.demandTransitions = structuredClone(pack.transitions.DEMAND);
+    this.ovTransitions = structuredClone(pack.transitions.OV);
+    this.invoiceTransitions = structuredClone(pack.transitions.INVOICE);
+    this.invoiceStreams = structuredClone(pack.invoiceStreams);
+    this.slaRules = structuredClone(pack.slaRules);
+    for (const r of dictionaryRows(pack)) {
+      const list = this.dictionary.get(r.kind) ?? [];
+      list.push({ key: r.key, label: r.label, labelMs: r.labelMs, meta: r.meta as Record<string, unknown>, active: true });
+      this.dictionary.set(r.kind, list);
+    }
+    for (const m of BORROWED) (this as Record<string, unknown>)[m] = (StoreService.prototype as unknown as Record<string, unknown>)[m];
+  }
+
+  packIdValue: string;
+  users = [{ name: 'Aisyah Rahman', role: 'ADMIN' }, { name: 'Qistina Yusof', role: 'QUALITY' }];
+
+  cfg() { return { dictionary: this.dictionary, packId: this.packIdValue, users: this.users }; }
 
   jobsById = new Map<string, Job>();
   demandsById = new Map<string, Demand>();
@@ -41,7 +70,8 @@ export class FakeStore {
   async fodIncident(id: string) { return this.fodById.get(id) ?? null; }
   async tool(tag: string) { return this.toolsByTag.get(tag) ?? null; }
 
-  async nextJobId() { return `PS-TEST-${++this.seq}`; }
+  async nextJobId(prefix = 'PS') { return `${prefix}-TEST-${++this.seq}`; }
+  async nextDemandId() { return `DM-TEST-${++this.seq}`; }
   async nextOvId() { return `OV-TEST-${++this.seq}`; }
   async nextInvoiceId() { return `INV-TEST-${++this.seq}`; }
   async nextFodId() { return `FOD-TEST-${++this.seq}`; }
@@ -83,4 +113,12 @@ export function makePartner(over: Partial<Partner> = {}): Partner {
     id: 'SUP-2026-9001', name: 'Test Supplier', type: 'SUPPLIER', country: 'MY', certifications: [],
     status: 'REGISTERED', lists: ['F224'], rating: 2, nonConformances: 0, factorsEvaluated: 0, cars: [], audit: [], ...over,
   } as Partner;
+}
+
+/** Settings as a fresh organisation on the given pack would have them. */
+export function fakeSettings(pack: Pack = AVIATION) {
+  return {
+    terms: pack.terms, modules: pack.modules,
+    defaults: { jobPrefix: pack.defaults.jobPrefix, initialLocation: pack.defaults.initialLocation },
+  } as unknown as SettingsService;
 }

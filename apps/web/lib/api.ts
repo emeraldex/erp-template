@@ -105,7 +105,10 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    const err = new ApiError(res.status, body?.message ?? res.statusText, body?.code);
+    // Validation failures list every problem; show them, not just the headline.
+    const details = Array.isArray(body?.errors) && body.errors.length ? `: ${body.errors.join("; ")}` : "";
+    const headline = Array.isArray(body?.message) ? body.message.join("; ") : (body?.message ?? res.statusText);
+    const err = new ApiError(res.status, `${headline}${details}`, body?.code);
     const isAuthCall = path.startsWith("/auth/login") || path.startsWith("/auth/change-password");
     if (res.status === 401 && !isAuthCall) {
       setSession(null);

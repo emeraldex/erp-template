@@ -10,11 +10,16 @@ organisation per prospect with sample data:
 
 ```bash
 docker compose exec api node dist/tenants-cli.js create apex --name "Apex Aero Services" --host apex.demo.example.com --demo
+# …or in the prospect's own sector:
+docker compose exec api node dist/tenants-cli.js create metro --name "Metro Fleet" --host metro.demo.example.com --pack fleet --demo
 ```
 
-The demo dataset has ten users, one per role (password `demo123`, or
+The aviation demo dataset has ten users, one per role (password `demo123`, or
 `SEED_PASSWORD`), and jobs, demands, outside-vendor repairs, invoices and
-suppliers at every stage. Set the prospect's company name in Settings, and the
+suppliers at every stage. The other packs' demos have a user per role
+(`admin@`, `helpdesk@`, `supervisor@`, `technician@`, `manager@company.example`…),
+six assets with meters and preventive schedules, and work orders across the
+workflow — the first preventive work order appears within the hour. Set the prospect's company name in Settings, and the
 tax rate their contracts use.
 
 For a laptop with no server at all, build the web app with
