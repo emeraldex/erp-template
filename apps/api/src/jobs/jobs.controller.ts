@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { InModule, Requires } from '../auth/roles.decorator';
 import { JobsService } from './jobs.service';
@@ -32,6 +32,20 @@ export class JobsController {
     return this.svc.register(dto, { name: req.user.name, role: req.user.role });
   }
 
+  /** Assign to a person, or `{ "userId": null }` to unassign. */
+  @Patch(':id/assignee')
+  @Requires('jobs.assign')
+  assignee(@Param('id') id: string, @Body() body: { userId?: string | null }, @Req() req: any) {
+    return this.svc.assign(id, body?.userId || null, { name: req.user.name, role: req.user.role, sub: req.user.sub });
+  }
+
+  /** Take an unassigned job whose next step your role owns. */
+  @Post(':id/claim')
+  @HttpCode(200)
+  claim(@Param('id') id: string, @Req() req: any) {
+    return this.svc.claim(id, { name: req.user.name, role: req.user.role, sub: req.user.sub });
+  }
+
   @Patch(':id/checklist')
   checklist(
     @Param('id') id: string,
@@ -47,7 +61,7 @@ export class JobsController {
     @Body() body: { to: JobStatus; fields?: Record<string, string> },
     @Req() req: any,
   ) {
-    return this.svc.transition(id, body.to, body.fields ?? {}, { name: req.user.name, role: req.user.role });
+    return this.svc.transition(id, body.to, body.fields ?? {}, { name: req.user.name, role: req.user.role, sub: req.user.sub });
   }
 
   // QP.56 AOG / ROA / Critical priority overlay (5.9) — Mgr PC / CsE (PCE) own the COL column

@@ -56,6 +56,11 @@ export const EFFECTS: EffectDef[] = [
     needs: ['refField'],
   },
   {
+    type: 'assignTo', kind: 'JOB', label: 'Assign to a person', description: 'Assigns the work order to the person chosen in a field; they are notified.',
+    params: [{ name: 'field', label: 'Person field', type: 'field', required: true }],
+    needs: ['field'],
+  },
+  {
     type: 'recordMeter', kind: 'JOB', label: 'Record a meter reading', description: 'Records the entered value on the asset’s meter (e.g. odometer, run hours); meter-based maintenance that falls due is raised.',
     params: [
       { name: 'field', label: 'Reading field', type: 'field', required: true },

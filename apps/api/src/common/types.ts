@@ -68,6 +68,10 @@ export interface Job {
   /** The preventive-maintenance schedule that raised this job. */
   pmScheduleId?: string;
   checklist?: ChecklistItem[];
+  /** The person the work is assigned to. */
+  assigneeId?: string;
+  assigneeName?: string;
+  assignedAt?: string;
   records: FormRecord[];   // Section 6 forms attached to the job
   audit: AuditEntry[];
 }

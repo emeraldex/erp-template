@@ -77,8 +77,8 @@ describe('Any sector: a fleet operator on the fleet pack (integration)', () => {
     expect(job).toEqual(expect.objectContaining({ status: 'OPEN', location: 'YARD' }));
     expect(job.id).toMatch(/^JC-\d{4}-\d{4}$/);
 
-    expect((await move(job.id, 'ASSIGNED', { assignee: 'Ravi' }, 'technician')).status).toBe(403);
-    await move(job.id, 'ASSIGNED', { assignee: 'Ravi' }, 'helpdesk').then(st(200));
+    expect((await move(job.id, 'ASSIGNED', { assignee: 'u-technician' }, 'technician')).status).toBe(403);
+    await move(job.id, 'ASSIGNED', { assignee: 'u-technician' }, 'helpdesk').then(st(200));
     const noOdo = await move(job.id, 'IN_PROGRESS', {}, 'technician');
     expect(noOdo.status).toBe(400);
     expect(noOdo.body.message).toContain('Odometer reading');
@@ -144,6 +144,53 @@ describe('Any sector: a fleet operator on the fleet pack (integration)', () => {
     expect((await get('/config').then(st(200))).body.terms).toEqual(expect.objectContaining({ job: 'Work order', component: 'Vehicle / plant' }));
   });
 
+  describe('assignment to named people', () => {
+    const newJob = async () => (await send('post', '/jobs', {
+      component: 'Truck BKR 9100', partNo: 'Isuzu NPR', serialNo: 'BKR9100', category: 'BREAKDOWN', originUnit: 'Logistics', repairUnit: 'HQ',
+    }, 'helpdesk').then(st(201))).body as { id: string };
+
+    it('assigns through the workflow step and tells the person', async () => {
+      const job = await newJob();
+      expect((await move(job.id, 'ASSIGNED', { assignee: 'nobody-here' }, 'helpdesk')).status).toBe(400);
+      const assigned = (await move(job.id, 'ASSIGNED', { assignee: 'u-technician' }, 'helpdesk').then(st(200))).body;
+      expect(assigned).toEqual(expect.objectContaining({ assigneeId: 'u-technician', assigneeName: 'Ravi Kumar', assignedAt: expect.any(String) }));
+      expect(assigned.audit.map((a: { action: string }) => a.action)).toContain('Assigned to Ravi Kumar');
+      const alerts = (await get('/notifications', 'technician').then(st(200))).body;
+      expect(alerts.items).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'job.assigned', ref: job.id, link: `/jobs/${job.id}` })]));
+    });
+
+    it('lets people with jobs.assign reassign, and others take free work their role can do', async () => {
+      const job = await newJob();
+      await move(job.id, 'ASSIGNED', { assignee: 'u-technician' }, 'helpdesk').then(st(200));
+      expect((await send('patch', `/jobs/${job.id}/assignee`, { userId: 'u-stores' }, 'technician')).status).toBe(403);
+      expect((await send('patch', `/jobs/${job.id}/assignee`, { userId: 'u-stores' }, 'supervisor').then(st(200))).body.assigneeName).toBe('Lim Wei Jie');
+      const free = (await send('patch', `/jobs/${job.id}/assignee`, { userId: null }, 'supervisor').then(st(200))).body;
+      expect(free.assigneeId).toBeUndefined();
+
+      // Stores has no step from ASSIGNED; the technician has (Start work).
+      expect((await send('post', `/jobs/${job.id}/claim`, {}, 'stores')).status).toBe(403);
+      expect((await send('post', `/jobs/${job.id}/claim`, {}, 'technician').then(st(200))).body.assigneeId).toBe('u-technician');
+      expect((await send('post', `/jobs/${job.id}/claim`, {}, 'technician')).status).toBe(200);
+      const taken = await send('post', `/jobs/${job.id}/claim`, {}, 'supervisor');
+      expect(taken.status).toBe(409);
+      expect(taken.body.message).toBe('Already assigned to Ravi Kumar');
+    });
+
+    it('lists staff for pickers without their e-mail addresses', async () => {
+      const staff = (await get('/users/directory', 'technician').then(st(200))).body as Record<string, unknown>[];
+      expect(staff.find((u) => u.id === 'u-technician')).toEqual({ id: 'u-technician', name: 'Ravi Kumar', role: 'TECHNICIAN', branch: 'HQ' });
+      expect(staff.every((u) => !('email' in u))).toBe(true);
+      await send('post', '/users/u-finance/deactivate', {}).then(st(200));
+      try {
+        expect(((await get('/users/directory', 'technician')).body as { id: string }[]).some((u) => u.id === 'u-finance')).toBe(false);
+        const job = await newJob();
+        expect((await send('patch', `/jobs/${job.id}/assignee`, { userId: 'u-finance' }, 'supervisor')).status).toBe(400);
+      } finally {
+        await send('post', '/users/u-finance/reactivate', {}).then(st(200));
+      }
+    });
+  });
+
   describe('assets, meters and preventive maintenance', () => {
     it('lists the demo fleet with odometers', async () => {
       const fleet = (await get('/assets').then(st(200))).body;
@@ -180,7 +227,7 @@ describe('Any sector: a fleet operator on the fleet pack (integration)', () => {
       expect(job).toEqual(expect.objectContaining({ assetId: van.id, pmScheduleId: pm.id, jobType: 'PREVENTIVE', status: 'OPEN', component: 'Van WXY 9009', repairUnit: 'NORTH' }));
       expect(job.checklist.map((c: { label: string }) => c.label)).toEqual(['Engine oil and filter', 'Brakes checked']);
 
-      await move(jobId, 'ASSIGNED', { assignee: 'Ravi' }, 'helpdesk').then(st(200));
+      await move(jobId, 'ASSIGNED', { assignee: 'u-technician' }, 'helpdesk').then(st(200));
       // The odometer entered when work starts goes onto the vehicle — and may not go backwards.
       expect((await move(jobId, 'IN_PROGRESS', { odometer: '100' }, 'technician')).status).toBe(400);
       await move(jobId, 'IN_PROGRESS', { odometer: '29750' }, 'technician').then(st(200));

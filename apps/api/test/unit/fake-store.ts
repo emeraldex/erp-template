@@ -86,6 +86,15 @@ export class FakeStore {
 
   async save() { this.saves++; }
 
+  people = [
+    { id: 'u-tech', name: 'Ravi Kumar', role: 'WORKSHOP', branch: 'HQ' },
+    { id: 'u-stores', name: 'Rahim Osman', role: 'STORES', branch: 'HQ' },
+    { id: 'u-mm', name: 'Hafiz', role: 'MM', branch: 'HQ' },
+  ];
+  notifications: { userId: string; kind: string; title: string; ref?: string }[] = [];
+  async activeUser(id: string) { return this.people.find((p) => p.id === id) ?? null; }
+  async notify(userId: string, n: { kind: string; title: string; body: string; ref?: string }) { this.notifications.push({ userId, ...n }); }
+
   asStore(): StoreService { return this as unknown as StoreService; }
 }
 

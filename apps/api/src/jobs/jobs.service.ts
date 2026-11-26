@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { AssetsService } from '../assets/assets.service';
 import { PmService } from '../assets/pm.service';
 import { StoreService } from '../common/store.service';
@@ -7,7 +7,8 @@ import { Branch, ChecklistItem, Job, JobStatus, PriorityType, RepairRoute, Role 
 import { SettingsService } from '../settings/settings.service';
 import type { Effect } from '../workflow/effects';
 
-type Actor = { name: string; role: Role };
+type Actor = { name: string; role: Role; sub?: string };
+type Person = { id: string; name: string };
 const str = (v: unknown) => (typeof v === 'string' ? v : v === undefined || v === null ? undefined : String(v));
 
 @Injectable()
@@ -102,9 +103,11 @@ export class JobsService {
 
     // The step's actions — committed together with the job itself.
     const alsoSave: object[] = [];
+    const assignedBefore = job.assigneeId;
     for (const effect of rule.effects ?? []) await this.runEffect(effect, job, fields ?? {}, actor, alsoSave);
 
     await this.store.save(job, ...alsoSave);
+    if (job.assigneeId && job.assigneeId !== assignedBefore) await this.tellAssignee(job, actor);
 
     // Preventive maintenance rolls forward when its job is done; a job cancelled
     // before the work was done leaves the cycle due.
@@ -112,6 +115,65 @@ export class JobsService {
       if (toPhase === 'done' && fromPhase !== 'done') await this.pm.completed(job);
       else if (this.store.isFinal('JOB', to) && fromPhase !== 'done') await this.pm.cancelled(job);
     }
+    return job;
+  }
+
+  // ─── Assignment to a named person ────────────────────────────────────────────
+
+  private setAssignee(job: Job, person: Person | null, actor: Actor): void {
+    if ((person?.id ?? undefined) === job.assigneeId) return;
+    if (person) {
+      job.assigneeId = person.id;
+      job.assigneeName = person.name;
+      job.assignedAt = new Date().toISOString();
+      job.audit.push(this.store.audit(actor.name, actor.role, `Assigned to ${person.name}`));
+    } else {
+      job.audit.push(this.store.audit(actor.name, actor.role, `Unassigned from ${job.assigneeName ?? 'nobody'}`));
+      delete job.assigneeId;
+      delete job.assigneeName;
+      delete job.assignedAt;
+    }
+  }
+
+  private async person(userId: string): Promise<Person> {
+    const u = await this.store.activeUser(userId);
+    if (!u) throw new BadRequestException('Choose an active member of staff');
+    return { id: u.id, name: u.name };
+  }
+
+  /** Tell the person a job was given to them (not when they took it themselves). */
+  private async tellAssignee(job: Job, actor: Actor): Promise<void> {
+    if (!job.assigneeId || job.assigneeId === actor.sub) return;
+    const word = this.settings.terms?.job ?? 'Job';
+    await this.store.notify(job.assigneeId, {
+      kind: 'job.assigned', title: `${word} ${job.id} assigned to you`, body: `${job.component} — assigned by ${actor.name}`, ref: `JOB:${job.id}`,
+    });
+  }
+
+  /** Assign (or, with null, unassign) a job — for people who hold jobs.assign. */
+  async assign(id: string, userId: string | null, actor: Actor): Promise<Job> {
+    const job = await this.get(id);
+    this.assertEditable(job);
+    const before = job.assigneeId;
+    this.setAssignee(job, userId ? await this.person(userId) : null, actor);
+    if (job.assigneeId === before) return job;
+    await this.store.save(job);
+    await this.tellAssignee(job, actor);
+    return job;
+  }
+
+  /** Take an unassigned job whose next step your role owns. */
+  async claim(id: string, actor: Actor & { sub: string }): Promise<Job> {
+    const job = await this.get(id);
+    this.assertEditable(job);
+    if (job.assigneeId === actor.sub) return job;
+    if (job.assigneeId) throw new ConflictException(`Already assigned to ${job.assigneeName}`);
+    const owns = this.store.jobTransitions.some((r) => r.from === job.status && r.roles.includes(actor.role));
+    if (!owns && !this.store.capabilitiesOf(actor.role).includes('jobs.assign')) {
+      throw new ForbiddenException('Your role has no step to take on this job at its current status');
+    }
+    this.setAssignee(job, await this.person(actor.sub), actor);
+    await this.store.save(job);
     return job;
   }
 
@@ -166,6 +228,11 @@ export class JobsService {
           }));
         }
         if (!job.demandIds.includes(ref)) job.demandIds.push(ref);
+        return;
+      }
+      case 'assignTo': {
+        const userId = fields[p.field];
+        if (userId) this.setAssignee(job, await this.person(userId), actor);
         return;
       }
       case 'recordMeter': {
