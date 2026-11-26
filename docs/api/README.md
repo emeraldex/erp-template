@@ -89,6 +89,26 @@ Download this month's Sales Performance Report as CSV:
 curl -s -o spr.csv "https://acme.erp.example.com/api/v1/reports/sales-performance?format=csv" -H "Authorization: Bearer $TOKEN"
 ```
 
+### Field work (the phone app)
+
+- `GET /jobs/mine` — `{ mine, available }`: work assigned to you, and
+  unassigned work at your site that your role can take.
+- `GET /jobs/:id/pack` — one job with its asset, meters, attachments,
+  preventive-maintenance instructions and the steps you may take.
+- `POST /jobs/:id/notes` `{ "text": "…" }`, `POST /jobs/:id/claim`,
+  `PATCH /jobs/:id/assignee` `{ "userId": "…" | null }` (needs `jobs.assign`).
+- `GET /users/directory` — active staff (id, name, role, site) for pickers.
+- `GET /assets/labels?ids=…` — A4 PDF of QR labels.
+- Photos and signatures: upload with `kind=photo` (and `caption`) or
+  `kind=signature` (a PNG with `signedBy`); a step's photo or signature field
+  takes the attachment id.
+
+**Sending changes made offline.** Send `X-Client-Op: <your id for the change>`
+with a note, attachment upload or meter reading. A resend with the same id
+answers `200 {"duplicate": true}` without applying it again; a refused change
+does not use up its id. Checklist changes and meter readings accept `"at"`, the
+time the change was made (not in the future, at most 30 days ago).
+
 ## Errors
 
 Errors are JSON: `{"statusCode": 400, "message": "…"}`. The ones to handle:

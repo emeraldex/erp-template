@@ -87,7 +87,12 @@ shows a "cannot reach the server" banner instead of sample records.
 ```bash
 pnpm --filter api test        # unit tests: workflow engine and business rules
 pnpm --filter api test:cov    # the same, with a coverage report
+pnpm --filter web test        # the phone app's offline sync rules
 ```
+
+`node scripts/phone-offline-check.js` drives the phone app in an emulated phone
+against a running facilities demo (`SEED_PACK=facilities`): it goes offline,
+works a job, reconnects and checks the server received everything once.
 
 The integration tests boot the real API against PostgreSQL. Point
 `TEST_DATABASE_URL` at a **disposable** database whose name contains `test` — its
@@ -155,6 +160,10 @@ dependency audit, on every push and pull request.
 - **Beyond the RFP** — asset register with hierarchy and meters, preventive maintenance by
   calendar and/or meter with automatic work orders, job checklists that gate completion,
   and five more sector packs ([guide](docs/guides/sectors.md)).
+- **Phone app** — an installable phone app (`/m`) for technicians: My work, assignment to
+  named people, checklists, photos, notes and meter readings that work without a signal,
+  photo and signature proof on workflow steps, and QR labels for assets
+  ([how it works](docs/architecture/mobile-offline.md)).
 
 ## Section 8 demonstration script
 
@@ -183,6 +192,9 @@ GET   /config                          workflow-as-data (FR-02): statuses, steps
 PATCH /config/sla/:id                  runtime rule change (workflow.edit)
 GET   /dashboard/kpis
 GET|POST /jobs · GET /jobs/:id · PATCH /jobs/:id/transition · PATCH /jobs/:id/checklist
+GET   /jobs/mine · GET /jobs/:id/pack · POST /jobs/:id/{notes,claim} · PATCH /jobs/:id/assignee
+                                       phone app / field work (X-Client-Op makes resends safe)
+GET   /users/directory · GET /assets/labels?ids=…
 POST  /jobs/:id/priority · PATCH /jobs/:id/priority · POST /jobs/:id/priority/close
                                        AOG/ROA/Critical overlay (QP.56)
 GET   /demands · /demands/:id · POST /demands/:id/quotations · PATCH /demands/:id/transition
