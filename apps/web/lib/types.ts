@@ -65,6 +65,9 @@ export interface Job {
   assetId?: string;
   pmScheduleId?: string;
   checklist?: ChecklistItem[];
+  assigneeId?: string;
+  assigneeName?: string;
+  assignedAt?: string;
   records: FormRecord[];
   audit: AuditEntry[];
 }
@@ -282,9 +285,18 @@ export interface TransitionRule<S extends string = string> {
   label: string;
   labelMs: string;
   roles: Role[];
-  requires: { key: string; label: string; formNo?: string }[];
+  requires: StepField[];
   setLocation?: Location;
+  effects?: { type: string; params?: Record<string, unknown> }[];
 }
+
+export type FieldType = "text" | "number" | "date" | "user" | "photo" | "signature";
+
+/** A mandatory field on a workflow step. Untyped fields are free text. */
+export interface StepField { key: string; label: string; formNo?: string; type?: FieldType }
+
+/** Someone who works here, for person pickers (GET /users/directory). */
+export interface StaffMember { id: string; name: string; role: string; branch: string }
 
 export interface SlaRule {
   id: string;
@@ -433,6 +445,9 @@ export interface Kpis {
 
 export interface Attachment {
   id: string;
+  kind?: "file" | "photo" | "signature";
+  caption?: string;
+  signedBy?: string;
   entity: "JOB" | "DEMAND" | "OV" | "INVOICE" | "PARTNER" | "FOD";
   entityId: string;
   formNo?: string;

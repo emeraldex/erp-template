@@ -3,6 +3,8 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RetentionService } from '../retention/retention.service';
 import { PmService } from '../assets/pm.service';
+import { pruneClientOps } from '../common/client-ops';
+import { PrismaService } from '../common/prisma.service';
 import { StoreService } from '../common/store.service';
 import { SettingsService } from '../settings/settings.service';
 import { runWithTenant } from '../tenancy/tenant';
@@ -28,6 +30,7 @@ export class SchedulerService implements OnApplicationBootstrap {
     private readonly store: StoreService,
     private readonly pm: PmService,
     private readonly settings: SettingsService,
+    private readonly prisma: PrismaService,
   ) {}
 
   /** Run a job for every active tenant in turn; one tenant's failure doesn't stop the rest. */
@@ -52,7 +55,10 @@ export class SchedulerService implements OnApplicationBootstrap {
     }
     this.every('sla-alerts', Number(process.env.ALERT_INTERVAL_MINUTES || 15) * 60_000, () => this.forEachTenant('sla-alerts', () => this.notifications.runAlerts()));
     this.every('pm', Number(process.env.PM_INTERVAL_MINUTES || 60) * 60_000, () => this.forEachTenant('pm', () => this.pm.generateDue()));
-    this.every('archive', Number(process.env.ARCHIVE_INTERVAL_HOURS || 24) * 3_600_000, () => this.forEachTenant('archive', () => this.retention.archiveClosedJobs()));
+    this.every('archive', Number(process.env.ARCHIVE_INTERVAL_HOURS || 24) * 3_600_000, () => this.forEachTenant('archive', async () => {
+      await this.retention.archiveClosedJobs();
+      await pruneClientOps(this.prisma);
+    }));
   }
 
   private every(name: string, ms: number, job: () => Promise<unknown>): void {

@@ -11,7 +11,7 @@ import type { Capability, DictKind, Entry, Modules, Pack, RoleMeta, StatusMeta, 
  */
 
 type Field = TransitionRule['requires'][number];
-export const field = (key: string, label: string): Field => ({ key, label });
+export const field = (key: string, label: string, type?: Field['type']): Field => ({ key, label, ...(type ? { type } : {}) });
 
 const st = (key: string, label: string, labelMs: string, tone: StatusMeta['tone'], phase: StatusMeta['phase'], extra: Partial<StatusMeta> = {}): Entry<StatusMeta> =>
   ({ key, label, labelMs, meta: { tone, phase, ...(phase === 'closed' ? { final: true } : {}), ...extra } });
@@ -27,13 +27,13 @@ export const ROLE = {
 
 const CAPS: Record<keyof typeof ROLE, Capability[]> = {
   ADMIN: [],
-  HELPDESK: ['jobs.register', 'priority.raise'],
-  SUPERVISOR: ['jobs.register', 'priority.raise', 'priority.close', 'assets.manage', 'meters.record', 'incidents.manage', 'tools.handle', 'reports.audit', 'alerts.escalation'],
+  HELPDESK: ['jobs.register', 'jobs.assign', 'priority.raise'],
+  SUPERVISOR: ['jobs.register', 'jobs.assign', 'priority.raise', 'priority.close', 'assets.manage', 'meters.record', 'incidents.manage', 'tools.handle', 'reports.audit', 'alerts.escalation'],
   TECHNICIAN: ['meters.record', 'tools.handle'],
   STORES: ['tools.handle'],
   PURCHASING: ['procurement.quote', 'registers.propose', 'registers.evaluate'],
   FINANCE: ['invoices.create', 'invoices.documents', 'reports.billing', 'reports.payments'],
-  MANAGER: ['workflow.edit', 'priority.raise', 'priority.close', 'registers.evaluate', 'registers.approve', 'assets.manage', 'invoices.documents', 'reports.billing', 'reports.audit', 'alerts.escalation'],
+  MANAGER: ['workflow.edit', 'jobs.assign', 'priority.raise', 'priority.close', 'registers.evaluate', 'registers.approve', 'assets.manage', 'invoices.documents', 'reports.billing', 'reports.audit', 'alerts.escalation'],
 };
 
 export function roles(titles: Record<keyof typeof ROLE, [string, string]>): Entry<RoleMeta>[] {
@@ -94,7 +94,8 @@ function jobWorkflow(o: MaintenanceOptions, modules: Modules) {
   ];
   const reason = [field('reason', 'Reason')];
   const transitions: TransitionRule[] = [
-    step('OPEN', 'ASSIGNED', 'Assign', 'Tugaskan', [HELPDESK, SUPERVISOR], [field('assignee', 'Assigned to')]),
+    step('OPEN', 'ASSIGNED', 'Assign', 'Tugaskan', [HELPDESK, SUPERVISOR], [field('assignee', 'Assigned to', 'user')],
+      { effects: [{ type: 'assignTo', params: { field: 'assignee' } }] }),
     step('OPEN', 'CANCELLED', 'Cancel', 'Batal', [HELPDESK, SUPERVISOR], reason),
     step('ASSIGNED', 'IN_PROGRESS', 'Start work', 'Mula kerja', [TECHNICIAN, SUPERVISOR], o.startRequires ?? [], o.startEffects ? { effects: o.startEffects } : {}),
     step('ASSIGNED', 'CANCELLED', 'Cancel', 'Batal', [SUPERVISOR], reason),
@@ -102,7 +103,7 @@ function jobWorkflow(o: MaintenanceOptions, modules: Modules) {
   if (modules.procurement) {
     transitions.push(
       step('IN_PROGRESS', 'ON_HOLD_PARTS', 'Request parts', 'Mohon alat ganti', [TECHNICIAN, SUPERVISOR],
-        [field('partDescription', 'Part needed'), field('qty', 'Quantity')],
+        [field('partDescription', 'Part needed'), field('qty', 'Quantity', 'number')],
         { effects: [{ type: 'raiseDemand', params: { descriptionField: 'partDescription', partNoField: 'partNo', qtyField: 'qty' } }] }),
       step('ON_HOLD_PARTS', 'IN_PROGRESS', 'Parts received — resume', 'Alat ganti diterima — sambung', [TECHNICIAN, SUPERVISOR]),
     );

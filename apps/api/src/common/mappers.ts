@@ -96,6 +96,9 @@ export function mapJob(r: any): Job {
     assetId: r.assetId ?? undefined,
     pmScheduleId: r.pmScheduleId ?? undefined,
     checklist: Array.isArray(r.checklist) && r.checklist.length ? r.checklist : undefined,
+    assigneeId: r.assigneeId ?? undefined,
+    assigneeName: r.assigneeName ?? undefined,
+    assignedAt: r.assignedAt ? iso(r.assignedAt) : undefined,
     records: mapRecords(r.records ?? []),
     audit: mapAudit(r.audit ?? []),
   }) as Job;

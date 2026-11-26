@@ -61,7 +61,11 @@ export const FACILITIES = maintenancePack({
       e('GENSET', 'Generator set', 'Set penjana'), e('FIRE_PANEL', 'Fire alarm panel', 'Panel penggera kebakaran'), e('PUMP', 'Pump', 'Pam'),
     ],
   },
-  completeRequires: [field('rootCause', 'Cause of fault')],
+  completeRequires: [
+    field('rootCause', 'Cause of fault'),
+    field('photoAfter', 'Photo of the completed work', 'photo'),
+    field('requesterSignature', 'Requester sign-off', 'signature'),
+  ],
   minQuotations: 3,
   defaults: { jobPrefix: 'HD', initialLocation: 'ON_SITE', tax: { label: 'SST', ratePct: 8 } },
 });
@@ -110,7 +114,7 @@ export const FLEET = maintenancePack({
       e('TRAILER', 'Trailer', 'Treler'), e('FORKLIFT', 'Forklift', 'Forklift'),
     ],
   },
-  startRequires: [field('odometer', 'Odometer reading')],
+  startRequires: [field('odometer', 'Odometer reading', 'number')],
   startEffects: [{ type: 'recordMeter', params: { field: 'odometer', meterKey: 'ODOMETER' } }],
   inspection: { label: 'Road test / inspection', labelMs: 'Uji jalan / pemeriksaan', requires: [field('roadTestBy', 'Road-tested by'), field('inspectionRef', 'Inspection checklist ref')] },
   minQuotations: 2,
@@ -164,7 +168,7 @@ export const INDUSTRIAL = maintenancePack({
     ],
   },
   startRequires: [field('permitRef', 'Permit to work no.'), field('isolationRef', 'Isolation / LOTO ref')],
-  completeRequires: [field('rootCause', 'Root cause'), field('downtimeHours', 'Downtime (hours)')],
+  completeRequires: [field('rootCause', 'Root cause'), field('downtimeHours', 'Downtime (hours)', 'number')],
   minQuotations: 3,
   defaults: { jobPrefix: 'MWO', initialLocation: 'ON_SITE', tax: { label: 'SST', ratePct: 8 } },
 });

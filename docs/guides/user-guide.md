@@ -55,6 +55,31 @@ has one. Files are kept permanently — if you attach the wrong one, attach the
 right one; both stay on record. Every download is checked against the
 fingerprint taken at upload.
 
+## On your phone
+
+Open the ERP's address on your phone and sign in: you get the phone app,
+starting at **My work**. To keep it like an app, install it — on Android tap
+**Install app** (or the browser's menu → *Install*); on iPhone tap **Share**,
+then **Add to Home Screen**.
+
+- **My work** lists what is assigned to you, and under **Available** the work
+  at your site that your role can take — tap **Pick up** to take it.
+- On a work order you can tick the **checklist**, take **photos**, add
+  **notes** and record **meter readings**. All four work **without a signal**:
+  they are kept on the phone and sent when you are back online. The chip at
+  the top says *All sent*, *3 waiting* or *Offline since 10:42*; tap it to send
+  now.
+- **Next step** (start, complete, request parts…) needs a connection, because
+  the server checks the rules. Some steps ask for a photo of the finished work
+  or a signature — the customer signs on your screen.
+- Point the phone's camera at a **job card** or an **asset label** QR code to
+  open it. On an asset, **Report a problem** raises a work order.
+- If the server refuses a change (for example the work order was closed
+  meanwhile), **More → Sending changes** shows why; retry or discard it.
+- Changes are sent while the app is open. Sign out only when *All sent* shows —
+  you are warned otherwise; unsent changes stay on the phone for you.
+- **More → Open the full site** switches to the desktop screens.
+
 ## By role
 
 **Stores** — register incoming items (*+ Register job*), dispatch them to the

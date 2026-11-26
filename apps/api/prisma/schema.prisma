@@ -141,6 +141,10 @@ model Job {
   pmScheduleId String?
   /// Checklist items: [{ key, label, required, done, by, at, note }].
   checklist    Json      @default("[]")
+  /// The person the work is assigned to (users are never deleted, so no foreign key).
+  assigneeId   String?
+  assigneeName String?
+  assignedAt   DateTime?
   /// FR-12: set when a long-closed job leaves the active lists. Read-only after.
   archivedAt   DateTime?
   // Optimistic-concurrency guard: a transition that reads v=n writes v=n+1 and
@@ -162,6 +166,7 @@ model Job {
   @@index([ordinal])
   @@index([archivedAt])
   @@index([assetId])
+  @@index([assigneeId])
   @@map("jobs")
 }
 
@@ -665,6 +670,11 @@ model Attachment {
   storageKey  String   @unique
   uploadedBy  String
   uploadedAt  DateTime @default(now())
+  /// file, photo or signature.
+  kind        String   @default("file")
+  caption     String?
+  /// For signatures: the name of the person who signed.
+  signedBy    String?
 
   @@index([entity, entityId])
   @@map("attachments")
@@ -729,4 +739,16 @@ model DictionaryEntry {
   @@unique([kind, key])
   @@index([kind, seq])
   @@map("dictionary_entries")
+}
+
+/// Offline changes replayed from a phone, so a resent change is applied once.
+model ClientOp {
+  /// The phone's own id for the change.
+  id        String   @id
+  userId    String
+  path      String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("client_ops")
 }

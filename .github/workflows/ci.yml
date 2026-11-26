@@ -89,6 +89,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Type check
         run: pnpm --filter web typecheck
+      - name: Offline sync rules (unit tests)
+        run: pnpm --filter web test
       - name: Build
         run: pnpm --filter web build
         env:

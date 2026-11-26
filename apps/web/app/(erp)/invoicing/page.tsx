@@ -238,6 +238,8 @@ export default function InvoicingPage() {
 
                   {cfg && user && (
                     <TransitionActions
+                      entity="invoice"
+                      entityId={inv.id}
                       status={inv.status}
                       rules={cfg.invoiceTransitions}
                       meta={cfg.invoiceStatusMeta}

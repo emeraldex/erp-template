@@ -114,7 +114,30 @@ SLA alerts appear in each user's alerts bell. To email them as well, set
 `SMTP_URL` (for example `smtps://user:password@smtp.example.com:465`) and
 `MAIL_FROM`. Reports → *Check SLA alerts now* runs the check immediately.
 
-## 6. Everyday operations
+## 6. Phones and offline field work
+
+Technicians open the ERP's usual address on a phone and get the phone app
+(`/m`), which they can install to the home screen. It needs **HTTPS** (the
+camera, offline storage and installing all require it; `localhost` is the
+only exception) — the reverse proxy in this repository provides it.
+
+- **Assignment**: work orders can be assigned to named people. Grant the
+  *Assign work orders to people* permission (`jobs.assign`) to the roles that
+  dispatch work, in *Workflow editor → Roles & permissions*. Organisations
+  created before this release have it only for ADMIN until you grant it.
+- **Proof of work**: in the workflow editor a mandatory field can be a number,
+  date, person, photo or signature; photo and signature fields make the step
+  wait for one taken on this work order.
+- **Asset labels**: *Assets → Print labels* prints A4 sheets of QR labels.
+- **Offline**: checklists, notes, photos and meter readings work without a
+  signal and are sent when the phone is back online, while the app is open.
+  Status changes need a connection. iPhones can clear data for sites that are
+  not installed, so ask iPhone users to add the app to the home screen.
+- **Kill switch**: if the offline cache ever misbehaves, rebuild the web app
+  with `NEXT_PUBLIC_PWA=0`; phones remove the service worker and its caches on
+  their next visit. Data already sent is unaffected.
+
+## 7. Everyday operations
 
 - **Health**: `GET /api/v1/health` for monitoring.
 - **Logs**: one JSON line per request in production.
@@ -125,7 +148,7 @@ SLA alerts appear in each user's alerts bell. To email them as well, set
 - **Upgrades**: pull the new version and rebuild; migrations run on start.
   Take a backup first.
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Symptom | Likely cause |
 |---|---|

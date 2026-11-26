@@ -60,6 +60,33 @@ jika ada. Fail disimpan secara kekal — jika tersilap melampirkan fail, lampirk
 fail yang betul; kedua-duanya kekal dalam rekod. Setiap muat turun disemak
 dengan cap jari yang diambil semasa muat naik.
 
+## Pada telefon anda
+
+Buka alamat ERP pada telefon dan log masuk: anda mendapat aplikasi telefon,
+bermula di **Kerja saya**. Untuk menggunakannya seperti aplikasi, pasangkannya —
+pada Android ketik **Pasang aplikasi** (atau menu pelayar → *Install*); pada
+iPhone ketik **Kongsi**, kemudian **Tambah ke Skrin Utama**.
+
+- **Kerja saya** menyenaraikan kerja yang ditugaskan kepada anda, dan di bawah
+  **Tersedia** kerja di tapak anda yang boleh diambil oleh peranan anda — ketik
+  **Ambil kerja**.
+- Pada arahan kerja anda boleh menanda **senarai semak**, mengambil **foto**,
+  menambah **catatan** dan merekod **bacaan meter**. Keempat-empatnya berfungsi
+  **tanpa isyarat**: ia disimpan pada telefon dan dihantar apabila anda kembali
+  dalam talian. Cip di atas menunjukkan *Semua dihantar*, *3 menunggu* atau
+  *Luar talian sejak 10:42*; ketik untuk menghantar sekarang.
+- **Langkah seterusnya** (mula, siapkan, mohon alat ganti…) memerlukan sambungan,
+  kerana pelayan menyemak peraturan. Sesetengah langkah meminta foto kerja yang
+  siap atau tandatangan — pelanggan menandatangani pada skrin anda.
+- Halakan kamera telefon ke kod QR pada **kad kerja** atau **label aset** untuk
+  membukanya. Pada aset, **Laporkan masalah** membuka arahan kerja.
+- Jika pelayan menolak sesuatu perubahan (contohnya arahan kerja telah ditutup),
+  **Lagi → Penghantaran perubahan** menunjukkan sebabnya; cuba lagi atau buang.
+- Perubahan dihantar semasa aplikasi dibuka. Log keluar hanya apabila *Semua
+  dihantar* dipaparkan — anda akan diberi amaran; perubahan yang belum dihantar
+  kekal pada telefon untuk anda.
+- **Lagi → Buka laman penuh** menukar ke skrin desktop.
+
 ## Mengikut peranan
 
 **Stor** — daftar barang masuk (*+ Register job*), hantar ke bengkel, rekod

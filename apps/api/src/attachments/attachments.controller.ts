@@ -2,6 +2,7 @@ import {
   Body, Controller, Get, Param, Post, Req, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ClientOpInterceptor } from '../common/client-ops';
 import type { Response } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { AuthUser } from '../auth/auth.service';
@@ -46,14 +47,16 @@ export class AttachmentsController {
   }
 
   @Post(':entity/:entityId')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: maxBytes() + 1, files: 1, fields: 5 } }))
+  @UseInterceptors(ClientOpInterceptor, FileInterceptor('file', { limits: { fileSize: maxBytes() + 1, files: 1, fields: 5 } }))
   upload(
     @Param('entity') entity: string,
     @Param('entityId') entityId: string,
     @UploadedFile() file: Express.Multer.File | undefined,
-    @Body('formNo') formNo: string | undefined,
+    @Body() body: { formNo?: string; kind?: string; caption?: string; signedBy?: string } | undefined,
     @Req() req: { user: AuthUser },
   ) {
-    return this.svc.upload(entity, entityId, file, formNo, { name: req.user.name, role: req.user.role });
+    return this.svc.upload(entity, entityId, file, body?.formNo, { name: req.user.name, role: req.user.role }, {
+      kind: body?.kind, caption: body?.caption, signedBy: body?.signedBy,
+    });
   }
 }

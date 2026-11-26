@@ -4,7 +4,8 @@ import { useSession } from "@/lib/use-session";
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, download, getWithFallback } from "@/lib/api";
-import { ChecklistItem, Job, JobStatus } from "@/lib/types";
+import { ChecklistItem, Job, JobStatus, StaffMember } from "@/lib/types";
+import { loadStaff } from "@/components/step-form";
 import { railOf, useVocab } from "@/lib/vocab";
 import { useConfig } from "@/lib/use-config";
 import { useLang } from "@/lib/i18n";
@@ -55,6 +56,22 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
     }
   }
 
+  async function assignTo(userId: string | null) {
+    if (!job) return;
+    setBusy(true); setError(null);
+    try { setJob(await api.patch<Job>(`/jobs/${job.id}/assignee`, { userId })); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+
+  async function pickUp() {
+    if (!job) return;
+    setBusy(true); setError(null);
+    try { setJob(await api.post<Job>(`/jobs/${job.id}/claim`, {})); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+
   async function checklist(body: { items?: { key: string; done?: boolean }[]; add?: { label: string }[] }) {
     if (!job) return;
     setBusy(true); setError(null);
@@ -91,6 +108,9 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
   const closed = isFinal("JOB", job.status);
   const rail = railOf(cfg?.jobStatusMeta);
   const checks: ChecklistItem[] = job.checklist ?? [];
+  // Aviation screens stay as they were unless the organisation starts assigning work.
+  const showAssignee = !aviation || !!job.assigneeId || can("jobs.assign");
+  const myRoleActs = !!cfg?.jobTransitions.some((r) => r.from === job.status && (user?.role === "ADMIN" || r.roles.includes(user?.role ?? "")));
 
   return (
     <div>
@@ -214,6 +234,17 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
 
       {error && <p className="mb-4 rounded border border-brand-bright/40 bg-brand-bright/10 px-3 py-2 text-sm text-brand-bright">{error}</p>}
 
+      {showAssignee && !job.archivedAt && (
+        <div className="fade-up mb-4 flex flex-wrap items-center gap-3 rounded-md border hairline bg-panel/50 px-4 py-2.5">
+          <span className="eyebrow">Assigned to</span>
+          <span className="text-sm text-fg">{job.assigneeName ?? <span className="text-dim">nobody yet</span>}</span>
+          {!closed && can("jobs.assign") && <AssignPicker current={job.assigneeId} disabled={busy} onPick={assignTo} />}
+          {!closed && !job.assigneeId && myRoleActs && (
+            <Button variant="ghost" disabled={busy} onClick={pickUp}>Pick up</Button>
+          )}
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel ticked className="fade-up d2 p-5 lg:col-span-2">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -227,6 +258,8 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
 
           {cfg && user && (
             <TransitionActions
+              entity="job"
+              entityId={job.id}
               status={job.status}
               rules={cfg.jobTransitions}
               meta={cfg.jobStatusMeta}
@@ -327,5 +360,22 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
         </Panel>
       </div>
     </div>
+  );
+}
+
+/** Reassign or unassign — for people allowed to assign work. */
+function AssignPicker({ current, disabled, onPick }: { current?: string; disabled: boolean; onPick: (userId: string | null) => void }) {
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  useEffect(() => { loadStaff().then(setStaff).catch(() => {}); }, []);
+  return (
+    <select
+      value={current ?? ""}
+      disabled={disabled}
+      onChange={(e) => onPick(e.target.value || null)}
+      className="mono rounded-md border hairline bg-ink-deep px-2.5 py-1.5 text-xs text-fg outline-none focus:border-trace"
+    >
+      <option value="">— unassigned —</option>
+      {staff.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.role}</option>)}
+    </select>
   );
 }

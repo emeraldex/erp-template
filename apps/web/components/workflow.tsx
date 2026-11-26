@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AuditEntry, FormRecord, Role, StatusMeta, TransitionRule } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
 import { Button, FormChip, MetaPill } from "./ui";
+import { StepForm, stepComplete } from "./step-form";
 
 /**
  * FR-02/03/05 in one component: renders the transition buttons and their
@@ -18,6 +19,8 @@ export function TransitionActions<S extends string>({
   userRole,
   busy,
   onTransition,
+  entity = "",
+  entityId = "",
 }: {
   status: S;
   rules: TransitionRule<S>[];
@@ -25,6 +28,9 @@ export function TransitionActions<S extends string>({
   userRole: Role;
   busy: boolean;
   onTransition: (to: S, fields: Record<string, string>) => void;
+  /** The record, for photo and signature fields (e.g. "job", "WO-2026-0001"). */
+  entity?: string;
+  entityId?: string;
 }) {
   const { lang, t } = useLang();
   const [openTo, setOpenTo] = useState<S | null>(null);
@@ -79,24 +85,10 @@ export function TransitionActions<S extends string>({
           <p className="eyebrow mb-3">
             {status} → <MetaPill status={active.to} meta={meta[active.to]} lang={lang} />
           </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {active.requires.map((f) => (
-              <label key={f.key} className="block">
-                <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">
-                  {f.formNo && <span className="mr-1.5 text-brand-bright">{f.formNo}</span>}
-                  {f.label} *
-                </span>
-                <input
-                  value={fields[f.key] ?? ""}
-                  onChange={(e) => setFields({ ...fields, [f.key]: e.target.value })}
-                  className="mono w-full rounded-md border hairline bg-panel px-3 py-2 text-xs text-fg outline-none transition-colors focus:border-trace"
-                />
-              </label>
-            ))}
-          </div>
+          <StepForm fields={active.requires} values={fields} onChange={setFields} entity={entity} entityId={entityId} disabled={busy} />
           <div className="mt-4 flex gap-2">
             <Button
-              disabled={busy || active.requires.some((f) => !fields[f.key]?.trim())}
+              disabled={busy || !stepComplete(active.requires, fields)}
               onClick={() => {
                 onTransition(active.to, fields);
                 setOpenTo(null);

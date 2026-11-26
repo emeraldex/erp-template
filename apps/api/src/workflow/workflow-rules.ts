@@ -1,6 +1,7 @@
 import type { Role, TransitionRule } from '../common/types';
 import type { Kind } from '../packs/types';
 import { validateEffects } from './effects';
+import { FIELD_TYPES, type FieldType } from './fields';
 
 export type { Kind } from '../packs/types';
 export { KINDS } from '../packs/types';
@@ -59,12 +60,14 @@ export function validateTransitions(kind: Kind, input: unknown, ctx: WorkflowCon
       const key = clean(field.key, 41);
       const flabel = clean(field.label, 120);
       const formNo = clean(field.formNo, 20);
+      const type = clean(field.type, 12) || 'text';
+      if (!(FIELD_TYPES as readonly string[]).includes(type)) errors.push(`${at}, field ${key || j + 1}: unknown type ${type} (use ${FIELD_TYPES.join(', ')})`);
       if (!KEY.test(key)) errors.push(`${at}, field ${j + 1}: key must be letters and digits, starting with a letter`);
       if (keys.has(key)) errors.push(`${at}: field ${key} is listed twice`);
       keys.add(key);
       if (!flabel) errors.push(`${at}, field ${key || j + 1}: a label is required`);
       if (formNo && !FORM.test(formNo)) errors.push(`${at}, field ${key}: form number may contain letters, digits, space, . / -`);
-      requires.push({ key, label: flabel, ...(formNo ? { formNo } : {}) });
+      requires.push({ key, label: flabel, ...(formNo ? { formNo } : {}), ...(type !== 'text' ? { type: type as FieldType } : {}) });
     }
     if (requires.length > 15) errors.push(`${at}: at most 15 mandatory fields`);
 
@@ -73,6 +76,16 @@ export function validateTransitions(kind: Kind, input: unknown, ctx: WorkflowCon
     if (setLocation && kind !== 'JOB') errors.push(`${at}: only job transitions can move the item`);
 
     const fx = validateEffects(kind, r.effects, { fields: requires.map((x) => x.key), locations: ctx.locations });
+    // Actions that read a person or a number need the right kind of field.
+    const typeOf = (k: unknown) => requires.find((x) => x.key === k)?.type ?? 'text';
+    for (const e of fx.effects) {
+      if (e.type === 'assignTo' && e.params?.field && typeOf(e.params.field) !== 'user') {
+        errors.push(`${at} (${from} → ${to}): field ${String(e.params.field)} is read by "Assign to a person" and must be a person field`);
+      }
+      if (e.type === 'recordMeter' && e.params?.field && typeOf(e.params.field) !== 'number') {
+        warnings.push(`${at} (${from} → ${to}): field ${String(e.params.field)} records a meter reading — make it a number field`);
+      }
+    }
     for (const e of fx.errors) errors.push(`${at} (${from} → ${to}): ${e}`);
 
     rules.push({

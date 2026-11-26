@@ -55,7 +55,8 @@ export class DemandsService {
       }
     }
 
-    applyTransition(dm, this.store.demandTransitions, to, f, actor);
+    const step = applyTransition(dm, this.store.demandTransitions, to, f, actor);
+    await this.store.checkStepFields(step, f, dm, 'DEMAND', dm.id);
 
     for (const e of rule?.effects ?? []) {
       const p = (e.params ?? {}) as Record<string, string>;

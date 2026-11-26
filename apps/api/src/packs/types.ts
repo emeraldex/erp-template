@@ -42,6 +42,7 @@ export const CAPABILITIES = {
   'org.admin': 'Users, settings, single sign-on, run background jobs',
   'workflow.edit': 'Workflow editor and SLA timers',
   'jobs.register': 'Register new work orders',
+  'jobs.assign': 'Assign work orders to people',
   'priority.raise': 'Raise and update priorities',
   'priority.close': 'Close priorities',
   'procurement.quote': 'Record supplier quotations',

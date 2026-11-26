@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, DEMO_MODE, getSession, loginPath, onConnectionChange, setSession, Session } from "@/lib/api";
 import { DictKey, useLang } from "@/lib/i18n";
 import type { Modules } from "@/lib/types";
 import { DEFAULT_TERMS, useVocab } from "@/lib/vocab";
+import { setFullSite } from "@/lib/phone";
+import { clearFieldCache, unsentCount } from "@/lib/offline/db";
 import { NotificationBell } from "./notifications";
 
 type TermKey = keyof typeof DEFAULT_TERMS;
@@ -79,6 +82,38 @@ function CompanyMark() {
 }
 
 export function Sidebar() {
+  return (
+    <aside className="fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r hairline bg-ink-deep/80 backdrop-blur md:flex">
+      <SidebarContent />
+    </aside>
+  );
+}
+
+/** Below the md breakpoint: a menu button that opens the same navigation as a drawer. */
+function MobileNav() {
+  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  useEffect(() => setOpen(false), [pathname]);
+  return (
+    <>
+      <button onClick={() => setOpen(true)} aria-label="Menu" className="rounded border hairline px-2.5 py-1.5 text-steel md:hidden">
+        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+      </button>
+      {/* In a portal: the top bar's backdrop blur would otherwise trap a fixed drawer inside it. */}
+      {open && createPortal(
+        <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true">
+          <button aria-label="Close menu" className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} />
+          <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto border-r hairline bg-ink-deep">
+            <SidebarContent mobile />
+          </aside>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+function SidebarContent({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname();
   const { t } = useLang();
   const { aviation, terms, modules, can, session } = useVocab();
@@ -90,8 +125,13 @@ export function Sidebar() {
     items: g.items.filter((i) => (!i.module || modules[i.module]) && (!i.capability || !session || can(i.capability))),
   })).filter((g) => g.items.length);
   return (
-    <aside className="fixed inset-y-0 left-0 z-20 hidden w-60 flex-col border-r hairline bg-ink-deep/80 backdrop-blur md:flex">
+    <>
       <CompanyMark />
+      {mobile && (
+        <Link href="/m" onClick={() => setFullSite(false)} className="mx-3 mb-2 rounded-md border border-trace/40 bg-trace/10 px-3 py-2.5 text-sm text-fg">
+          📱 Phone app — my work
+        </Link>
+      )}
       <nav className="mt-2 flex-1 space-y-6 px-3">
         {nav.map((g) => (
           <div key={g.group}>
@@ -126,7 +166,7 @@ export function Sidebar() {
         ))}
       </nav>
       <p className="eyebrow px-5 py-4">{aviation ? "CO-RFP-IT-001 · Prototype" : "Maintenance ERP"}</p>
-    </aside>
+    </>
   );
 }
 
@@ -164,8 +204,9 @@ export function Topbar() {
   }, [router]);
 
   return (
-    <header className="sticky top-0 z-10 flex items-center justify-between border-b hairline bg-ink/85 px-6 py-3 backdrop-blur">
+    <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b hairline bg-ink/85 px-4 py-3 backdrop-blur sm:px-6">
       <div className="flex items-center gap-3">
+        <MobileNav />
         {link === "ok" ? (
           <span className="mono flex items-center gap-1.5 text-[10.5px] tracking-widest text-phosphor">
             <span className="blip h-1.5 w-1.5 rounded-full bg-phosphor" />
@@ -196,7 +237,7 @@ export function Topbar() {
         </div>
         {session && (
           <>
-            <div className="text-right">
+            <div className="hidden text-right sm:block">
               <p className="text-sm leading-tight text-fg">{session.user.name}</p>
               <p className="mono text-[10px] tracking-widest text-dim">
                 {session.user.designation} · {session.user.role} · {session.user.branch}
@@ -211,6 +252,9 @@ export function Topbar() {
             </button>
             <button
               onClick={async () => {
+                const unsent = session ? await unsentCount(session.user.id) : 0;
+                if (unsent && !window.confirm(`${unsent} change(s) made on this phone have not been sent yet. They stay here and are sent when you sign in again. Sign out anyway?`)) return;
+                if (session) await clearFieldCache(session.user.id);
                 await api.logout().catch(() => { /* already signed out server-side */ });
                 setSession(null);
                 router.replace("/login");

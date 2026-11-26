@@ -18,6 +18,7 @@ export default function JobsPage() {
   const [rows, setRows] = useState<Job[]>([]);
   const [offline, setOffline] = useState(false);
   const [filter, setFilter] = useState<JobStatus | "ALL">("ALL");
+  const [onlyMine, setOnlyMine] = useState(false);
   const [q, setQ] = useState("");
   const [showNew, setShowNew] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,8 +27,10 @@ export default function JobsPage() {
   });
   const [assets, setAssets] = useState<Asset[]>([]);
 
-  useSession();
+  const me = useSession()?.user.id;
   const canRegister = can("jobs.register");
+  // Aviation screens stay as they were unless the organisation starts assigning work.
+  const showAssignee = !aviation || rows.some((j) => j.assigneeId);
   // The organisation's lists, with sensible first choices.
   const categories = dict("category");
   const sites = dict("site");
@@ -54,12 +57,13 @@ export default function JobsPage() {
       rows.filter(
         (j) =>
           (filter === "ALL" || j.status === filter) &&
+          (!onlyMine || j.assigneeId === me) &&
           (q === "" ||
             `${j.id} ${j.component} ${j.partNo} ${j.serialNo} ${j.originUnit} ${j.repairUnit}`
               .toLowerCase()
               .includes(q.toLowerCase())),
       ),
-    [rows, filter, q],
+    [rows, filter, q, onlyMine, me],
   );
 
   async function register() {
@@ -184,6 +188,16 @@ export default function JobsPage() {
         >
           ALL
         </button>
+        {showAssignee && (
+          <button
+            onClick={() => setOnlyMine(!onlyMine)}
+            className={`mono rounded-full border px-3 py-1 text-[10.5px] tracking-widest transition-colors ${
+              onlyMine ? "border-trace bg-trace/15 text-fg" : "hairline text-steel hover:border-steel/50 hover:text-fg"
+            }`}
+          >
+            MINE
+          </button>
+        )}
         {statuses.map((s) => (
           <button
             key={s}
@@ -207,7 +221,7 @@ export default function JobsPage() {
         <EmptyState title={`No ${terms.jobs.toLowerCase()} match`} hint="Adjust the status filter or clear the search." />
       ) : (
         <div className="panel fade-up d2">
-          <Table head={[aviation ? "PS / Job" : terms.jobNo, terms.component, aviation ? "Part / Serial" : "Model / Tag", "Cat", terms.originUnit, terms.site, t("status"), t("location"), "Days"]}>
+          <Table head={[aviation ? "PS / Job" : terms.jobNo, terms.component, aviation ? "Part / Serial" : "Model / Tag", "Cat", terms.originUnit, terms.site, ...(showAssignee ? ["Assigned to"] : []), t("status"), t("location"), "Days"]}>
             {filtered.map((j) => (
               <Tr key={j.id} onClick={() => router.push(`/jobs/${j.id}`)}>
                 <Td className="mono text-xs text-trace">
@@ -226,6 +240,7 @@ export default function JobsPage() {
                 <Td className="mono text-xs text-steel">{aviation ? (j.category === "MILITARY" ? "MIL" : j.category) : label("category", j.category)}</Td>
                 <Td className="mono text-xs text-steel">{j.originUnit}</Td>
                 <Td className="mono text-xs text-steel">{aviation ? j.repairUnit : label("site", j.repairUnit)}</Td>
+                {showAssignee && <Td className="text-xs text-steel">{j.assigneeName ?? <span className="text-dim">—</span>}</Td>}
                 <Td><MetaPill status={j.status} meta={cfg?.jobStatusMeta?.[j.status]} lang={lang} /></Td>
                 <Td className="mono text-xs text-steel">{aviation ? j.location : label("location", j.location)}</Td>
                 <Td className="mono text-xs tabular-nums text-steel">{daysIn(j.statusSince)}</Td>

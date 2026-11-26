@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, UseGuards, UseInterceptors } from '@nestjs/common';
+import { ClientOpInterceptor } from '../common/client-ops';
 import { AuthGuard } from '../auth/auth.guard';
 import { InModule, Requires } from '../auth/roles.decorator';
 import { JobsService } from './jobs.service';
@@ -18,6 +19,12 @@ export class JobsController {
     return this.svc.list((archived ?? 'exclude') as 'exclude' | 'include' | 'only');
   }
 
+  /** My work: assigned to me, and unassigned work at my site that my role can take. */
+  @Get('mine')
+  mine(@Req() req: any) {
+    return this.svc.mine({ name: req.user.name, role: req.user.role, sub: req.user.sub, branch: req.user.branch });
+  }
+
   @Get(':id')
   get(@Param('id') id: string) {
     return this.svc.get(id);
@@ -32,10 +39,37 @@ export class JobsController {
     return this.svc.register(dto, { name: req.user.name, role: req.user.role });
   }
 
+  /** Everything the phone needs for one job (and keeps for offline use). */
+  @Get(':id/pack')
+  pack(@Param('id') id: string, @Req() req: any) {
+    return this.svc.pack(id, { name: req.user.name, role: req.user.role, sub: req.user.sub });
+  }
+
+  /** A note on the job's timeline. Safe to resend with the same X-Client-Op. */
+  @Post(':id/notes')
+  @UseInterceptors(ClientOpInterceptor)
+  note(@Param('id') id: string, @Body() body: { text?: string }, @Req() req: any) {
+    return this.svc.addNote(id, body?.text, { name: req.user.name, role: req.user.role, sub: req.user.sub });
+  }
+
+  /** Assign to a person, or `{ "userId": null }` to unassign. */
+  @Patch(':id/assignee')
+  @Requires('jobs.assign')
+  assignee(@Param('id') id: string, @Body() body: { userId?: string | null }, @Req() req: any) {
+    return this.svc.assign(id, body?.userId || null, { name: req.user.name, role: req.user.role, sub: req.user.sub });
+  }
+
+  /** Take an unassigned job whose next step your role owns. */
+  @Post(':id/claim')
+  @HttpCode(200)
+  claim(@Param('id') id: string, @Req() req: any) {
+    return this.svc.claim(id, { name: req.user.name, role: req.user.role, sub: req.user.sub });
+  }
+
   @Patch(':id/checklist')
   checklist(
     @Param('id') id: string,
-    @Body() body: { items?: { key: string; done?: boolean; note?: string }[]; add?: { label: string; required?: boolean }[] },
+    @Body() body: { items?: { key: string; done?: boolean; note?: string }[]; add?: { label: string; required?: boolean }[]; at?: string },
     @Req() req: any,
   ) {
     return this.svc.updateChecklist(id, body ?? {}, { name: req.user.name, role: req.user.role });
@@ -47,7 +81,7 @@ export class JobsController {
     @Body() body: { to: JobStatus; fields?: Record<string, string> },
     @Req() req: any,
   ) {
-    return this.svc.transition(id, body.to, body.fields ?? {}, { name: req.user.name, role: req.user.role });
+    return this.svc.transition(id, body.to, body.fields ?? {}, { name: req.user.name, role: req.user.role, sub: req.user.sub });
   }
 
   // QP.56 AOG / ROA / Critical priority overlay (5.9) — Mgr PC / CsE (PCE) own the COL column

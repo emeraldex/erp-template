@@ -1,4 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import { checkTypedFields } from '../workflow/fields';
 import { currentTenant } from '../tenancy/tenant';
 import { ADMIN_ROLE, CAPABILITIES, type Capability, type Kind as WorkflowKind, type Phase, type StatusMeta } from '../packs/types';
 import { AVIATION } from '../packs/aviation';
@@ -181,6 +183,48 @@ export class StoreService {
   focalPoint(): string {
     const roles = this.rolesWith('incidents.manage').filter((r) => r !== ADMIN_ROLE);
     return this.cfg().users.find((u) => roles.includes(u.role))?.name ?? 'Safety focal point';
+  }
+
+  /** An active person in this organisation, or null. */
+  async activeUser(id: string): Promise<{ id: string; name: string; role: string; branch: string } | null> {
+    if (!id) return null;
+    return this.prisma.user.findFirst({ where: { id, deactivatedAt: null }, select: { id: true, name: true, role: true, branch: true } });
+  }
+
+  /** An attachment's facts, for checking photo and signature fields. */
+  async attachmentBrief(id: string) {
+    if (!/^[0-9a-f-]{36}$/.test(id)) return null;
+    return this.prisma.attachment.findUnique({
+      where: { id }, select: { entity: true, entityId: true, kind: true, contentType: true, filename: true, signedBy: true },
+    });
+  }
+
+  /**
+   * Check a step's typed fields (numbers, dates, people, photos, signatures) and
+   * show readable values in the audit entry the step just added.
+   */
+  async checkStepFields(rule: TransitionRule, fields: Record<string, string>, record: { audit: AuditEntry[] }, entity: string, entityId: string): Promise<void> {
+    if (!rule.requires.some((f) => f.type && f.type !== 'text')) return;
+    const shown = await checkTypedFields(rule.requires, fields, {
+      entity, entityId, user: (id) => this.activeUser(id), attachment: (id) => this.attachmentBrief(id),
+    });
+    const entry = record.audit.at(-1);
+    if (entry?.fields && Object.keys(shown).length) entry.fields = { ...entry.fields, ...shown };
+  }
+
+  /** Attachment metadata for one record (no file contents). */
+  async attachmentsOf(entity: string, entityId: string) {
+    const rows = await this.prisma.attachment.findMany({ where: { entity, entityId }, orderBy: { uploadedAt: 'asc' } });
+    return rows.map((a) => ({
+      id: a.id, filename: a.filename, contentType: a.contentType, sizeBytes: a.sizeBytes, kind: a.kind,
+      ...(a.caption ? { caption: a.caption } : {}), ...(a.signedBy ? { signedBy: a.signedBy } : {}), ...(a.formNo ? { formNo: a.formNo } : {}),
+      uploadedBy: a.uploadedBy, uploadedAt: a.uploadedAt.toISOString(),
+    }));
+  }
+
+  /** An in-app notification for one person. */
+  async notify(userId: string, n: { kind: string; title: string; body: string; ref?: string }): Promise<void> {
+    await this.prisma.notification.create({ data: { id: randomUUID(), userId, kind: n.kind, title: n.title, body: n.body, ref: n.ref ?? null } });
   }
 
   /** What a role may do; ADMIN may do everything. */
@@ -550,6 +594,8 @@ export class StoreService {
         indentRef: job.indentRef ?? null, ovId: job.ovId ?? null,
         jobType: job.jobType ?? 'CORRECTIVE', assetId: job.assetId ?? null, pmScheduleId: job.pmScheduleId ?? null,
         checklist: (job.checklist ?? []) as never,
+        assigneeId: job.assigneeId ?? null, assigneeName: job.assigneeName ?? null,
+        assignedAt: job.assignedAt ? new Date(job.assignedAt) : null,
         ordinal: await this.ordinalIn(tx.job),
         records: { create: this.recordCreate(job.records) },
         audit: { create: this.auditCreate(job.audit) },
@@ -726,6 +772,9 @@ export class StoreService {
         indentRef: job.indentRef ?? null,
         ovId: job.ovId ?? null,
         checklist: (job.checklist ?? []) as never,
+        assigneeId: job.assigneeId ?? null,
+        assigneeName: job.assigneeName ?? null,
+        assignedAt: job.assignedAt ? new Date(job.assignedAt) : null,
         version: { increment: 1 },
       },
     });

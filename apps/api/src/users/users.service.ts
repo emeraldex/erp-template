@@ -29,6 +29,15 @@ export class UsersService {
     });
   }
 
+  /** Active staff, for pickers: id, name, role and site only. */
+  async directory() {
+    return this.prisma.user.findMany({
+      where: { deactivatedAt: null },
+      select: { id: true, name: true, role: true, branch: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   private async activeAdmins(): Promise<number> {
     return this.prisma.user.count({ where: { role: 'ADMIN', deactivatedAt: null } });
   }

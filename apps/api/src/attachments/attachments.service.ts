@@ -16,17 +16,24 @@ export const maxBytes = () => Number(process.env.ATTACHMENT_MAX_MB || 20) * 1024
 export interface AttachmentView {
   id: string; entity: Entity; entityId: string; formNo?: string; filename: string;
   contentType: string; sizeBytes: number; sha256: string; uploadedBy: string; uploadedAt: string;
+  kind: 'file' | 'photo' | 'signature'; caption?: string; signedBy?: string;
 }
+
+export const ATTACHMENT_KINDS = ['file', 'photo', 'signature'] as const;
+const SIGNATURE_MAX_BYTES = 200 * 1024;
 
 type Audited = { audit: AuditEntry[]; status?: string };
 
 const view = (a: {
   id: string; entity: string; entityId: string; formNo: string | null; filename: string; contentType: string;
   sizeBytes: number; sha256: string; uploadedBy: string; uploadedAt: Date;
+  kind?: string; caption?: string | null; signedBy?: string | null;
 }): AttachmentView => ({
   id: a.id, entity: a.entity as Entity, entityId: a.entityId, ...(a.formNo ? { formNo: a.formNo } : {}),
   filename: a.filename, contentType: a.contentType, sizeBytes: a.sizeBytes, sha256: a.sha256,
   uploadedBy: a.uploadedBy, uploadedAt: a.uploadedAt.toISOString(),
+  kind: (a.kind ?? 'file') as AttachmentView['kind'],
+  ...(a.caption ? { caption: a.caption } : {}), ...(a.signedBy ? { signedBy: a.signedBy } : {}),
 });
 
 /**
@@ -72,6 +79,7 @@ export class AttachmentsService {
     file: { originalname: string; mimetype: string; buffer: Buffer; size: number } | undefined,
     formNo: string | undefined,
     actor: { name: string; role: Role },
+    extra: { kind?: string; caption?: string; signedBy?: string } = {},
   ): Promise<AttachmentView> {
     const e = this.parseEntity(entity);
     if (!file?.buffer?.length) throw new BadRequestException('Attach a non-empty file in the "file" field');
@@ -81,6 +89,17 @@ export class AttachmentsService {
     if (problem) throw new BadRequestException(problem);
     const form = formNo?.trim().slice(0, 20) || undefined;
     if (form && !/^[A-Za-z0-9 ./-]+$/.test(form)) throw new BadRequestException('formNo may contain letters, digits, space, . / -');
+    // Photos and signatures are proof of work that steps can ask for.
+    const kind = (extra.kind?.trim() || 'file') as AttachmentView['kind'];
+    if (!ATTACHMENT_KINDS.includes(kind)) throw new BadRequestException(`kind must be one of ${ATTACHMENT_KINDS.join(', ')}`);
+    const caption = extra.caption?.trim().slice(0, 200) || undefined;
+    const signedBy = extra.signedBy?.trim() || undefined;
+    if (kind === 'photo' && !file.mimetype.startsWith('image/')) throw new BadRequestException('A photo must be an image');
+    if (kind === 'signature') {
+      if (file.mimetype !== 'image/png') throw new BadRequestException('A signature must be a PNG image');
+      if (file.size > SIGNATURE_MAX_BYTES) throw new BadRequestException('A signature image must be under 200 KB');
+      if (!signedBy || signedBy.length < 2 || signedBy.length > 80) throw new BadRequestException('Give the name of the person signing (2–80 characters)');
+    } else if (signedBy) throw new BadRequestException('Only signatures carry a signer');
 
     const rec = await this.record(e, entityId);
     if (!rec) throw new NotFoundException(`${e} ${entityId} not found`);
@@ -92,9 +111,13 @@ export class AttachmentsService {
     await this.storage.put(storageKey, file.buffer, file.mimetype);
 
     const row = await this.prisma.attachment.create({
-      data: { id, entity: e, entityId, formNo: form ?? null, filename, contentType: file.mimetype, sizeBytes: file.size, sha256, storageKey, uploadedBy: actor.name },
+      data: {
+        id, entity: e, entityId, formNo: form ?? null, filename, contentType: file.mimetype, sizeBytes: file.size, sha256, storageKey,
+        uploadedBy: actor.name, kind, caption: caption ?? null, signedBy: signedBy ?? null,
+      },
     });
-    rec.audit.push(this.store.audit(actor.name, actor.role, `Attachment added: ${filename}${form ? ` (${form})` : ''}`, {
+    const what = kind === 'signature' ? `Signature added (signed by ${signedBy})` : kind === 'photo' ? `Photo added: ${caption ?? filename}` : `Attachment added: ${filename}${form ? ` (${form})` : ''}`;
+    rec.audit.push(this.store.audit(actor.name, actor.role, what, {
       attachmentId: id, sha256: sha256.slice(0, 16), ...(form ? { formNo: form } : {}),
     }));
     await this.store.save(rec);

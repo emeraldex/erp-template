@@ -76,7 +76,7 @@ it takes:
 
 | Workflow | Actions |
 |---|---|
-| Work orders | Raise a parts request · Open a vendor repair · Record a meter reading · Copy fields onto the record |
+| Work orders | Assign to a person · Raise a parts request · Open a vendor repair · Record a meter reading · Copy fields onto the record |
 | Parts requests | Record a stock check · Issue from stock · Evaluate quotations (minimum number, optional bypass approval) · Record receipt |
 | Vendor repairs | Set the vendor · Record cost and delivery · Move the item · Close the work order |
 | Invoices | Raise the tax invoice · Record payment · Mark outstanding |
@@ -85,10 +85,21 @@ A field an action reads must stay mandatory while the action is on the step;
 the editor marks such fields **NEEDED** and refuses to save otherwise.
 Removing a step removes its actions with it.
 
+### Field types and proof of work
+
+A mandatory field can ask for **text** (the default), a **number**, a **date**,
+a **person** (picked from active staff), a **photo** or a **signature**. The
+server checks each type and the audit trail records a readable value — the
+person's name, the photo's file name, "signed by …". A photo or signature
+field must point to an attachment on the same work order, so the technician
+takes it on the spot. New Facilities organisations ask for a photo of the
+completed work and the requester's signature when work is completed; the
+*Assign to a person* action reads a person field.
+
 ### Roles and permissions — *Workflow editor → Roles & permissions* (administrators)
 
 Who owns each step is set on the step. Everything else a role may do is a
-permission: register work, raise or close priorities, record quotations,
+permission: register work, assign work to people, raise or close priorities, record quotations,
 create invoices, download billing documents, manage the supplier register,
 manage incidents, sign tools in and out, manage assets, record meter readings,
 run each report, receive escalations, edit the workflow, administer the

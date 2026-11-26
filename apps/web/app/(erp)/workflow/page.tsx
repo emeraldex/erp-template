@@ -8,7 +8,10 @@ import { useVocab } from "@/lib/vocab";
 import type { DictEntry, Phase } from "@/lib/types";
 import { Button, PageHeader, Panel } from "@/components/ui";
 
-type Field = { key: string; label: string; formNo?: string };
+type Field = { key: string; label: string; formNo?: string; type?: "text" | "number" | "date" | "user" | "photo" | "signature" };
+const FIELD_TYPES: [NonNullable<Field["type"]>, string][] = [
+  ["text", "Text"], ["number", "Number"], ["date", "Date"], ["user", "Person"], ["photo", "Photo"], ["signature", "Signature"],
+];
 type Effect = { type: string; params?: Record<string, unknown> };
 type Rule = { from: string; to: string; label: string; labelMs: string; roles: string[]; requires: Field[]; setLocation?: string; effects?: Effect[] };
 type ParamDef = { name: string; label: string; type: "field" | "number" | "location" | "jobStatus" | "text"; required?: boolean };
@@ -132,9 +135,12 @@ function TransitionsEditor({ snap, roles, roleLabel, locations, onSaved }: { sna
                   const sys = needed || locked?.fields.some((x) => x.key === f.key && (r.effects ?? []).length > 0);
                   const setField = (patch: Partial<Field>) => update(i, { requires: r.requires.map((x, m) => (m === k ? { ...x, ...patch } : x)) });
                   return (
-                    <div key={k} className="mb-1.5 grid grid-cols-[1fr_2fr_90px_auto] items-center gap-1.5">
+                    <div key={k} className="mb-1.5 grid grid-cols-[1fr_2fr_96px_90px_auto] items-center gap-1.5">
                       <input value={f.key} disabled={sys} placeholder="key" onChange={(e) => setField({ key: e.target.value })} className={input} />
                       <input value={f.label} placeholder="Label shown to the user" onChange={(e) => setField({ label: e.target.value })} className={input} />
+                      <select value={f.type ?? "text"} title="What is asked for" onChange={(e) => setField({ type: e.target.value === "text" ? undefined : (e.target.value as Field["type"]) })} className={input}>
+                        {FIELD_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                      </select>
                       <input value={f.formNo ?? ""} placeholder="Form no." onChange={(e) => setField({ formNo: e.target.value || undefined })} className={input} />
                       {sys ? <span className="mono text-[9px] tracking-widest text-amber">NEEDED</span> : (
                         <button onClick={() => update(i, { requires: r.requires.filter((_, m) => m !== k) })} className="mono text-[10px] text-steel hover:text-brand-bright">✕</button>

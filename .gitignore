@@ -47,3 +47,5 @@ coverage/
 
 # Local reverse proxy config (copy of deploy/Caddyfile.example)
 deploy/Caddyfile
+phone-check/
+apps/api/data/

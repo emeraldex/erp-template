@@ -104,6 +104,7 @@ export class InvoicingService {
     }
 
     const rule = applyTransition(inv, this.store.invoiceTransitions, to, f, actor);
+    await this.store.checkStepFields(rule, f, inv, 'INVOICE', inv.id);
 
     for (const e of rule.effects ?? []) {
       const p = (e.params ?? {}) as Record<string, string>;

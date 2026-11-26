@@ -53,6 +53,25 @@ monitoring) is up to whoever operates it.
 - **Exports**: CSV exports neutralise spreadsheet formula injection; file
   downloads are served as attachments with `nosniff` and a sandbox policy.
 
+## Data on phones
+
+- The phone app keeps copies of the person's assigned work orders (and ones
+  opened in the last 7 days), the organisation's lists and their own unsent
+  changes, in the browser's storage for that site, separately per
+  organisation address and person. It never stores passwords or tokens: the
+  session stays in the httpOnly cookie.
+- Signing out removes the cached copies; unsent changes stay on the phone for
+  the same person and are never shown to another user. **More → Remove offline
+  copies** clears them on demand.
+- Photos are re-encoded on the phone before upload, which drops their
+  metadata, including GPS location.
+- Resent offline changes carry an id (`X-Client-Op`) so each applies once.
+- The service worker caches only the app's own pages and static files; it
+  never intercepts API calls. Building with `NEXT_PUBLIC_PWA=0` removes it from
+  every phone.
+- Lost or shared phones: deactivate the user (sessions end at once) and, if
+  needed, ask them to clear the site's data.
+
 ## Application security
 
 - Security headers (helmet); CORS limited to known web addresses.
