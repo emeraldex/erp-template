@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { api } from "@/lib/api";
+import { api, download } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { Asset } from "@/lib/types";
 import { useVocab } from "@/lib/vocab";
@@ -73,7 +73,16 @@ function AssetsRegister() {
       <PageHeader
         eyebrow="Register · hierarchy · meters · maintenance history"
         title={terms.assets}
-        actions={canManage ? <Button onClick={() => setAdding(!adding)} variant={adding ? "ghost" : "primary"}>{adding ? "Cancel" : `+ Add ${terms.asset.toLowerCase()}`}</Button> : undefined}
+        actions={
+          <>
+            {shown.length > 0 && (
+              <Button variant="ghost" onClick={() => download(`/assets/labels?ids=${shown.slice(0, 100).map((a) => encodeURIComponent(a.id)).join(",")}`, "asset-labels.pdf").catch((e) => setMsg({ ok: false, text: (e as Error).message }))}>
+                Print labels ({Math.min(shown.length, 100)})
+              </Button>
+            )}
+            {canManage && <Button onClick={() => setAdding(!adding)} variant={adding ? "ghost" : "primary"}>{adding ? "Cancel" : `+ Add ${terms.asset.toLowerCase()}`}</Button>}
+          </>
+        }
       />
       {msg && <p className={`mb-4 rounded border px-3 py-2 text-sm ${msg.ok ? "border-phosphor/40 text-phosphor" : "border-brand-bright/40 bg-brand-bright/10 text-brand-bright"}`}>{msg.text}</p>}
 

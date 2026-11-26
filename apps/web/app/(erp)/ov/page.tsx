@@ -102,6 +102,8 @@ export default function OvPage() {
 
                   {cfg && user && (
                     <TransitionActions
+                      entity="ov"
+                      entityId={ov.id}
                       status={ov.status}
                       rules={cfg.ovTransitions}
                       meta={cfg.ovStatusMeta}

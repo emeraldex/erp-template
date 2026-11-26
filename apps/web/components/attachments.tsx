@@ -66,6 +66,8 @@ export function AttachmentsPanel({
                 {a.filename}
               </button>
               <p className="mono text-[10px] tracking-wider text-dim">
+                {a.kind === "photo" && <span className="mr-2 text-trace">PHOTO{a.caption ? ` · ${a.caption}` : ""}</span>}
+                {a.kind === "signature" && <span className="mr-2 text-phosphor">SIGNATURE · {a.signedBy}</span>}
                 {a.formNo && <span className="mr-2 text-steel">{a.formNo}</span>}
                 {size(a.sizeBytes)} · {a.uploadedBy} · {a.uploadedAt.slice(0, 16).replace("T", " ")} ·{" "}
                 <span title={`SHA-256 ${a.sha256}`}>SHA-256 {a.sha256.slice(0, 12)}…</span>

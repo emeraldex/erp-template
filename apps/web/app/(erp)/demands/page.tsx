@@ -157,6 +157,8 @@ export default function DemandsPage() {
 
                   {cfg && user && (
                     <TransitionActions
+                      entity="demand"
+                      entityId={dm.id}
                       status={dm.status}
                       rules={cfg.demandTransitions}
                       meta={cfg.demandStatusMeta}

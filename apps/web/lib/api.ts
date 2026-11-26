@@ -106,7 +106,8 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     // Validation failures list every problem; show them, not just the headline.
-    const details = Array.isArray(body?.errors) && body.errors.length ? `: ${body.errors.join("; ")}` : "";
+    const errors: string[] = Array.isArray(body?.errors) ? body.errors : [];
+    const details = errors.length && !(errors.length === 1 && errors[0] === body?.message) ? `: ${errors.join("; ")}` : "";
     const headline = Array.isArray(body?.message) ? body.message.join("; ") : (body?.message ?? res.statusText);
     const err = new ApiError(res.status, `${headline}${details}`, body?.code);
     const isAuthCall = path.startsWith("/auth/login") || path.startsWith("/auth/change-password");
@@ -171,11 +172,11 @@ export const api = {
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
   get: <T,>(path: string) => request<T>(path),
-  post: <T,>(path: string, body: unknown) =>
-    request<T>(path, { method: "POST", body: JSON.stringify(body) }),
-  patch: <T,>(path: string, body: unknown) =>
-    request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
+  post: <T,>(path: string, body: unknown, headers?: Record<string, string>) =>
+    request<T>(path, { method: "POST", body: JSON.stringify(body), headers }),
+  patch: <T,>(path: string, body: unknown, headers?: Record<string, string>) =>
+    request<T>(path, { method: "PATCH", body: JSON.stringify(body), headers }),
   put: <T,>(path: string, body: unknown) =>
     request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
-  upload: <T,>(path: string, form: FormData) => request<T>(path, { method: "POST", body: form }),
+  upload: <T,>(path: string, form: FormData, headers?: Record<string, string>) => request<T>(path, { method: "POST", body: form, headers }),
 };
