@@ -99,6 +99,7 @@ export class JobsService {
       if (open.length) throw new BadRequestException(`Checklist incomplete: ${open.map((c) => c.label).join('; ')}`);
     }
     const rule = applyTransition(job, this.store.jobTransitions, to, fields ?? {}, actor);
+    await this.store.checkStepFields(rule, fields ?? {}, job, 'JOB', job.id);
     if (fields?.indentRef) job.indentRef = fields.indentRef;
 
     // The step's actions — committed together with the job itself.

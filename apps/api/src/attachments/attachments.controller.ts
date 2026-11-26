@@ -51,9 +51,11 @@ export class AttachmentsController {
     @Param('entity') entity: string,
     @Param('entityId') entityId: string,
     @UploadedFile() file: Express.Multer.File | undefined,
-    @Body('formNo') formNo: string | undefined,
+    @Body() body: { formNo?: string; kind?: string; caption?: string; signedBy?: string } | undefined,
     @Req() req: { user: AuthUser },
   ) {
-    return this.svc.upload(entity, entityId, file, formNo, { name: req.user.name, role: req.user.role });
+    return this.svc.upload(entity, entityId, file, body?.formNo, { name: req.user.name, role: req.user.role }, {
+      kind: body?.kind, caption: body?.caption, signedBy: body?.signedBy,
+    });
   }
 }

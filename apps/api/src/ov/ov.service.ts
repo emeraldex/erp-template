@@ -22,6 +22,7 @@ export class OvService {
     if (this.store.isFinal('OV', ov.status)) throw new BadRequestException('Vendor repair is closed');
     const f = fields ?? {};
     const rule = applyTransition(ov, this.store.ovTransitions, to, f, actor);
+    await this.store.checkStepFields(rule, f, ov, 'OV', ov.id);
     const job = await this.store.job(ov.jobId);
     // Reflect vendor-repair milestones on the parent job's audit trail.
     job?.audit.push(this.store.audit(actor.name, actor.role, `OV ${ov.id}: ${to}`));

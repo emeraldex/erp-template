@@ -8,7 +8,7 @@ import { dictionaryRows } from '../../src/seed-db';
 /** The vocabulary lookups are pure, so the fake borrows the real ones. */
 const BORROWED = [
   'dict', 'dictionaryAll', 'has', 'statusKeys', 'initialStatus', 'finalStatuses', 'statusesInPhase', 'status',
-  'phaseOf', 'isFinal', 'statusMeta', 'dictMeta', 'label', 'capabilitiesOf', 'rolesWith', 'packId', 'procedureRef', 'focalPoint',
+  'phaseOf', 'isFinal', 'statusMeta', 'dictMeta', 'label', 'capabilitiesOf', 'rolesWith', 'packId', 'procedureRef', 'focalPoint', 'checkStepFields',
 ] as const;
 
 /**
@@ -92,6 +92,8 @@ export class FakeStore {
     { id: 'u-mm', name: 'Hafiz', role: 'MM', branch: 'HQ' },
   ];
   notifications: { userId: string; kind: string; title: string; ref?: string }[] = [];
+  attachments = new Map<string, { entity: string; entityId: string; kind: string; contentType: string; filename: string; signedBy: string | null }>();
+  async attachmentBrief(id: string) { return this.attachments.get(id) ?? null; }
   async activeUser(id: string) { return this.people.find((p) => p.id === id) ?? null; }
   async notify(userId: string, n: { kind: string; title: string; body: string; ref?: string }) { this.notifications.push({ userId, ...n }); }
 

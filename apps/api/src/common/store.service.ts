@@ -1,5 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { checkTypedFields } from '../workflow/fields';
 import { currentTenant } from '../tenancy/tenant';
 import { ADMIN_ROLE, CAPABILITIES, type Capability, type Kind as WorkflowKind, type Phase, type StatusMeta } from '../packs/types';
 import { AVIATION } from '../packs/aviation';
@@ -188,6 +189,27 @@ export class StoreService {
   async activeUser(id: string): Promise<{ id: string; name: string; role: string; branch: string } | null> {
     if (!id) return null;
     return this.prisma.user.findFirst({ where: { id, deactivatedAt: null }, select: { id: true, name: true, role: true, branch: true } });
+  }
+
+  /** An attachment's facts, for checking photo and signature fields. */
+  async attachmentBrief(id: string) {
+    if (!/^[0-9a-f-]{36}$/.test(id)) return null;
+    return this.prisma.attachment.findUnique({
+      where: { id }, select: { entity: true, entityId: true, kind: true, contentType: true, filename: true, signedBy: true },
+    });
+  }
+
+  /**
+   * Check a step's typed fields (numbers, dates, people, photos, signatures) and
+   * show readable values in the audit entry the step just added.
+   */
+  async checkStepFields(rule: TransitionRule, fields: Record<string, string>, record: { audit: AuditEntry[] }, entity: string, entityId: string): Promise<void> {
+    if (!rule.requires.some((f) => f.type && f.type !== 'text')) return;
+    const shown = await checkTypedFields(rule.requires, fields, {
+      entity, entityId, user: (id) => this.activeUser(id), attachment: (id) => this.attachmentBrief(id),
+    });
+    const entry = record.audit.at(-1);
+    if (entry?.fields && Object.keys(shown).length) entry.fields = { ...entry.fields, ...shown };
   }
 
   /** An in-app notification for one person. */
