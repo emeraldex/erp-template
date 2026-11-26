@@ -32,6 +32,7 @@ const NAV: { group: DictKey; items: NavItem[] }[] = [
     group: "operations",
     items: [
       { href: "/dashboard", label: "command", code: "OPS", tag: "OPS" },
+      { href: "/requests", label: "requests", code: "REQ", tag: "REQ", module: "requests", capability: "requests.manage" },
       { href: "/jobs", label: "jobs", term: "jobRegister", code: "JTS", tag: "WO" },
       { href: "/assets", label: "assets", term: "assets", code: "AST", tag: "AST", module: "assets" },
       { href: "/pm", label: "pm", term: "pm", code: "PM", tag: "PM", module: "pm" },
@@ -121,6 +122,16 @@ function SidebarContent({ mobile = false }: { mobile?: boolean }) {
   // Unchanged aviation words keep their Bahasa Melayu translation; an
   // organisation's own words are shown as it wrote them.
   const labelOf = (item: NavItem) => (item.term && terms[item.term] !== DEFAULT_TERMS[item.term] ? terms[item.term] : t(item.label));
+  // How many portal requests are waiting, for the menu.
+  const [waiting, setWaiting] = useState(0);
+  const triage = modules.requests && !!session && can("requests.manage");
+  useEffect(() => {
+    if (!triage) return;
+    const load = () => api.get<{ id: string }[]>("/requests?status=NEW").then((r) => setWaiting(r.length)).catch(() => {});
+    load();
+    const timer = setInterval(load, 60_000);
+    return () => clearInterval(timer);
+  }, [triage, pathname]);
   const nav = NAV.map((g) => ({
     ...g,
     items: g.items.filter((i) => (!i.module || modules[i.module]) && (!i.capability || !session || can(i.capability))),
@@ -150,7 +161,12 @@ function SidebarContent({ mobile = false }: { mobile?: boolean }) {
                           : "text-steel hover:bg-panel/70 hover:text-fg"
                       }`}
                     >
-                      <span>{labelOf(item)}</span>
+                      <span>
+                        {labelOf(item)}
+                        {item.href === "/requests" && waiting > 0 && (
+                          <span className="mono ml-2 rounded-full bg-brand px-1.5 py-0.5 text-[10px] text-white" aria-label={`${waiting} waiting`}>{waiting}</span>
+                        )}
+                      </span>
                       <span
                         className={`mono text-[10px] tracking-widest transition-colors ${
                           active ? "text-brand-bright" : "text-dim group-hover:text-steel"

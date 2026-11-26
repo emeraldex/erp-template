@@ -147,6 +147,11 @@ export async function download(path: string, fallbackName = "download"): Promise
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
+/** GET a file (e.g. a photo) as a blob, for showing in the page. */
+export async function fetchBlob(path: string): Promise<Blob> {
+  return (await send(path)).blob();
+}
+
 /**
  * GET that, in demo mode only, falls back to bundled sample data when the API
  * is unreachable. Outside demo mode an unreachable API is an error the user sees.

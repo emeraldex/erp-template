@@ -13,6 +13,9 @@ import { RadarScope, RadarLegend } from "@/components/radar-scope";
 import { StatCard } from "@/components/stat-card";
 import { Bars } from "@/components/charts";
 
+// Static class names, so the stylesheet keeps them.
+const CARD_COLUMNS: Record<number, string> = { 4: "lg:grid-cols-4", 5: "lg:grid-cols-5", 6: "lg:grid-cols-6", 7: "lg:grid-cols-7" };
+
 export default function DashboardPage() {
   const cfg = useConfig();
   const { lang } = useLang();
@@ -60,7 +63,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className={`mb-6 grid grid-cols-2 gap-3 ${modules.stock && kpis.lowStock != null ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
+      <div className={`mb-6 grid grid-cols-2 gap-3 ${CARD_COLUMNS[4 + (modules.stock && kpis.lowStock != null ? 1 : 0) + (modules.requests && kpis.newRequests != null ? 2 : 0)]}`}>
         <StatCard label={`Open ${terms.jobs.toLowerCase()}`} value={kpis.openJobs} delayClass="d1" />
         <StatCard label="Work in progress" value={kpis.wip} delayClass="d2" />
         <StatCard
@@ -80,6 +83,20 @@ export default function DashboardPage() {
           />
         ) : (
           <StatCard label="Awaiting customer" value={kpis.awaitingCustomer} delayClass="d4" />
+        )}
+        {modules.requests && kpis.newRequests != null && (
+          <>
+            <Link href="/requests" className="block">
+              <StatCard label="New requests" value={kpis.newRequests} tone={kpis.newRequests ? "critical" : "good"} delayClass="d4" />
+            </Link>
+            <StatCard
+              label={kpis.satisfaction?.ratings ? `Satisfaction · ${kpis.satisfaction.ratings} rating${kpis.satisfaction.ratings === 1 ? "" : "s"}, 90 d` : "Satisfaction · no ratings yet"}
+              value={kpis.satisfaction?.average ?? 0}
+              format={(n) => (kpis.satisfaction?.ratings ? `${n.toFixed(1)} ★` : "—")}
+              tone={!kpis.satisfaction?.ratings ? "default" : kpis.satisfaction.average >= 4 ? "good" : kpis.satisfaction.average < 3 ? "critical" : "warn"}
+              delayClass="d4"
+            />
+          </>
         )}
         {modules.stock && kpis.lowStock != null && (
           <Link href="/stock?view=reorder" className="block">

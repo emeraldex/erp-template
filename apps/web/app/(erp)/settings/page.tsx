@@ -4,7 +4,7 @@ import { useSession } from "@/lib/use-session";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
-import { CompanyProfile, Modules, Settings, Terms } from "@/lib/types";
+import { CompanyProfile, Modules, PortalSettings, Settings, Terms } from "@/lib/types";
 import { DEFAULT_TERMS, useVocab } from "@/lib/vocab";
 import { Button, PageHeader, Panel } from "@/components/ui";
 
@@ -105,6 +105,7 @@ export default function SettingsPage() {
         </Panel>
             </div>
       {isAdmin && <SectorSettings settings={settings} onSaved={(next) => setSettings({ ...settings, ...next })} />}
+      {isAdmin && settings.modules?.requests && settings.portal && <PortalSettingsPanel initial={settings.portal} />}
       {isAdmin && <SsoSettings />}
     </div>
   );
@@ -184,7 +185,7 @@ const TERM_LABELS: [keyof Terms, string][] = [
 
 const MODULE_LABELS: [keyof Modules, string][] = [
   ["assets", "Asset register & meters"], ["pm", "Preventive maintenance (needs assets)"], ["procurement", "Parts requests & purchasing"],
-  ["stock", "Parts catalogue & stock control"],
+  ["stock", "Parts catalogue & stock control"], ["requests", "Request portal (anyone can report a problem)"],
   ["vendorRepair", "Repairs at vendors / OEMs"], ["priority", "Priority escalation"], ["invoicing", "Invoicing"],
   ["registers", "Supplier & contractor register"], ["incidents", "Safety incidents"], ["tools", "Tool control"], ["training", "Training records"],
 ];
@@ -263,6 +264,73 @@ function SectorSettings({ settings, onSaved }: { settings: Settings; onSaved: (s
         </div>
       </div>
       {msg && <p className={`mt-4 text-sm ${msg.ok ? "text-phosphor" : "text-brand-bright"}`}>{msg.text}</p>}
+    </Panel>
+  );
+}
+
+/** The public request portal: its address, whether it is open, the access code and the text above the form. */
+function PortalSettingsPanel({ initial }: { initial: PortalSettings }) {
+  const [p, setP] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+  const link = typeof window !== "undefined" ? `${window.location.origin}/r` : "/r";
+
+  async function save() {
+    setBusy(true); setMsg(null);
+    try {
+      setP(await api.patch<PortalSettings>("/settings/portal", p));
+      setMsg({ ok: true, text: "Saved." });
+    } catch (e) {
+      setMsg({ ok: false, text: (e as Error).message });
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <Panel className="fade-up d4 mt-5 p-5">
+      <p className="eyebrow mb-1">Request portal</p>
+      <p className="mb-4 text-sm text-steel">
+        Anyone with the link can report a problem — tenants, drivers, operators, ward staff — without an account. Requests arrive in
+        <a href="/requests" className="mx-1 text-trace hover:underline">Requests</a>for the help desk to accept, add to a work order or decline.
+        Print QR posters there for places and assets.
+      </p>
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border hairline bg-ink-deep/40 px-3 py-2">
+        <span className="mono text-xs text-fg">{link}</span>
+        <button onClick={() => { void navigator.clipboard?.writeText(link).then(() => setCopied(true)); }} className="mono text-[10.5px] tracking-widest text-steel hover:text-trace">{copied ? "COPIED" : "COPY"}</button>
+        <a href="/r" target="_blank" rel="noreferrer" className="mono text-[10.5px] tracking-widest text-steel hover:text-trace">OPEN ↗</a>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm text-fg">
+            <input type="checkbox" checked={p.open} onChange={(e) => setP({ ...p, open: e.target.checked })} className="accent-[var(--c-red)]" />
+            The form accepts new requests
+          </label>
+          <label className="flex items-center gap-2 text-sm text-fg">
+            <input type="checkbox" checked={p.askCategory} onChange={(e) => setP({ ...p, askCategory: e.target.checked })} className="accent-[var(--c-red)]" />
+            Ask what type of problem it is
+          </label>
+          <label className="block">
+            <span className="mono mb-1 block text-[10px] tracking-widest text-dim">Access code (empty = none; QR posters never need it)</span>
+            <input value={p.accessCode} onChange={(e) => setP({ ...p, accessCode: e.target.value })} placeholder="e.g. TOWER-7" className={inputClass} />
+          </label>
+          <label className="block">
+            <span className="mono mb-1 block text-[10px] tracking-widest text-dim">Remind the help desk after (hours; 0 = never)</span>
+            <input inputMode="numeric" value={String(p.triageHours)} onChange={(e) => setP({ ...p, triageHours: Number(e.target.value.replace(/\D/g, "") || 0) })} className={inputClass} />
+          </label>
+        </div>
+        <label className="block lg:col-span-1">
+          <span className="mono mb-1 block text-[10px] tracking-widest text-dim">Text above the form (English)</span>
+          <textarea rows={5} maxLength={500} value={p.intro} onChange={(e) => setP({ ...p, intro: e.target.value })} placeholder="e.g. For emergencies call 03-1234 5678." className={inputClass} />
+        </label>
+        <label className="block lg:col-span-1">
+          <span className="mono mb-1 block text-[10px] tracking-widest text-dim">Text above the form (Bahasa Melayu)</span>
+          <textarea rows={5} maxLength={500} value={p.introMs} onChange={(e) => setP({ ...p, introMs: e.target.value })} placeholder="cth. Untuk kecemasan hubungi 03-1234 5678." className={inputClass} />
+        </label>
+      </div>
+      <div className="mt-3 flex items-center gap-3">
+        <Button disabled={busy} onClick={save}>Save portal settings</Button>
+        {msg && <span className={`text-sm ${msg.ok ? "text-phosphor" : "text-brand-bright"}`}>{msg.text}</span>}
+      </div>
     </Panel>
   );
 }
