@@ -282,7 +282,12 @@ export interface TransitionRule<S extends string = string> {
   labelMs: string;               // bilingual — Section 7.2
   roles: Role[];                 // process-owner gating — FR-03
   /** Mandatory fields — FR-05. `type` defaults to free text (see workflow/fields.ts). */
-  requires: { key: string; label: string; formNo?: string; type?: 'text' | 'number' | 'date' | 'user' | 'photo' | 'signature' }[];
+  requires: {
+    key: string; label: string; formNo?: string;
+    type?: 'text' | 'number' | 'date' | 'user' | 'photo' | 'signature' | 'part' | 'store';
+    /** Shown on the step but not mandatory (checked when filled). */
+    optional?: boolean;
+  }[];
   setLocation?: Location;
   /** Actions taken with the step (raise a demand, mark paid…) — see workflow/effects.ts. */
   effects?: { type: string; params?: Record<string, unknown> }[];

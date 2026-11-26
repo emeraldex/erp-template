@@ -304,12 +304,19 @@ export class JobsService {
         if (p.indentRef && fields[p.indentRef]) job.indentRef = fields[p.indentRef];
         return;
       case 'raiseDemand': {
+        // A catalogue part (stock module) names itself; otherwise the request needs a description.
+        const partId = p.partField && this.settings.modules.stock ? str(fields[p.partField]) : undefined;
+        const part = partId && this.stock ? await this.stock.brief(partId) : null;
+        if (partId && (!part || !part.active)) throw new BadRequestException('Choose a part from the catalogue');
+        const described = p.descriptionField ? str(fields[p.descriptionField])?.trim() : undefined;
+        if (p.partField && !part && !described) throw new BadRequestException('Choose a part from the catalogue or describe what is needed');
         const ref = str(fields[p.refField]) || (await this.store.nextDemandId());
         if (!(await this.store.demandExists(ref))) {
           alsoSave.push(this.store.newDemand({
             id: ref, jobId: job.id,
-            partDescription: (p.descriptionField && fields[p.descriptionField]) || 'Spare per inspection',
-            partNo: (p.partNoField && fields[p.partNoField]) || '-',
+            ...(part ? { partId: part.id } : {}),
+            partDescription: part?.name ?? (described || 'Spare per inspection'),
+            partNo: part?.partNo ?? ((p.partNoField && fields[p.partNoField]) || '-'),
             qty: Number((p.qtyField && fields[p.qtyField]) || 1),
             status: this.store.initialStatus('DEMAND'), statusSince: new Date().toISOString(),
             raisedBy: actor.name, branch: job.repairUnit, quotations: [], records: [],

@@ -67,7 +67,8 @@ export function validateTransitions(kind: Kind, input: unknown, ctx: WorkflowCon
       keys.add(key);
       if (!flabel) errors.push(`${at}, field ${key || j + 1}: a label is required`);
       if (formNo && !FORM.test(formNo)) errors.push(`${at}, field ${key}: form number may contain letters, digits, space, . / -`);
-      requires.push({ key, label: flabel, ...(formNo ? { formNo } : {}), ...(type !== 'text' ? { type: type as FieldType } : {}) });
+      const optional = field.optional === true;
+      requires.push({ key, label: flabel, ...(formNo ? { formNo } : {}), ...(type !== 'text' ? { type: type as FieldType } : {}), ...(optional ? { optional } : {}) });
     }
     if (requires.length > 15) errors.push(`${at}: at most 15 mandatory fields`);
 
@@ -75,7 +76,8 @@ export function validateTransitions(kind: Kind, input: unknown, ctx: WorkflowCon
     if (setLocation && !ctx.locations.includes(setLocation)) errors.push(`${at}: unknown location ${setLocation}`);
     if (setLocation && kind !== 'JOB') errors.push(`${at}: only job transitions can move the item`);
 
-    const fx = validateEffects(kind, r.effects, { fields: requires.map((x) => x.key), locations: ctx.locations });
+    // Fields an action needs must be mandatory; optional fields don't count.
+    const fx = validateEffects(kind, r.effects, { fields: requires.filter((x) => !x.optional).map((x) => x.key), locations: ctx.locations });
     // Actions that read a person or a number need the right kind of field.
     const typeOf = (k: unknown) => requires.find((x) => x.key === k)?.type ?? 'text';
     for (const e of fx.effects) {

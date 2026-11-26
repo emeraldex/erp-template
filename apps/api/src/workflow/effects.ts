@@ -41,6 +41,7 @@ export const EFFECTS: EffectDef[] = [
     type: 'raiseDemand', kind: 'JOB', label: 'Raise a parts demand', description: 'Creates a parts demand linked to this work order, at the demand workflow’s first status.',
     params: [
       { name: 'refField', label: 'Demand number field (leave empty to number automatically)', type: 'field' },
+      { name: 'partField', label: 'Catalogue part field (stock)', type: 'field' },
       { name: 'descriptionField', label: 'Part description field', type: 'field' },
       { name: 'partNoField', label: 'Part number field', type: 'field' },
       { name: 'qtyField', label: 'Quantity field', type: 'field' },
@@ -73,8 +74,8 @@ export const EFFECTS: EffectDef[] = [
     params: [{ name: 'refField', label: 'Stock check reference field', type: 'field', required: true }], needs: ['refField'],
   },
   {
-    type: 'issueFromStock', kind: 'DEMAND', label: 'Issue from stock', description: 'Marks the part as available from stock.',
-    params: [{ name: 'holdingField', label: 'Holding store field', type: 'field' }], needs: [],
+    type: 'issueFromStock', kind: 'DEMAND', label: 'Issue from stock', description: 'Marks the part as available from stock. For a catalogue part (stock module on) it takes the quantity out of the store and issues it to the work order.',
+    params: [{ name: 'holdingField', label: 'Store field', type: 'field' }], needs: [],
   },
   {
     type: 'evaluateQuotations', kind: 'DEMAND', label: 'Evaluate quotations', description: 'Requires a minimum number of quotations (unless a bypass approval is given) and records the selected supplier.',
@@ -87,10 +88,13 @@ export const EFFECTS: EffectDef[] = [
     needs: [],
   },
   {
-    type: 'recordReceipt', kind: 'DEMAND', label: 'Record receipt', description: 'Records an optional discrepancy report on receipt.',
+    type: 'recordReceipt', kind: 'DEMAND', label: 'Record receipt', description: 'Records an optional discrepancy report on receipt. For a catalogue part (stock module on) it puts the goods into a store at their cost; a request for stock is then closed.',
     params: [
       { name: 'discrepancyField', label: 'Discrepancy report field', type: 'field' },
       { name: 'noteField', label: 'Discrepancy note field', type: 'field' },
+      { name: 'storeField', label: 'Store received into (field)', type: 'field' },
+      { name: 'qtyField', label: 'Quantity received (field; default: as requested)', type: 'field' },
+      { name: 'costField', label: 'Unit cost (field; default: from the chosen quotation)', type: 'field' },
     ],
     needs: [],
   },

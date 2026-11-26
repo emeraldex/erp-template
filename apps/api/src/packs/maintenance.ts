@@ -13,6 +13,8 @@ import { store, UNITS } from './stock-lists';
 
 type Field = TransitionRule['requires'][number];
 export const field = (key: string, label: string, type?: Field['type']): Field => ({ key, label, ...(type ? { type } : {}) });
+/** A field shown on the step but not mandatory. */
+export const optional = (key: string, label: string, type?: Field['type']): Field => ({ ...field(key, label, type), optional: true });
 
 const st = (key: string, label: string, labelMs: string, tone: StatusMeta['tone'], phase: StatusMeta['phase'], extra: Partial<StatusMeta> = {}): Entry<StatusMeta> =>
   ({ key, label, labelMs, meta: { tone, phase, ...(phase === 'closed' ? { final: true } : {}), ...extra } });
@@ -104,8 +106,9 @@ function jobWorkflow(o: MaintenanceOptions, modules: Modules) {
   if (modules.procurement) {
     transitions.push(
       step('IN_PROGRESS', 'ON_HOLD_PARTS', 'Request parts', 'Mohon alat ganti', [TECHNICIAN, SUPERVISOR],
-        [field('partDescription', 'Part needed'), field('qty', 'Quantity', 'number')],
-        { effects: [{ type: 'raiseDemand', params: { descriptionField: 'partDescription', partNoField: 'partNo', qtyField: 'qty' } }] }),
+        // A catalogue part if there is one (stock), otherwise a description.
+        [optional('part', 'Part from the catalogue', 'part'), optional('partDescription', 'Or describe the part'), field('qty', 'Quantity', 'number')],
+        { effects: [{ type: 'raiseDemand', params: { partField: 'part', descriptionField: 'partDescription', partNoField: 'partNo', qtyField: 'qty' } }] }),
       step('ON_HOLD_PARTS', 'IN_PROGRESS', 'Parts received — resume', 'Alat ganti diterima — sambung', [TECHNICIAN, SUPERVISOR]),
     );
   }
@@ -144,25 +147,35 @@ function demandWorkflow(o: MaintenanceOptions) {
     st('QUOTING', 'Getting quotations', 'Mendapatkan sebut harga', 'warn', 'waiting_parts', { acceptsQuotations: true }),
     st('ORDERED', 'Ordered', 'Dipesan', 'warn', 'waiting_parts'),
     st('RECEIVED', 'Received', 'Diterima', 'info', 'active'),
-    st('ISSUED', 'Issued', 'Dikeluarkan', 'good', 'closed'),
+    st('ISSUED', 'Fulfilled', 'Dipenuhi', 'good', 'closed'),
     st('REJECTED', 'Rejected', 'Ditolak', 'bad', 'closed', { branch: true }),
   ];
   const transitions = [
     step('RAISED', 'APPROVED', 'Approve', 'Lulus', [SUPERVISOR, MANAGER]),
     step('RAISED', 'REJECTED', 'Reject', 'Tolak', [SUPERVISOR, MANAGER], [field('reason', 'Reason')]),
-    step('APPROVED', 'ISSUED', 'Issue from stock', 'Keluarkan dari stok', [STORES], [field('store', 'Store / bin')],
+    step('APPROVED', 'ISSUED', 'Issue from stock', 'Keluarkan dari stok', [STORES], [field('store', 'Store', 'store')],
       { effects: [{ type: 'issueFromStock', params: { holdingField: 'store' } }] }),
     step('APPROVED', 'QUOTING', 'Request quotations', 'Minta sebut harga', [PURCHASING], [field('rfqRef', 'RFQ ref')],
       { effects: [{ type: 'setAttributes', params: { rfqRef: 'rfqRef' } }] }),
-    step('QUOTING', 'ORDERED', 'Place order', 'Buat pesanan', [PURCHASING], [field('poRef', 'Purchase order no.'), field('selectedSupplierId', 'Supplier chosen')], {
+    step('QUOTING', 'ORDERED', 'Place order', 'Buat pesanan', [PURCHASING],
+      [field('poRef', 'Purchase order no.'), field('selectedSupplierId', 'Supplier chosen'), optional('singleSourceRef', 'Single-source approval ref (if fewer quotations)')], {
       effects: [
         { type: 'evaluateQuotations', params: { min: o.minQuotations, selectionField: 'selectedSupplierId', bypassField: 'singleSourceRef' } },
         { type: 'setAttributes', params: { poRef: 'poRef' } },
       ],
     }),
-    step('ORDERED', 'RECEIVED', 'Receive goods', 'Terima barang', [STORES], [field('grnRef', 'Goods received note')],
-      { effects: [{ type: 'recordReceipt', params: { discrepancyField: 'discrepancyRef', noteField: 'discrepancyNote' } }] }),
-    step('RECEIVED', 'ISSUED', 'Issue to work order', 'Keluarkan untuk arahan kerja', [STORES]),
+    step('ORDERED', 'RECEIVED', 'Receive goods', 'Terima barang', [STORES], [
+      field('grnRef', 'Goods received note'), field('store', 'Received into store', 'store'),
+      optional('receivedQty', 'Quantity received (if not as ordered)', 'number'), optional('unitCost', 'Unit cost (if not from the quotation)', 'number'),
+      optional('discrepancyRef', 'Discrepancy report ref'), optional('discrepancyNote', 'Discrepancy note'),
+    ], {
+      effects: [{
+        type: 'recordReceipt',
+        params: { discrepancyField: 'discrepancyRef', noteField: 'discrepancyNote', storeField: 'store', qtyField: 'receivedQty', costField: 'unitCost' },
+      }],
+    }),
+    step('RECEIVED', 'ISSUED', 'Issue to work order', 'Keluarkan untuk arahan kerja', [STORES], [],
+      { effects: [{ type: 'issueFromStock', params: {} }] }),
   ];
   return { statuses, transitions };
 }

@@ -32,14 +32,14 @@ export function applyTransition<S extends string>(
       `Stage owned by: ${rule.roles.join(' | ')} (process owner) — your role ${actor.role} may not set this status`,
     );
   }
-  const missing = rule.requires.filter((f) => !fields?.[f.key]?.toString().trim());
+  const missing = rule.requires.filter((f) => !f.optional && !fields?.[f.key]?.toString().trim());
   if (missing.length) {
     throw new BadRequestException(`Mandatory fields missing: ${missing.map((m) => m.label).join(', ')}`);
   }
 
   const today = new Date().toISOString().slice(0, 10);
   for (const req of rule.requires) {
-    if (req.formNo) {
+    if (req.formNo && fields?.[req.key]?.toString().trim()) {
       entity.records.push({ formNo: req.formNo, refNo: fields[req.key], date: today, by: actor.name });
     }
   }

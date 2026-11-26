@@ -86,6 +86,19 @@ export class StockController {
     return this.stock.transfer(body ?? {}, who(req));
   }
 
+  /** At or below the reorder point, with suggested quantities. */
+  @Get('reorder')
+  reorder() {
+    return this.stock.reorderList();
+  }
+
+  /** Raise purchase requests for stock: `{ items: [{ partId, store, qty }] }`. */
+  @Post('reorder')
+  @Requires('stock.manage')
+  raise(@Body() body: { items?: unknown }, @Req() req: Req) {
+    return this.stock.raiseReorder(body?.items, who(req));
+  }
+
   @Get('movements')
   movements(@Query('partId') partId?: string, @Query('store') store?: string, @Query('jobId') jobId?: string, @Query('from') from?: string, @Query('to') to?: string) {
     return this.stock.movements({ partId, store, jobId, from, to });

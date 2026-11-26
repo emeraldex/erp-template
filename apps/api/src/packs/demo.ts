@@ -81,6 +81,46 @@ const PM_TASK: Record<string, [string, number, string[]]> = {
   medical: ['Annual PPM & safety test', 365, ['Visual and functional check', 'Electrical safety test (IEC 62353)', 'Performance verification', 'Update service label']],
 };
 
+/** Demo parts per pack: [partNo, name, unit, group, unit cost, qty in the first store, reorder point, qty in the second store]. */
+type DemoPart = [string, string, string, string, number, number, number, number];
+const PARTS: Record<string, DemoPart[]> = {
+  general: [
+    ['BRG-6205', 'Ball bearing 6205-2RS', 'EA', 'MECHANICAL', 18.5, 24, 10, 4], ['VB-A42', 'V-belt A42', 'EA', 'MECHANICAL', 22, 6, 6, 0],
+    ['FUSE-10A', 'Fuse 10 A (box of 10)', 'BOX', 'ELECTRICAL', 15, 12, 4, 2], ['CB-20A', 'Circuit breaker 20 A', 'EA', 'ELECTRICAL', 38, 5, 3, 1],
+    ['GRS-EP2', 'Grease EP2 400 g', 'EA', 'CONSUMABLES', 16.9, 20, 8, 3], ['WD-40', 'Penetrating oil 400 ml', 'EA', 'CONSUMABLES', 21.5, 3, 6, 1],
+    ['CT-200', 'Cable ties 200 mm (pack)', 'BOX', 'CONSUMABLES', 9.9, 30, 10, 5], ['LMP-LED18', 'LED tube 18 W', 'EA', 'ELECTRICAL', 14.5, 40, 15, 0],
+    ['SEAL-25', 'Shaft seal 25 mm', 'EA', 'MECHANICAL', 12, 2, 4, 0], ['HOSE-12', 'Hose 1/2 in', 'M', 'MECHANICAL', 6.8, 50, 20, 10],
+  ],
+  facilities: [
+    ['FLT-G4-592', 'Panel filter G4 592×592', 'EA', 'FILTERS', 28, 36, 20, 6], ['FLT-F7-BAG', 'Bag filter F7', 'EA', 'FILTERS', 95, 8, 6, 0],
+    ['BLT-SPA1250', 'V-belt SPA 1250', 'EA', 'BELTS', 34, 4, 6, 2], ['BLT-SPZ1000', 'V-belt SPZ 1000', 'EA', 'BELTS', 27, 10, 4, 0],
+    ['LMP-LED18', 'LED tube 18 W', 'EA', 'ELECTRICAL', 14.5, 120, 40, 20], ['CB-16A', 'MCB 16 A', 'EA', 'ELECTRICAL', 29, 9, 5, 2],
+    ['VLV-BALL15', 'Ball valve 15 mm', 'EA', 'PLUMBING', 24, 15, 6, 4], ['MIX-BASIN', 'Basin mixer tap', 'EA', 'PLUMBING', 185, 2, 2, 1],
+    ['SMK-DET', 'Smoke detector head', 'EA', 'FIRE', 88, 12, 6, 0], ['REF-R32', 'Refrigerant R32 (kg)', 'KG', 'CONSUMABLES', 42, 18, 10, 0],
+  ],
+  fleet: [
+    ['OF-HIACE', 'Oil filter (Hiace)', 'EA', 'FILTERS', 32, 25, 10, 6], ['AF-HIACE', 'Air filter (Hiace)', 'EA', 'FILTERS', 58, 8, 6, 2],
+    ['BP-FR-NPR', 'Brake pads front (NPR)', 'SET', 'BRAKES', 165, 5, 4, 1], ['BS-RR-NPR', 'Brake shoes rear (NPR)', 'SET', 'BRAKES', 140, 2, 3, 0],
+    ['TYR-195R15', 'Tyre 195R15C', 'EA', 'TYRES', 310, 12, 8, 4], ['TYR-215R16', 'Tyre 215/70R16', 'EA', 'TYRES', 365, 6, 4, 0],
+    ['EO-15W40', 'Engine oil 15W-40', 'L', 'FLUIDS', 14.2, 180, 60, 40], ['COOL-LL', 'Long-life coolant', 'L', 'FLUIDS', 11.5, 40, 20, 10],
+    ['BAT-NS70', 'Battery NS70', 'EA', 'ELECTRICAL', 395, 3, 2, 1], ['BLB-H4', 'Headlamp bulb H4', 'EA', 'ELECTRICAL', 18, 20, 8, 6],
+  ],
+  industrial: [
+    ['BRG-6310', 'Ball bearing 6310-C3', 'EA', 'BEARINGS', 86, 10, 6, 2], ['BRG-22216', 'Spherical roller bearing 22216', 'EA', 'BEARINGS', 520, 2, 2, 0],
+    ['SEAL-MECH-35', 'Mechanical seal 35 mm', 'EA', 'SEALS', 640, 3, 2, 1], ['GSK-DN100', 'Gasket DN100 PN16', 'EA', 'SEALS', 12.5, 40, 20, 10],
+    ['CNT-40A', 'Contactor 40 A', 'EA', 'ELECTRICAL', 275, 4, 3, 1], ['OL-RELAY', 'Overload relay 25–32 A', 'EA', 'ELECTRICAL', 160, 2, 3, 0],
+    ['GRS-EP2', 'Grease EP2 (kg)', 'KG', 'LUBRICANTS', 22, 30, 15, 5], ['OIL-ISO68', 'Hydraulic oil ISO 68', 'L', 'LUBRICANTS', 9.8, 400, 200, 100],
+    ['PT-4-20', 'Pressure transmitter 4–20 mA', 'EA', 'INSTRUMENT', 1450, 1, 1, 0], ['THC-K', 'Thermocouple type K', 'EA', 'INSTRUMENT', 95, 6, 4, 2],
+  ],
+  medical: [
+    ['SPO2-ADULT', 'SpO2 sensor, adult', 'EA', 'ACCESSORIES', 380, 6, 4, 2], ['ECG-LEAD5', 'ECG lead set, 5-lead', 'EA', 'ACCESSORIES', 290, 4, 3, 1],
+    ['NIBP-CUFF-M', 'NIBP cuff, adult medium', 'EA', 'ACCESSORIES', 120, 10, 6, 2], ['BAT-DEFIB', 'Defibrillator battery pack', 'EA', 'BATTERIES', 1650, 1, 2, 0],
+    ['BAT-PUMP', 'Infusion pump battery', 'EA', 'BATTERIES', 420, 5, 4, 1], ['DOOR-PUMP', 'Infusion pump door assembly', 'EA', 'SPARES', 780, 2, 1, 0],
+    ['FAN-MON', 'Monitor cooling fan', 'EA', 'SPARES', 210, 3, 2, 0], ['PAD-DEFIB', 'Defibrillation pads, adult', 'SET', 'CONSUMABLES', 145, 20, 10, 6],
+    ['FLT-VENT', 'Ventilator inlet filter', 'EA', 'CONSUMABLES', 65, 12, 8, 2], ['PAPER-ECG', 'ECG paper roll', 'BOX', 'CONSUMABLES', 48, 8, 6, 3],
+  ],
+};
+
 const SUPPLIERS: [name: string, type: 'SUPPLIER' | 'SUBCONTRACTOR'][] = [
   ['Prime Parts Sdn Bhd', 'SUPPLIER'], ['Delta Industrial Supply', 'SUPPLIER'], ['Metro Technical Services', 'SUBCONTRACTOR'],
 ];
@@ -173,5 +213,26 @@ export async function seedPackDemo(prisma: Db, pack: Pack): Promise<void> {
       update: {},
     });
   }
-  console.log(`Demo data for the ${pack.name} pack: ${PEOPLE.length} users (password ${process.env.SEED_PASSWORD ? 'from SEED_PASSWORD' : 'demo123'}), ${SUPPLIERS.length} partners, ${assetOf.size} assets with preventive schedules, ${items.length} ${pack.terms.jobs.toLowerCase()}.`);
+  // Stock: parts with opening balances, a few already at their reorder point.
+  let partCount = 0;
+  const stores = pack.dictionaries.store.map((st) => st.key);
+  if (pack.modules.stock && stores.length) {
+    const groups = new Set(pack.dictionaries.partGroup.map((g) => g.key));
+    const year = new Date().getFullYear();
+    for (const [i, [partNo, name, unit, group, cost, q1, reorder, q2]] of (PARTS[pack.id] ?? PARTS.general).entries()) {
+      const id = `PRT-${year}-${String(i + 1).padStart(4, '0')}`;
+      if (await prisma.part.findUnique({ where: { id } })) continue;
+      await prisma.part.create({ data: { id, partNo, name, unit, group: groups.has(group) ? group : '', avgCost: cost, lastCost: cost, createdBy: 'seed' } });
+      for (const [store, qty, point] of [[stores[0], q1, reorder], [stores[1], q2, null]] as [string | undefined, number, number | null][]) {
+        if (!store || (!qty && point === null)) continue;
+        await prisma.stockLevel.create({
+          data: { partId: id, store, qty, bin: `${String.fromCharCode(65 + (i % 6))}-${String(1 + (i % 4)).padStart(2, '0')}`, reorderPoint: point, reorderQty: point ? point * 2 : null, lowSince: point !== null && qty <= point ? new Date() : null },
+        });
+        if (qty) await prisma.stockMovement.create({ data: { partId: id, store, type: 'OPENING', qty, unitCost: cost, balanceAfter: qty, reason: 'Opening stock', by: 'seed' } });
+      }
+      partCount++;
+    }
+  }
+
+  console.log(`Demo data for the ${pack.name} pack: ${partCount} parts in stock, ${PEOPLE.length} users (password ${process.env.SEED_PASSWORD ? 'from SEED_PASSWORD' : 'demo123'}), ${SUPPLIERS.length} partners, ${assetOf.size} assets with preventive schedules, ${items.length} ${pack.terms.jobs.toLowerCase()}.`);
 }

@@ -1,11 +1,23 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import type { Prisma } from '../generated/prisma/client';
+import { SettingsService } from '../settings/settings.service';
+import { quantity, StockService } from '../stock/stock.service';
 import { StoreService } from '../common/store.service';
 import { applyTransition } from '../common/transition.engine';
 import { Demand, DemandStatus, Quotation, Role } from '../common/types';
 
 @Injectable()
 export class DemandsService {
-  constructor(private readonly store: StoreService) {}
+  constructor(
+    private readonly store: StoreService,
+    @Optional() private readonly stock?: StockService,
+    @Optional() private readonly settings?: SettingsService,
+  ) {}
+
+  /** Stock moves only for catalogue parts, and only when the stock module is on. */
+  private stockFor(dm: Demand): StockService | null {
+    return dm.partId && this.stock && this.settings?.modules.stock ? this.stock : null;
+  }
 
   list(): Promise<Demand[]> {
     return this.store.demands();
@@ -58,15 +70,39 @@ export class DemandsService {
     const step = applyTransition(dm, this.store.demandTransitions, to, f, actor);
     await this.store.checkStepFields(step, f, dm, 'DEMAND', dm.id);
 
+    // Stock movements this step makes, committed together with the request.
+    const stock = this.stockFor(dm);
+    const moves: ((tx: Prisma.TransactionClient) => Promise<unknown>)[] = [];
+    const touched: { partId: string; store: string }[] = [];
+
     for (const e of rule?.effects ?? []) {
       const p = (e.params ?? {}) as Record<string, string>;
       switch (e.type) {
         case 'recordStockCheck':
           dm.stockCheck = { f244Ref: f[p.refField], available: false };
+          if (stock) {
+            const levels = await stock.onHand(dm.partId!);
+            const total = levels.reduce((n, l) => n + l.qty, 0);
+            dm.audit.push(this.store.audit(actor.name, actor.role, total
+              ? `On hand: ${total} (${levels.map((l) => `${l.storeLabel} ${l.qty}`).join(', ')})`
+              : 'On hand: none'));
+          }
           break;
-        case 'issueFromStock':
-          dm.stockCheck = { ...(dm.stockCheck ?? { f244Ref: '-' }), available: true, holdingUnit: p.holdingField ? f[p.holdingField] : undefined };
+        case 'issueFromStock': {
+          const chosen = p.holdingField ? f[p.holdingField] : undefined;
+          if (stock) {
+            const from = stock.defaultStore(chosen || dm.forStore);
+            dm.stockCheck = { ...(dm.stockCheck ?? { f244Ref: '-' }), available: true, holdingUnit: stock.storeName(from) };
+            if (dm.jobId) {
+              const jobId = dm.jobId;
+              moves.push((tx) => stock.issueToJobTx(tx, { partId: dm.partId!, store: from, qty: dm.qty, jobId, demandId: dm.id }, actor));
+              touched.push({ partId: dm.partId!, store: from });
+            }
+          } else {
+            dm.stockCheck = { ...(dm.stockCheck ?? { f244Ref: '-' }), available: true, holdingUnit: chosen };
+          }
           break;
+        }
         case 'setAttributes':
           if (p.rfqRef && f[p.rfqRef]) dm.rfqRef = f[p.rfqRef];
           if (p.poRef && f[p.poRef]) dm.poRef = f[p.poRef];
@@ -85,11 +121,50 @@ export class DemandsService {
             dm.discrepancy = { f217Ref: f[p.discrepancyField], note: (p.noteField && f[p.noteField]) || 'Stores Discrepancy Report raised' };
             dm.records.push({ formNo: 'F217', refNo: f[p.discrepancyField], date: new Date().toISOString().slice(0, 10), by: actor.name });
           }
+          if (stock) this.receiveIntoStock(stock, dm, p, f, actor, moves, touched);
           break;
       }
     }
 
-    await this.store.save(dm);
+    await this.store.saveWith(moves.length ? async (tx) => { for (const m of moves) await m(tx); } : undefined, dm);
+    if (stock && touched.length) await stock.checkLow(touched);
     return dm;
+  }
+
+  /**
+   * Goods for a catalogue part arrive: into a store, at a unit cost (entered,
+   * else the chosen quotation's price for the whole request divided by the
+   * quantity requested, else the part's average). A request for stock — one
+   * with no work order — is then done, so it is closed.
+   */
+  private receiveIntoStock(
+    stock: StockService, dm: Demand, p: Record<string, string>, f: Record<string, string>, actor: { name: string; role: Role },
+    moves: ((tx: Prisma.TransactionClient) => Promise<unknown>)[], touched: { partId: string; store: string }[],
+  ) {
+    const into = stock.defaultStore((p.storeField && f[p.storeField]) || dm.forStore);
+    const qty = p.qtyField && f[p.qtyField] ? quantity(f[p.qtyField], 'Quantity received') : dm.qty;
+    let cost = NaN;
+    if (p.costField && f[p.costField] !== undefined && f[p.costField] !== '') {
+      cost = Number(f[p.costField]);
+      if (!Number.isFinite(cost) || cost < 0) throw new BadRequestException('Unit cost must be a number ≥ 0');
+    } else {
+      const chosen = dm.quotations.find((q) => q.supplierId === dm.evaluation?.selectedSupplierId);
+      if (chosen && dm.qty > 0) cost = Number(chosen.priceMYR) / dm.qty;
+    }
+    const partId = dm.partId!;
+    moves.push((tx) => stock.receiveTx(tx, { partId, store: into, qty, unitCost: cost, by: actor.name, demandId: dm.id, reason: `Request ${dm.id}` }));
+    touched.push({ partId, store: into });
+    dm.forStore = into;
+    if (Number.isFinite(cost)) dm.unitCost = Math.round(cost * 10_000) / 10_000;
+    dm.audit.push(this.store.audit(actor.name, actor.role,
+      `Received into stock: ${qty} into ${stock.storeName(into)}${Number.isFinite(cost) ? ` at RM ${cost.toFixed(2)} each` : ''}`));
+    if (!dm.jobId) {
+      const done = this.store.finalStatuses('DEMAND').find((k) => !this.store.status('DEMAND', k)?.branch);
+      if (done) {
+        dm.status = done;
+        dm.statusSince = new Date().toISOString();
+        dm.audit.push(this.store.audit(actor.name, actor.role, 'Request closed — received into stock'));
+      }
+    }
   }
 }

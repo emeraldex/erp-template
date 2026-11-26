@@ -107,6 +107,17 @@ export class StockService {
     return out;
   }
 
+  /** The few facts a work order or request needs about a part. */
+  async brief(id: string) {
+    return this.prisma.part.findUnique({ where: { id }, select: { id: true, partNo: true, name: true, unit: true, active: true } });
+  }
+
+  /** What is on hand of a part, per store. */
+  async onHand(partId: string) {
+    const levels = await this.prisma.stockLevel.findMany({ where: { partId, qty: { gt: 0 } }, orderBy: { store: 'asc' } });
+    return levels.map((l) => ({ store: l.store, storeLabel: this.storeLabel(l.store), qty: Number(l.qty) }));
+  }
+
   async get(id: string) {
     const p = await this.prisma.part.findUnique({ where: { id }, include: { levels: true } });
     if (!p) throw new NotFoundException(`Part ${id} not found`);
@@ -307,6 +318,25 @@ export class StockService {
     return { movement: this.movementView(r.movement), balance: r.balance };
   }
 
+  /** Issue inside another record's transaction (a purchase request's step), with the job's audit entry. */
+  async issueToJobTx(tx: Tx, args: { partId: string; store: string; qty: number; jobId: string; demandId?: string }, actor: Actor) {
+    const out = await this.takeTx(tx, { partId: args.partId, store: args.store, qty: args.qty, type: 'ISSUE', by: actor.name, jobId: args.jobId, demandId: args.demandId });
+    const part = await tx.part.findUniqueOrThrow({ where: { id: args.partId }, select: { partNo: true, name: true, unit: true } });
+    await this.jobAudit(tx, args.jobId, actor, `Part issued: ${args.qty} ${part.unit} ${part.partNo} — ${part.name} from ${this.storeLabel(args.store)}${args.demandId ? ` (request ${args.demandId})` : ''}`,
+      { partId: args.partId, store: args.store, qty: String(args.qty) });
+    return out;
+  }
+
+  /** The store a request's goods go to or come from when none is given. */
+  defaultStore(preferred?: string): string {
+    if (preferred && this.store.has('store', preferred)) return preferred;
+    return this.store.dict('store', true)[0]?.key ?? 'MAIN';
+  }
+
+  storeName(key: string): string {
+    return this.storeLabel(key);
+  }
+
   /** Net quantity of a part issued to a job (issues minus returns). */
   private async netIssued(tx: Tx | PrismaService, partId: string, jobId: string): Promise<number> {
     const rows = await tx.stockMovement.findMany({ where: { partId, jobId, type: { in: ['ISSUE', 'RETURN'] } }, select: { qty: true } });
@@ -385,6 +415,67 @@ export class StockService {
     }
     const lines = [...by.values()].map((l) => ({ ...l, qty: round(l.qty, 3), cost: round(l.cost, 2) })).filter((l) => l.qty !== 0 || l.cost !== 0);
     return { lines, total: round(lines.reduce((s, l) => s + l.cost, 0), 2) };
+  }
+
+  // ─── reordering ──────────────────────────────────────────────────────────────
+
+  /** Open purchase requests for stock, by part and store. */
+  private async openStockRequests(): Promise<Map<string, string>> {
+    const rows = await this.prisma.demand.findMany({ where: { partId: { not: null }, forStore: { not: null }, jobId: null }, select: { id: true, partId: true, forStore: true, status: true } });
+    return new Map(rows.filter((r) => !this.store.isFinal('DEMAND', r.status)).map((r) => [`${r.partId}|${r.forStore}`, r.id]));
+  }
+
+  /** What is at or below its reorder point, with a suggested quantity and any request already open. */
+  async reorderList() {
+    const levels = await this.prisma.stockLevel.findMany({
+      where: { reorderPoint: { not: null }, part: { active: true } },
+      include: { part: { select: { id: true, partNo: true, name: true, unit: true, avgCost: true, preferredSupplierId: true } } },
+      orderBy: [{ store: 'asc' }, { partId: 'asc' }],
+    });
+    const open = await this.openStockRequests();
+    return levels.filter((l) => Number(l.qty) <= Number(l.reorderPoint)).map((l) => {
+      const qty = Number(l.qty);
+      const point = Number(l.reorderPoint);
+      const suggested = l.reorderQty !== null && Number(l.reorderQty) > 0 ? Number(l.reorderQty) : Math.max(1, round(point * 2 - qty, 3));
+      return {
+        partId: l.partId, partNo: l.part.partNo, name: l.part.name, unit: l.part.unit, store: l.store, storeLabel: this.storeLabel(l.store),
+        bin: l.bin, qty, reorderPoint: point, suggested, avgCost: Number(l.part.avgCost), preferredSupplierId: l.part.preferredSupplierId,
+        openRequest: open.get(`${l.partId}|${l.store}`) ?? null, lowSince: l.lowSince?.toISOString() ?? null,
+      };
+    });
+  }
+
+  /** Raise purchase requests for stock: one per part and store, through the normal purchasing steps. */
+  async raiseReorder(items: unknown, actor: Actor) {
+    if (!Array.isArray(items) || !items.length) throw new BadRequestException('Choose what to reorder');
+    if (items.length > 100) throw new BadRequestException('At most 100 items at once');
+    const open = await this.openStockRequests();
+    const raised: string[] = [];
+    for (const [i, raw] of items.entries()) {
+      const it = (raw ?? {}) as { partId?: string; store?: string; qty?: unknown };
+      const at = `Item ${i + 1}`;
+      const part = it.partId ? await this.brief(it.partId) : null;
+      if (!part || !part.active) throw new BadRequestException(`${at}: choose an active part`);
+      const s = this.assertStore(it.store);
+      const qty = quantity(it.qty, `${at}: quantity`);
+      const existing = open.get(`${part.id}|${s}`);
+      if (existing) throw new ConflictException(`${part.partNo} for ${this.storeLabel(s)} already has an open request (${existing})`);
+      const level = await this.prisma.stockLevel.findUnique({ where: { partId_store: { partId: part.id, store: s } } });
+      const id = await this.store.nextDemandId();
+      const now = new Date().toISOString();
+      const site = String((this.store.dict('store', false).find((x) => x.key === s)?.meta as { site?: string } | undefined)?.site ?? '');
+      const dm = this.store.newDemand({
+        id, partId: part.id, forStore: s, partDescription: part.name, partNo: part.partNo, qty,
+        status: this.store.initialStatus('DEMAND'), statusSince: now, raisedBy: actor.name, branch: site,
+        quotations: [], records: [],
+        audit: [this.store.audit(actor.name, actor.role, `Purchase request for stock: ${qty} ${part.unit} for ${this.storeLabel(s)}`,
+          { onHand: String(Number(level?.qty ?? 0)), reorderPoint: level?.reorderPoint == null ? '-' : String(Number(level.reorderPoint)) })],
+      });
+      await this.store.save(dm);
+      open.set(`${part.id}|${s}`, id);
+      raised.push(id);
+    }
+    return { raised };
   }
 
   // ─── low stock ───────────────────────────────────────────────────────────────

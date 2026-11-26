@@ -122,6 +122,114 @@ describe('Stock: catalogue and ledger (integration)', () => {
     expect(await alerts()).toHaveLength(2);
   });
 
+  describe('purchasing and work orders', () => {
+    const part = async (partNo: string) => ((await get(`/stock/parts?q=${partNo}`)).body as { id: string; partNo: string }[]).find((p) => p.partNo === partNo)!;
+    const qtyIn = async (id: string, store = 'MAIN') => ((await get(`/stock/parts/${id}`)).body.levels as { store: string; qty: number }[]).find((l) => l.store === store)?.qty ?? 0;
+    const step = (id: string, to: string, fields: Record<string, string>, user: string) => send('patch', `/demands/${id}/transition`, { to, fields }, user);
+    const quote = (id: string, supplierId: string, priceMYR: number) => send('post', `/demands/${id}/quotations`, { supplierId, supplier: supplierId, priceMYR, eddDays: 7 }, 'purchasing');
+    const startedJob = async () => {
+      const id = await newJob();
+      await send('patch', `/jobs/${id}/transition`, { to: 'ASSIGNED', fields: { assignee: 'u-technician' } }, 'helpdesk').then(st(200));
+      await send('patch', `/jobs/${id}/transition`, { to: 'IN_PROGRESS', fields: { odometer: '1000' } }, 'technician').then(st(200));
+      return id;
+    };
+
+    it('requests a catalogue part on a work order and issues it from stock', async () => {
+      const filter = await part('OF-HIACE');
+      const before = await qtyIn(filter.id);
+      const job = await startedJob();
+      expect((await send('patch', `/jobs/${job}/transition`, { to: 'ON_HOLD_PARTS', fields: { qty: '2' } }, 'technician')).body.message)
+        .toBe('Choose a part from the catalogue or describe what is needed');
+      const held = (await send('patch', `/jobs/${job}/transition`, { to: 'ON_HOLD_PARTS', fields: { part: filter.id, qty: '2' } }, 'technician').then(st(200))).body;
+      const dmId = held.demandIds.at(-1);
+      const dm = (await get(`/demands/${dmId}`)).body;
+      expect(dm).toEqual(expect.objectContaining({ partId: filter.id, partNo: 'OF-HIACE', partDescription: 'Oil filter (Hiace)', qty: 2, jobId: job }));
+      const audit = held.audit.find((a: { action: string }) => a.action.startsWith('Status → ON_HOLD_PARTS'));
+      expect(audit.fields.part).toBe('OF-HIACE — Oil filter (Hiace)');
+
+      await step(dmId, 'APPROVED', {}, 'supervisor').then(st(200));
+      const issued = (await step(dmId, 'ISSUED', { store: 'MAIN' }, 'stores').then(st(200))).body;
+      expect(issued.stockCheck).toEqual(expect.objectContaining({ available: true, holdingUnit: 'Main depot store' }));
+      expect(await qtyIn(filter.id)).toBe(before - 2);
+      expect((await get(`/jobs/${job}/parts`)).body.lines).toEqual([expect.objectContaining({ partNo: 'OF-HIACE', qty: 2, cost: 64 })]);
+    });
+
+    it('refuses to issue more than the store holds, leaving the request where it was', async () => {
+      const tyre = await part('TYR-215R16');
+      const job = await startedJob();
+      const held = (await send('patch', `/jobs/${job}/transition`, { to: 'ON_HOLD_PARTS', fields: { part: tyre.id, qty: '50' } }, 'technician').then(st(200))).body;
+      const dmId = held.demandIds.at(-1);
+      await step(dmId, 'APPROVED', {}, 'supervisor').then(st(200));
+      const refused = await step(dmId, 'ISSUED', { store: 'MAIN' }, 'stores');
+      expect(refused.body.message).toContain('of TYR-215R16 in Main depot store (50 needed)');
+      expect((await get(`/demands/${dmId}`)).body.status).toBe('APPROVED');
+    });
+
+    it('buys a part for a work order, receives it into stock at the quoted cost, then issues it', async () => {
+      const shoes = await part('BS-RR-NPR');
+      const job = await startedJob();
+      const held = (await send('patch', `/jobs/${job}/transition`, { to: 'ON_HOLD_PARTS', fields: { part: shoes.id, qty: '3' } }, 'technician').then(st(200))).body;
+      const dmId = held.demandIds.at(-1);
+      const before = await qtyIn(shoes.id);
+      await step(dmId, 'APPROVED', {}, 'supervisor').then(st(200));
+      await step(dmId, 'QUOTING', { rfqRef: 'RFQ-1' }, 'purchasing').then(st(200));
+      await quote(dmId, 'SUP-2026-0001', 450).then(st(201));
+      await quote(dmId, 'SUP-2026-0002', 480).then(st(201));
+      await step(dmId, 'ORDERED', { poRef: 'PO-1', selectedSupplierId: 'SUP-2026-0001' }, 'purchasing').then(st(200));
+      const received = (await step(dmId, 'RECEIVED', { grnRef: 'GRN-1', store: 'MAIN' }, 'stores').then(st(200))).body;
+      expect(received).toEqual(expect.objectContaining({ status: 'RECEIVED', forStore: 'MAIN', unitCost: 150 }));
+      expect(await qtyIn(shoes.id)).toBe(before + 3);
+      // 2 on hand at 140 + 3 at 150 → 146
+      expect((await get(`/stock/parts/${shoes.id}`)).body.avgCost).toBe(146);
+      await step(dmId, 'ISSUED', {}, 'stores').then(st(200));
+      expect(await qtyIn(shoes.id)).toBe(before);
+      expect((await get(`/jobs/${job}/parts`)).body.lines).toEqual([expect.objectContaining({ partNo: 'BS-RR-NPR', qty: 3, cost: 438 })]);
+    });
+
+    it('raises a purchase request for stock from the reorder list, and closes it on receipt', async () => {
+      const created = (await send('post', '/stock/parts', { partNo: 'FT-REORDER', name: 'Fuel filter', unit: 'EA', group: 'FILTERS' }).then(st(201))).body;
+      await send('post', '/stock/receive', { partId: created.id, store: 'MAIN', qty: 2, unitCost: 10, reason: 'Opening stock' }).then(st(201));
+      await send('put', `/stock/parts/${created.id}/levels/MAIN`, { reorderPoint: 5, reorderQty: 10 }).then(st(200));
+      const line = ((await get('/stock/reorder')).body as { partId: string; store: string; suggested: number; openRequest: string | null }[]).find((l) => l.partId === created.id);
+      expect(line).toEqual(expect.objectContaining({ store: 'MAIN', suggested: 10, openRequest: null }));
+
+      expect((await send('post', '/stock/reorder', { items: [{ partId: created.id, store: 'MAIN', qty: 10 }] }, 'technician')).status).toBe(403);
+      const { raised } = (await send('post', '/stock/reorder', { items: [{ partId: created.id, store: 'MAIN', qty: 10 }] }).then(st(201))).body;
+      expect(raised).toHaveLength(1);
+      expect((await send('post', '/stock/reorder', { items: [{ partId: created.id, store: 'MAIN', qty: 10 }] })).status).toBe(409);
+      const dmId = raised[0];
+      expect((await get(`/demands/${dmId}`)).body).toEqual(expect.objectContaining({ partId: created.id, forStore: 'MAIN', qty: 10, status: 'RAISED' }));
+      expect((await get(`/demands/${dmId}`)).body.jobId).toBeUndefined();
+
+      await step(dmId, 'APPROVED', {}, 'supervisor').then(st(200));
+      await step(dmId, 'QUOTING', { rfqRef: 'RFQ-2' }, 'purchasing').then(st(200));
+      await quote(dmId, 'SUP-2026-0001', 100).then(st(201));
+      await quote(dmId, 'SUP-2026-0002', 120).then(st(201));
+      await step(dmId, 'ORDERED', { poRef: 'PO-2', selectedSupplierId: 'SUP-2026-0001' }, 'purchasing').then(st(200));
+      const done = (await step(dmId, 'RECEIVED', { grnRef: 'GRN-2', store: 'MAIN' }, 'stores').then(st(200))).body;
+      expect(done.status).toBe('ISSUED');
+      expect(done.audit.map((a: { action: string }) => a.action)).toEqual(expect.arrayContaining(['Received into stock: 10 into Main depot store at RM 10.00 each', 'Request closed — received into stock']));
+      expect(await qtyIn(created.id)).toBe(12);
+      expect(((await get('/stock/reorder')).body as { partId: string }[]).some((l) => l.partId === created.id)).toBe(false);
+    });
+
+    it('lets an optional field through empty but checks it when filled', async () => {
+      const job = await startedJob();
+      const held = (await send('patch', `/jobs/${job}/transition`, { to: 'ON_HOLD_PARTS', fields: { partDescription: 'Wiper blades', qty: '1' } }, 'technician').then(st(200))).body;
+      const dmId = held.demandIds.at(-1);
+      await step(dmId, 'APPROVED', {}, 'supervisor').then(st(200));
+      await step(dmId, 'QUOTING', { rfqRef: 'RFQ-3' }, 'purchasing').then(st(200));
+      await quote(dmId, 'SUP-2026-0001', 40).then(st(201));
+      await quote(dmId, 'SUP-2026-0002', 42).then(st(201));
+      await step(dmId, 'ORDERED', { poRef: 'PO-3', selectedSupplierId: 'SUP-2026-0001' }, 'purchasing').then(st(200));
+      expect((await step(dmId, 'RECEIVED', { grnRef: 'GRN-3', store: 'MAIN', receivedQty: 'lots' }, 'stores')).body.message).toBe('Quantity received (if not as ordered): must be a number');
+      // Not a catalogue part: nothing goes into stock.
+      const r = (await step(dmId, 'RECEIVED', { grnRef: 'GRN-3', store: 'MAIN' }, 'stores').then(st(200))).body;
+      expect(r.status).toBe('RECEIVED');
+      expect(r.forStore).toBeUndefined();
+    });
+  });
+
   it('switches off with its module', async () => {
     await send('patch', '/settings/modules', { stock: false }, 'admin').then(st(200));
     try {
