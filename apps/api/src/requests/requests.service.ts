@@ -205,7 +205,7 @@ export class RequestsService implements JobDoneHook {
   /** What the requester sees. Never staff names, internal statuses, costs or the photos themselves. */
   async requesterView(r: RequestRow) {
     const stage = stageOf(r.status, await this.jobPhase(r.jobId));
-    const photos = await this.prisma.attachment.count({ where: { OR: [{ entity: 'REQUEST', entityId: r.id }, ...(r.jobId ? [{ entity: 'JOB', entityId: r.jobId, caption: 'Photo from the requester', uploadedBy: r.requesterName }] : [])] } });
+    const photos = await this.prisma.attachment.count({ where: { OR: [{ entity: 'REQUEST', entityId: r.id }, ...(r.jobId ? [{ entity: 'JOB', entityId: r.jobId, filename: { startsWith: `${r.id}-` } }] : [])] } });
     const asset = r.assetId ? await this.prisma.asset.findUnique({ where: { id: r.assetId }, select: { tag: true, name: true } }) : null;
     const org = this.org();
     return {
@@ -277,6 +277,37 @@ export class RequestsService implements JobDoneHook {
   }
 
   // ─── work orders ───────────────────────────────────────────────────────────
+
+  /** Who asked for a work order, how to reach them, what was said and how they rated it. */
+  async forJob(jobId: string) {
+    if (!this.enabled) return [];
+    const rows = await this.prisma.serviceRequest.findMany({ where: { jobId }, include: { messages: { orderBy: { id: 'asc' } } }, orderBy: { createdAt: 'asc' } });
+    return rows.map((r) => ({
+      id: r.id, createdAt: r.createdAt.toISOString(), merged: r.merged, requesterName: r.requesterName, requesterEmail: r.requesterEmail,
+      requesterPhone: r.requesterPhone, urgent: r.urgent, description: r.description, rating: r.rating, ratingComment: r.ratingComment,
+      ratedAt: r.ratedAt?.toISOString() ?? null, doneNotified: !!r.doneNotifiedAt,
+      messages: r.messages.map((m) => ({ from: m.from, by: m.by, body: m.body, at: m.at.toISOString() })),
+    }));
+  }
+
+  /** Remind the help desk, once, about requests still new after the organisation's triage time. */
+  async remindStale(now = Date.now()): Promise<number> {
+    const hours = this.settings.portal.triageHours;
+    if (!this.enabled || !hours) return 0;
+    const stale = await this.prisma.serviceRequest.findMany({
+      where: { status: 'NEW', remindedAt: null, createdAt: { lt: new Date(now - hours * 3_600_000) } }, orderBy: { createdAt: 'asc' }, take: 200,
+    });
+    let sent = 0;
+    for (const r of stale) {
+      const claimed = await this.prisma.serviceRequest.updateMany({ where: { id: r.id, remindedAt: null }, data: { remindedAt: new Date(now) } });
+      if (!claimed.count) continue;
+      await this.notifyHolders('requests.manage', {
+        kind: 'request.waiting', title: `${r.id} has been waiting more than ${hours} h`, body: r.description.slice(0, 160), ref: `REQUEST:${r.id}`,
+      });
+      sent += 1;
+    }
+    return sent;
+  }
 
   /**
    * A work order changed status. When it reaches a done phase, tell each

@@ -3,12 +3,13 @@ import { ClientOpInterceptor } from '../common/client-ops';
 import { AuthGuard } from '../auth/auth.guard';
 import { InModule, Requires } from '../auth/roles.decorator';
 import { JobsService } from './jobs.service';
+import { RequestsService } from '../requests/requests.service';
 import { Branch, JobStatus, PriorityType, RepairRoute } from '../common/types';
 
 @Controller('jobs')
 @UseGuards(AuthGuard)
 export class JobsController {
-  constructor(private readonly svc: JobsService) {}
+  constructor(private readonly svc: JobsService, private readonly requests: RequestsService) {}
 
   /** ?archived=include to add archived jobs, ?archived=only for just those. */
   @Get()
@@ -37,6 +38,12 @@ export class JobsController {
     @Req() req: any,
   ) {
     return this.svc.register(dto, { name: req.user.name, role: req.user.role });
+  }
+
+  /** Who reported this through the request portal: contact, messages, rating. */
+  @Get(':id/requests')
+  requesters(@Param('id') id: string) {
+    return this.requests.forJob(id);
   }
 
   /** Parts used on the job, with their cost. */

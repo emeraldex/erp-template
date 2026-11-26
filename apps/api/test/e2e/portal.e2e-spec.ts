@@ -2,13 +2,12 @@ import { INestApplication } from '@nestjs/common';
 import request = require('supertest');
 import { createApp, login } from './app';
 import { Mailer } from '../../src/notifications/mailer';
+import { PNG } from './fixtures';
 
 const API = '/api/v1';
 const HOST = 'fm.test'; // facilities pack: the request portal is on; buildings HQ, ANNEX, WAREHOUSE
 jest.setTimeout(20_000);
 
-/** A real 1×1 PNG. */
-export const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 
 describe('Request portal: the public side (integration)', () => {
   let app: INestApplication;
