@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Rajdhani, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -20,10 +20,19 @@ const plexMono = IBM_Plex_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  themeColor: "#0a1526",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export const metadata: Metadata = {
   title: "Maintenance ERP — Operations Command",
-  description:
-    "Enterprise resource planning for Company Aerospace and Defence — MRO work orders, spares inventory, procurement and fleet readiness.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Maintenance", statusBarStyle: "black-translucent" },
+  icons: { apple: "/icons/apple" },
+  description: "Maintenance ERP — work orders, assets, preventive maintenance, purchasing and invoicing, for any maintenance team.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

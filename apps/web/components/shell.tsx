@@ -7,6 +7,8 @@ import { api, DEMO_MODE, getSession, loginPath, onConnectionChange, setSession, 
 import { DictKey, useLang } from "@/lib/i18n";
 import type { Modules } from "@/lib/types";
 import { DEFAULT_TERMS, useVocab } from "@/lib/vocab";
+import { setFullSite } from "@/lib/phone";
+import { clearFieldCache, unsentCount } from "@/lib/offline/db";
 import { NotificationBell } from "./notifications";
 
 type TermKey = keyof typeof DEFAULT_TERMS;
@@ -123,7 +125,7 @@ function SidebarContent({ mobile = false }: { mobile?: boolean }) {
     <>
       <CompanyMark />
       {mobile && (
-        <Link href="/m" className="mx-3 mb-2 rounded-md border border-trace/40 bg-trace/10 px-3 py-2.5 text-sm text-fg">
+        <Link href="/m" onClick={() => setFullSite(false)} className="mx-3 mb-2 rounded-md border border-trace/40 bg-trace/10 px-3 py-2.5 text-sm text-fg">
           📱 Phone app — my work
         </Link>
       )}
@@ -247,6 +249,9 @@ export function Topbar() {
             </button>
             <button
               onClick={async () => {
+                const unsent = session ? await unsentCount(session.user.id) : 0;
+                if (unsent && !window.confirm(`${unsent} change(s) made on this phone have not been sent yet. They stay here and are sent when you sign in again. Sign out anyway?`)) return;
+                if (session) await clearFieldCache(session.user.id);
                 await api.logout().catch(() => { /* already signed out server-side */ });
                 setSession(null);
                 router.replace("/login");
