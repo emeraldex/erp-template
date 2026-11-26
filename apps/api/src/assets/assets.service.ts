@@ -3,6 +3,8 @@ import { PrismaService } from '../common/prisma.service';
 import { StoreService } from '../common/store.service';
 import { SettingsService } from '../settings/settings.service';
 import { nextId, text } from './ids';
+import { offlineTime } from '../common/client-ops';
+import { MAX_LABELS } from './labels';
 import { PmService } from './pm.service';
 
 type Actor = { name: string; role: string };
@@ -30,6 +32,35 @@ export class AssetsService {
     private readonly pm: PmService,
     private readonly settings: SettingsService,
   ) {}
+
+  /** Assets to print labels for, in the order asked, with site names. */
+  async forLabels(ids: string[]) {
+    const unique = [...new Set(ids.map((i) => i.trim()).filter(Boolean))];
+    if (unique.length > MAX_LABELS) throw new BadRequestException(`At most ${MAX_LABELS} labels per print run`);
+    const rows = await this.prisma.asset.findMany({ where: { id: { in: unique } }, select: { id: true, tag: true, name: true, site: true } });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const missing = unique.filter((id) => !byId.has(id));
+    if (missing.length) throw new NotFoundException(`Asset ${missing[0]} not found`);
+    return unique.map((id) => { const r = byId.get(id)!; return { ...r, site: this.store.label('site', r.site) }; });
+  }
+
+  /** Tags of several assets at once, for lists. */
+  async tags(ids: string[]): Promise<Map<string, string>> {
+    if (!ids.length) return new Map();
+    const rows = await this.prisma.asset.findMany({ where: { id: { in: ids } }, select: { id: true, tag: true } });
+    return new Map(rows.map((r) => [r.id, r.tag]));
+  }
+
+  /** What a technician needs to see about a job's asset. */
+  async forJob(id: string) {
+    const a = await this.prisma.asset.findUnique({ where: { id }, include: { meters: { orderBy: { key: 'asc' } } } });
+    if (!a) return null;
+    return {
+      id: a.id, tag: a.tag, name: a.name, type: a.type, site: a.site, location: a.location, make: a.make, model: a.model,
+      serialNo: a.serialNo, status: a.status, criticality: a.criticality,
+      meters: a.meters.map((m) => ({ key: m.key, label: m.label, unit: m.unit, value: m.value, readAt: m.readAt?.toISOString() ?? null })),
+    };
+  }
 
   /** The few facts a job needs about its asset. */
   async brief(id: string) {
@@ -195,7 +226,8 @@ export class AssetsService {
    * it is flagged as a reset (a replaced instrument or rolled-over counter).
    * Meter-based maintenance that has fallen due is raised straight away.
    */
-  async recordReading(id: string, key: string, body: { value?: unknown; reset?: boolean }, actor: Actor, source = 'manual') {
+  async recordReading(id: string, key: string, body: { value?: unknown; reset?: boolean; at?: unknown }, actor: Actor, source = 'manual') {
+    const at = offlineTime(body.at);
     const meter = await this.prisma.meter.findUnique({ where: { assetId_key: { assetId: id, key } } });
     if (!meter) throw new NotFoundException(`Asset ${id} has no ${key} meter`);
     const value = Number(body.value);
@@ -204,8 +236,8 @@ export class AssetsService {
       throw new BadRequestException(`Reading ${value} is below the last one (${meter.value} ${meter.unit}) — record it as a reset if the meter was replaced`);
     }
     await this.prisma.$transaction([
-      this.prisma.meterReading.create({ data: { meterId: meter.id, value, by: actor.name, source: body.reset ? 'reset' : source } }),
-      this.prisma.meter.update({ where: { id: meter.id }, data: { value, readAt: new Date() } }),
+      this.prisma.meterReading.create({ data: { meterId: meter.id, value, by: actor.name, source: body.reset ? 'reset' : source, ...(at ? { at } : {}) } }),
+      this.prisma.meter.update({ where: { id: meter.id }, data: { value, readAt: at ?? new Date() } }),
     ]);
     const raised = await this.pm.generateDue({ assetId: id });
     return { key, value, unit: meter.unit, raised };

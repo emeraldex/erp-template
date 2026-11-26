@@ -1,4 +1,10 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, Res, StreamableFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { webBaseFor } from '../auth/web-origin';
+import { currentTenant } from '../tenancy/tenant';
+import { TenantRegistry } from '../tenancy/tenant-registry';
+import { assetLabels } from './labels';
+import { ClientOpInterceptor } from '../common/client-ops';
 import { AuthGuard } from '../auth/auth.guard';
 import type { AuthUser } from '../auth/auth.service';
 import { InModule, Requires } from '../auth/roles.decorator';
@@ -13,11 +19,20 @@ const who = (req: Req) => ({ name: req.user.name, role: req.user.role });
 @UseGuards(AuthGuard)
 @InModule('assets')
 export class AssetsController {
-  constructor(private readonly assets: AssetsService) {}
+  constructor(private readonly assets: AssetsService, private readonly registry: TenantRegistry) {}
 
   @Get()
   list(@Query('site') site?: string, @Query('type') type?: string, @Query('status') status?: string, @Query('parentId') parentId?: string, @Query('q') search?: string) {
     return this.assets.list({ site, type, status, parentId, search });
+  }
+
+  /** GET /assets/labels?ids=AST-…,AST-… — A4 sheets of QR labels (2 × 5). */
+  @Get('labels')
+  async labels(@Query('ids') ids: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<StreamableFile> {
+    const assets = await this.assets.forLabels((ids ?? '').split(','));
+    const { filename, pdf } = await assetLabels(assets, webBaseFor(req, this.registry, currentTenant()));
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${filename}"`, 'Cache-Control': 'no-store' });
+    return new StreamableFile(pdf);
   }
 
   @Get(':id')
@@ -50,7 +65,8 @@ export class AssetsController {
 
   @Post(':id/meters/:key/readings')
   @Requires('meters.record')
-  record(@Param('id') id: string, @Param('key') key: string, @Body() body: { value?: number; reset?: boolean }, @Req() req: Req) {
+  @UseInterceptors(ClientOpInterceptor)
+  record(@Param('id') id: string, @Param('key') key: string, @Body() body: { value?: number; reset?: boolean; at?: string }, @Req() req: Req) {
     return this.assets.recordReading(id, key, body ?? {}, who(req));
   }
 }

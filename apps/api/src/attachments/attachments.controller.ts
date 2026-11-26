@@ -2,6 +2,7 @@ import {
   Body, Controller, Get, Param, Post, Req, Res, StreamableFile, UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ClientOpInterceptor } from '../common/client-ops';
 import type { Response } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { AuthUser } from '../auth/auth.service';
@@ -46,7 +47,7 @@ export class AttachmentsController {
   }
 
   @Post(':entity/:entityId')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: maxBytes() + 1, files: 1, fields: 5 } }))
+  @UseInterceptors(ClientOpInterceptor, FileInterceptor('file', { limits: { fileSize: maxBytes() + 1, files: 1, fields: 5 } }))
   upload(
     @Param('entity') entity: string,
     @Param('entityId') entityId: string,

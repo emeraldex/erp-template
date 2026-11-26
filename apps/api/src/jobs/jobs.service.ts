@@ -6,6 +6,7 @@ import { applyTransition } from '../common/transition.engine';
 import { Branch, ChecklistItem, Job, JobStatus, PriorityType, RepairRoute, Role } from '../common/types';
 import { SettingsService } from '../settings/settings.service';
 import type { Effect } from '../workflow/effects';
+import { offlineTime } from '../common/client-ops';
 
 type Actor = { name: string; role: Role; sub?: string };
 type Person = { id: string; name: string };
@@ -178,12 +179,84 @@ export class JobsService {
     return job;
   }
 
+  // ─── Field work (the phone app) ──────────────────────────────────────────────
+
+  private card(job: Job, tags: Map<string, string>) {
+    const meta = this.store.status('JOB', job.status);
+    const daysIn = Math.floor((Date.now() - new Date(job.statusSince).getTime()) / 86_400_000);
+    const sla = this.store.slaRules.find((r) => r.entity === 'JOB' && r.status === job.status);
+    const checks = job.checklist ?? [];
+    return {
+      id: job.id, component: job.component, serialNo: job.serialNo, status: job.status, statusLabel: meta?.label ?? job.status,
+      statusSince: job.statusSince, site: job.repairUnit, location: job.location, jobType: job.jobType,
+      assignee: job.assigneeId ? { id: job.assigneeId, name: job.assigneeName } : null,
+      priority: job.priority?.state === 'OPEN' ? job.priority.type : null,
+      asset: job.assetId ? { id: job.assetId, tag: tags.get(job.assetId) ?? job.assetId } : null,
+      checklist: { done: checks.filter((c) => c.done).length, total: checks.length },
+      sla: sla ? { days: sla.days, overdueBy: Math.max(0, daysIn - sla.days) } : null,
+    };
+  }
+
+  /** Can this role take any step from the job's current status? */
+  private canAct(job: Job, role: string): boolean {
+    return this.store.jobTransitions.some((r) => r.from === job.status && (role === 'ADMIN' || r.roles.includes(role)));
+  }
+
+  /**
+   * My work: what is assigned to me, and unassigned work at my site that my
+   * role can take. Open priorities first, then the most overdue, then oldest.
+   */
+  async mine(actor: Actor & { sub: string; branch: string }) {
+    const open = (await this.store.jobs('exclude')).filter((j) => !this.store.isFinal('JOB', j.status));
+    const mine = open.filter((j) => j.assigneeId === actor.sub);
+    const available = open.filter((j) => !j.assigneeId && j.repairUnit === actor.branch && this.canAct(j, actor.role));
+    const tags = await (this.assets?.tags([...new Set([...mine, ...available].map((j) => j.assetId).filter((x): x is string => !!x))]) ?? new Map());
+    const order = (list: Job[]) => list.map((j) => this.card(j, tags)).sort((a, b) =>
+      Number(!!b.priority) - Number(!!a.priority) || (b.sla?.overdueBy ?? 0) - (a.sla?.overdueBy ?? 0) || a.statusSince.localeCompare(b.statusSince));
+    return { mine: order(mine), available: order(available) };
+  }
+
+  /** Everything the phone needs to work on one job, in one call (and to keep offline). */
+  async pack(id: string, actor: Actor) {
+    const job = await this.get(id);
+    const [asset, attachments, pm] = await Promise.all([
+      job.assetId ? this.assets?.forJob(job.assetId) ?? null : null,
+      this.store.attachmentsOf('JOB', job.id),
+      job.pmScheduleId ? this.pm?.get(job.pmScheduleId).catch(() => null) ?? null : null,
+    ]);
+    const steps = this.store.jobTransitions
+      .filter((r) => r.from === job.status && (actor.role === 'ADMIN' || r.roles.includes(actor.role)))
+      .map((r) => ({ to: r.to, toLabel: this.store.status('JOB', r.to)?.label ?? r.to, label: r.label, labelMs: r.labelMs, requires: r.requires }));
+    return {
+      job,
+      asset,
+      pm: pm ? { id: pm.id, title: pm.title, instructions: pm.instructions } : null,
+      attachments,
+      steps,
+      locked: !!job.archivedAt || this.store.isFinal('JOB', job.status),
+      fetchedAt: new Date().toISOString(),
+    };
+  }
+
+  /** A note on the job's timeline. */
+  async addNote(id: string, text: unknown, actor: Actor): Promise<Job> {
+    const note = typeof text === 'string' ? text.trim() : '';
+    if (!note || note.length > 1000) throw new BadRequestException('A note is 1–1000 characters');
+    const job = await this.get(id);
+    this.assertEditable(job);
+    job.audit.push(this.store.audit(actor.name, actor.role, `Note: ${note}`));
+    await this.store.save(job);
+    return job;
+  }
+
   /** Tick checklist items off (or add a check found on the job). Locked once the job is closed. */
-  async updateChecklist(id: string, body: { items?: { key: string; done?: boolean; note?: string }[]; add?: { label: string; required?: boolean }[] }, actor: Actor): Promise<Job> {
+  async updateChecklist(id: string, body: { items?: { key: string; done?: boolean; note?: string }[]; add?: { label: string; required?: boolean }[]; at?: unknown }, actor: Actor): Promise<Job> {
     const job = await this.get(id);
     this.assertEditable(job);
     const list: ChecklistItem[] = [...(job.checklist ?? [])];
-    const now = new Date().toISOString();
+    // Ticked off offline: keep when it was done; the audit entry says when it arrived.
+    const offline = offlineTime(body.at);
+    const now = (offline ?? new Date()).toISOString();
     for (const u of body.items ?? []) {
       const item = list.find((c) => c.key === u?.key);
       if (!item) throw new BadRequestException(`No checklist item ${u?.key}`);
@@ -204,7 +277,8 @@ export class JobsService {
     }
     const done = list.filter((c) => c.done).length;
     job.checklist = list;
-    job.audit.push(this.store.audit(actor.name, actor.role, `Checklist updated — ${done}/${list.length} done`));
+    job.audit.push(this.store.audit(actor.name, actor.role,
+      `Checklist updated — ${done}/${list.length} done${offline ? ` (recorded offline at ${offline.toISOString().slice(0, 16).replace('T', ' ')} UTC)` : ''}`));
     await this.store.save(job);
     return job;
   }

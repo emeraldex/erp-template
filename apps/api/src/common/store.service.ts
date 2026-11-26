@@ -212,6 +212,16 @@ export class StoreService {
     if (entry?.fields && Object.keys(shown).length) entry.fields = { ...entry.fields, ...shown };
   }
 
+  /** Attachment metadata for one record (no file contents). */
+  async attachmentsOf(entity: string, entityId: string) {
+    const rows = await this.prisma.attachment.findMany({ where: { entity, entityId }, orderBy: { uploadedAt: 'asc' } });
+    return rows.map((a) => ({
+      id: a.id, filename: a.filename, contentType: a.contentType, sizeBytes: a.sizeBytes, kind: a.kind,
+      ...(a.caption ? { caption: a.caption } : {}), ...(a.signedBy ? { signedBy: a.signedBy } : {}), ...(a.formNo ? { formNo: a.formNo } : {}),
+      uploadedBy: a.uploadedBy, uploadedAt: a.uploadedAt.toISOString(),
+    }));
+  }
+
   /** An in-app notification for one person. */
   async notify(userId: string, n: { kind: string; title: string; body: string; ref?: string }): Promise<void> {
     await this.prisma.notification.create({ data: { id: randomUUID(), userId, kind: n.kind, title: n.title, body: n.body, ref: n.ref ?? null } });

@@ -37,7 +37,7 @@ export function configureApp(app: INestApplication): void {
       cb(null, configured.includes(origin) || (!!host && registry.knownHosts().has(host.toLowerCase())));
     },
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Client-Op'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'OPTIONS'],
     maxAge: 600,
   });
