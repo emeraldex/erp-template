@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { PrismaService } from '../common/prisma.service';
 import { StoreService } from '../common/store.service';
+import { SettingsService } from '../settings/settings.service';
 import { JobStatus } from '../common/types';
 import { computeBreaches, daysSince, SlaBreach } from './sla';
 
@@ -10,7 +12,19 @@ type Snapshot = Awaited<ReturnType<StoreService['dashboardSnapshot']>>;
 /** FR-10 (SLA alerts) + FR-12 (status / ageing / performance dashboards). */
 @Injectable()
 export class DashboardService {
-  constructor(private readonly store: StoreService) {}
+  constructor(
+    private readonly store: StoreService,
+    @Optional() private readonly prisma?: PrismaService,
+    @Optional() private readonly settings?: SettingsService,
+  ) {}
+
+  /** Store places at or below their reorder point (active parts), when stock control is on. */
+  private async lowStock(): Promise<number | null> {
+    if (!this.prisma || !this.settings?.modules.stock) return null;
+    return this.prisma.stockLevel.count({
+      where: { reorderPoint: { not: null }, qty: { lte: this.prisma.stockLevel.fields.reorderPoint }, part: { active: true } },
+    });
+  }
 
   private daysIn(since: string): number {
     return daysSince(since, Date.now());
@@ -25,7 +39,7 @@ export class DashboardService {
   }
 
   async kpis() {
-    const snap = await this.store.dashboardSnapshot();
+    const [snap, lowStock] = await Promise.all([this.store.dashboardSnapshot(), this.lowStock()]);
     const jobs = snap.jobs;
     // Counts work from status phases, so they hold for any sector's workflow.
     const final = new Set(this.store.finalStatuses('JOB'));
@@ -81,6 +95,7 @@ export class DashboardService {
       byStatus,
       avgJobAgeDays: ageing.length ? Math.round(ageing.reduce((s, a) => s + a.days, 0) / ageing.length) : 0,
       weeklyClosures: snap.closures,
+      lowStock,
     };
   }
 }

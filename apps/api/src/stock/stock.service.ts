@@ -57,11 +57,11 @@ export class StockService {
 
   // ─── catalogue ───────────────────────────────────────────────────────────────
 
-  private storeLabel(key: string) {
+  storeLabel(key: string) {
     return this.store.label('store', key);
   }
 
-  private assertStore(key: unknown): string {
+  assertStore(key: unknown): string {
     const k = String(key ?? '');
     if (!this.store.has('store', k)) throw new BadRequestException(`Unknown store ${k || '(none)'}`);
     return k;
@@ -105,6 +105,29 @@ export class StockService {
     if (q.store) out = out.filter((p) => p.levels.some((l) => l.store === q.store));
     if (q.low) out = out.filter((p) => p.levels.some((l) => l.low && (!q.store || l.store === q.store)));
     return out;
+  }
+
+  /**
+   * What goes on part labels, in the order asked. With a store, each label
+   * shows the part's bin there; without, its unit and group.
+   */
+  async forLabels(ids: string[], storeKey?: string) {
+    const unique = [...new Set(ids.map((i) => i.trim()).filter(Boolean))];
+    if (!unique.length) throw new BadRequestException('Choose at least one part');
+    if (unique.length > 100) throw new BadRequestException('At most 100 labels per print run');
+    const s = storeKey ? this.assertStore(storeKey) : undefined;
+    const rows = await this.prisma.part.findMany({ where: { id: { in: unique } }, include: { levels: s ? { where: { store: s } } : false } });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const missing = unique.find((id) => !byId.has(id));
+    if (missing) throw new NotFoundException(`Part ${missing} not found`);
+    return unique.map((id) => {
+      const p = byId.get(id)!;
+      const bin = s ? (p as typeof p & { levels?: { bin: string }[] }).levels?.[0]?.bin : undefined;
+      const detail = s
+        ? [bin ? `Bin ${bin}` : '', this.storeLabel(s)].filter(Boolean).join(' · ')
+        : [this.store.label('unit', p.unit), p.group ? this.store.label('partGroup', p.group) : ''].filter(Boolean).join(' · ');
+      return { id: p.id, partNo: p.partNo, name: p.name, detail };
+    });
   }
 
   /** The few facts a work order or request needs about a part. */

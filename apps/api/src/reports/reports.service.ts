@@ -9,6 +9,7 @@ export interface Period { from: string; to: string }
 const DAY = 86_400_000;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const round2 = (n: number) => Math.round(n * 100) / 100;
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 /** Validate ?from&to (inclusive dates); default to the current calendar month. */
 export function parsePeriod(from?: string, to?: string, now = new Date()): Period {
@@ -161,6 +162,126 @@ export class ReportsService {
         rows,
         totals: { invoiceNo: `TOTAL (${rows.length})`, total: round2(open.reduce((s, i) => s + i.totalMYR, 0)) },
       }],
+    };
+  }
+
+  /** Stock valuation: every part held, per store, at its moving-average cost. */
+  async stockValuation(now = Date.now()): Promise<Report> {
+    const levels = await this.prisma.stockLevel.findMany({
+      where: { qty: { gt: 0 } },
+      include: { part: { select: { partNo: true, name: true, unit: true, group: true, avgCost: true } } },
+    });
+    const byStore = new Map<string, Row[]>();
+    for (const l of levels) {
+      const qty = Number(l.qty);
+      const avg = Number(l.part.avgCost);
+      const rows = byStore.get(l.store) ?? [];
+      rows.push({
+        partNo: l.part.partNo, name: l.part.name, group: l.part.group ? this.store.label('partGroup', l.part.group) : '',
+        bin: l.bin, qty, unit: this.store.label('unit', l.part.unit), avgCost: avg, value: round2(qty * avg),
+      });
+      byStore.set(l.store, rows);
+    }
+    const columns: Sheet['columns'] = [
+      { key: 'store', header: 'Store', width: 22 },
+      { key: 'partNo', header: 'Part no.', width: 16 }, { key: 'name', header: 'Name', width: 34 },
+      { key: 'group', header: 'Group', width: 16 }, { key: 'bin', header: 'Bin', width: 10 },
+      { key: 'qty', header: 'On hand', type: 'qty' }, { key: 'unit', header: 'Unit', width: 8 },
+      { key: 'avgCost', header: 'Average cost', type: 'money', width: 14 }, { key: 'value', header: 'Value (MYR)', type: 'money', width: 15 },
+    ];
+    const stores = [...byStore.keys()].sort();
+    const all: Row[] = [];
+    for (const k of stores) {
+      for (const r of byStore.get(k)!.sort((a, b) => String(a.partNo).localeCompare(String(b.partNo)))) all.push({ store: this.store.label('store', k), ...r });
+    }
+    const total = (rows: Row[]) => round2(rows.reduce((s, r) => s + Number(r.value), 0));
+    const summary: Row[] = stores.map((k) => ({ store: this.store.label('store', k), lines: byStore.get(k)!.length, value: total(byStore.get(k)!) }));
+    return {
+      title: 'Stock valuation',
+      subtitle: `As at ${new Date(now).toISOString().slice(0, 10)} — moving-average cost`,
+      sheets: [
+        { name: 'Stock', columns, rows: all, totals: { store: `TOTAL (${all.length})`, value: total(all) } },
+        {
+          name: 'By store',
+          columns: [{ key: 'store', header: 'Store', width: 26 }, { key: 'lines', header: 'Parts held', type: 'int', width: 12 }, { key: 'value', header: 'Value (MYR)', type: 'money', width: 15 }],
+          rows: summary,
+          totals: { store: 'TOTAL', lines: all.length, value: total(all) },
+        },
+      ],
+    };
+  }
+
+  /** Parts used: issues to work orders net of returns, in a period, with cost. */
+  async partsUsage(period: Period): Promise<Report> {
+    const moves = await this.prisma.stockMovement.findMany({
+      where: {
+        type: { in: ['ISSUE', 'RETURN'] }, jobId: { not: null },
+        at: { gte: new Date(`${period.from}T00:00:00Z`), lt: new Date(Date.parse(`${period.to}T00:00:00Z`) + DAY) },
+      },
+      select: { partId: true, jobId: true, qty: true, unitCost: true },
+    });
+    const partIds = [...new Set(moves.map((m) => m.partId))];
+    const jobIds = [...new Set(moves.map((m) => m.jobId!))];
+    const [parts, jobs] = await Promise.all([
+      this.prisma.part.findMany({ where: { id: { in: partIds } }, select: { id: true, partNo: true, name: true, unit: true } }),
+      this.prisma.job.findMany({ where: { id: { in: jobIds } }, select: { id: true, component: true, asset: { select: { tag: true } } } }),
+    ]);
+    const part = new Map(parts.map((p) => [p.id, p]));
+    const job = new Map(jobs.map((j) => [j.id, j]));
+    const lines = new Map<string, { partId: string; jobId: string; qty: number; cost: number }>();
+    for (const m of moves) {
+      const key = `${m.partId}\u0000${m.jobId}`;
+      const l = lines.get(key) ?? { partId: m.partId, jobId: m.jobId!, qty: 0, cost: 0 };
+      l.qty -= Number(m.qty); // issues are negative in the ledger
+      l.cost -= Number(m.qty) * Number(m.unitCost);
+      lines.set(key, l);
+    }
+    const detail: Row[] = [...lines.values()]
+      .filter((l) => round3(l.qty) !== 0 || round2(l.cost) !== 0)
+      .map((l) => {
+        const p = part.get(l.partId);
+        const j = job.get(l.jobId);
+        return {
+          partNo: p?.partNo ?? l.partId, name: p?.name ?? '', jobId: l.jobId, asset: j?.asset?.tag ?? '', item: j?.component ?? '',
+          qty: round3(l.qty), unit: p ? this.store.label('unit', p.unit) : '', cost: round2(l.cost),
+        };
+      })
+      .sort((a, b) => String(a.partNo).localeCompare(String(b.partNo)) || String(a.jobId).localeCompare(String(b.jobId)));
+    const byPart = new Map<string, Row>();
+    for (const r of detail) {
+      const t = byPart.get(String(r.partNo)) ?? { partNo: r.partNo, name: r.name, qty: 0, unit: r.unit, jobs: 0, cost: 0 };
+      t.qty = round3(Number(t.qty) + Number(r.qty));
+      t.cost = round2(Number(t.cost) + Number(r.cost));
+      t.jobs = Number(t.jobs) + 1;
+      byPart.set(String(r.partNo), t);
+    }
+    const summary = [...byPart.values()].sort((a, b) => Number(b.cost) - Number(a.cost));
+    const total = round2(detail.reduce((s, r) => s + Number(r.cost), 0));
+    return {
+      title: 'Parts usage',
+      subtitle: `${period.from} to ${period.to} — issues to work orders, net of returns`,
+      sheets: [
+        {
+          name: 'By part',
+          columns: [
+            { key: 'partNo', header: 'Part no.', width: 16 }, { key: 'name', header: 'Name', width: 34 },
+            { key: 'qty', header: 'Used', type: 'qty' }, { key: 'unit', header: 'Unit', width: 8 },
+            { key: 'jobs', header: 'Work orders', type: 'int', width: 12 }, { key: 'cost', header: 'Cost (MYR)', type: 'money', width: 15 },
+          ],
+          rows: summary,
+          totals: { partNo: `TOTAL (${summary.length})`, cost: total },
+        },
+        {
+          name: 'By work order',
+          columns: [
+            { key: 'partNo', header: 'Part no.', width: 16 }, { key: 'name', header: 'Name', width: 30 },
+            { key: 'jobId', header: 'Work order', width: 16 }, { key: 'asset', header: 'Asset', width: 14 }, { key: 'item', header: 'Item', width: 26 },
+            { key: 'qty', header: 'Used', type: 'qty' }, { key: 'unit', header: 'Unit', width: 8 }, { key: 'cost', header: 'Cost (MYR)', type: 'money', width: 15 },
+          ],
+          rows: detail,
+          totals: { partNo: `TOTAL (${detail.length})`, cost: total },
+        },
+      ],
     };
   }
 
