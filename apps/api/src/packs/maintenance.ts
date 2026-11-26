@@ -1,6 +1,7 @@
 import type { TransitionRule } from '../common/types';
 import type { InvoiceStreamDef, SlaRule } from '../common/workflow-config';
 import type { Capability, DictKind, Entry, Modules, Pack, RoleMeta, StatusMeta, Terms } from './types';
+import { store, UNITS } from './stock-lists';
 
 /**
  * Building blocks shared by the general-purpose sector packs. Every pack built
@@ -28,12 +29,12 @@ export const ROLE = {
 const CAPS: Record<keyof typeof ROLE, Capability[]> = {
   ADMIN: [],
   HELPDESK: ['jobs.register', 'jobs.assign', 'priority.raise'],
-  SUPERVISOR: ['jobs.register', 'jobs.assign', 'priority.raise', 'priority.close', 'assets.manage', 'meters.record', 'incidents.manage', 'tools.handle', 'reports.audit', 'alerts.escalation'],
-  TECHNICIAN: ['meters.record', 'tools.handle'],
-  STORES: ['tools.handle'],
+  SUPERVISOR: ['jobs.register', 'jobs.assign', 'stock.manage', 'stock.issue', 'priority.raise', 'priority.close', 'assets.manage', 'meters.record', 'incidents.manage', 'tools.handle', 'reports.audit', 'alerts.escalation'],
+  TECHNICIAN: ['meters.record', 'tools.handle', 'stock.issue'],
+  STORES: ['tools.handle', 'stock.manage', 'stock.issue'],
   PURCHASING: ['procurement.quote', 'registers.propose', 'registers.evaluate'],
   FINANCE: ['invoices.create', 'invoices.documents', 'reports.billing', 'reports.payments'],
-  MANAGER: ['workflow.edit', 'jobs.assign', 'priority.raise', 'priority.close', 'registers.evaluate', 'registers.approve', 'assets.manage', 'invoices.documents', 'reports.billing', 'reports.audit', 'alerts.escalation'],
+  MANAGER: ['workflow.edit', 'jobs.assign', 'stock.manage', 'stock.issue', 'priority.raise', 'priority.close', 'registers.evaluate', 'registers.approve', 'assets.manage', 'invoices.documents', 'reports.billing', 'reports.audit', 'alerts.escalation'],
 };
 
 export function roles(titles: Record<keyof typeof ROLE, [string, string]>): Entry<RoleMeta>[] {
@@ -74,7 +75,7 @@ const BASE_TERMS: Terms = {
 
 const BASE_MODULES: Modules = {
   procurement: true, vendorRepair: false, priority: true, incidents: true, tools: false, training: true,
-  invoicing: true, registers: true, assets: true, pm: true,
+  invoicing: true, registers: true, assets: true, pm: true, stock: true,
 };
 
 const { HELPDESK, SUPERVISOR, TECHNICIAN, STORES, PURCHASING, FINANCE, MANAGER } = ROLE;
@@ -289,6 +290,9 @@ export function maintenancePack(o: MaintenanceOptions): Pack {
       course: d.course ?? [],
       jobType: d.jobType ?? BASE_JOB_TYPES,
       assetType: d.assetType ?? [],
+      store: d.store ?? [store('MAIN', 'Main store', 'Stor utama', 'HQ'), store('VAN1', 'Service van 1', 'Van servis 1', 'HQ')],
+      unit: d.unit ?? UNITS,
+      partGroup: d.partGroup ?? [],
     },
     slaRules: o.sla ?? BASE_SLA,
     invoiceStreams: o.invoiceStreams ?? BASE_STREAMS,

@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { HealthController } from './health/health.controller';
 import { JobsModule } from './jobs/jobs.module';
 import { AssetsModule } from './assets/assets.module';
+import { StockModule } from './stock/stock.module';
 import { DemandsModule } from './demands/demands.module';
 import { OvModule } from './ov/ov.module';
 import { RegistersModule } from './registers/registers.module';
@@ -31,7 +32,7 @@ import { TenantMiddleware } from './tenancy/tenant.middleware';
   imports: [
     // Per-IP request ceiling for the whole API; sign-in has a tighter limit.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: authConfig.apiRateLimit }]),
-    TenancyModule, SettingsModule, AuthModule, AssetsModule, JobsModule, DemandsModule, OvModule, RegistersModule, FodModule, InvoicingModule, DashboardModule, DocumentsModule, ReportsModule, AttachmentsModule,
+    TenancyModule, SettingsModule, AuthModule, AssetsModule, StockModule, JobsModule, DemandsModule, OvModule, RegistersModule, FodModule, InvoicingModule, DashboardModule, DocumentsModule, ReportsModule, AttachmentsModule,
     NotificationsModule, RetentionModule, SchedulerModule, WorkflowModule, UsersModule,
   ],
   controllers: [HealthController],

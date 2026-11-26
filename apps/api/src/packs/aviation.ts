@@ -3,6 +3,7 @@ import {
   JOB_TRANSITIONS, OV_STATUS_META, OV_TRANSITIONS, PRIORITY_META, REPAIR_ROUTE_META, SLA_RULES,
 } from '../common/workflow-config';
 import type { Entry, Pack, Phase, StatusMeta } from './types';
+import { store, UNITS } from './stock-lists';
 
 const statuses = (meta: Record<string, { en: string; ms: string; tone: StatusMeta['tone'] }>, phases: Record<string, Phase | [Phase, Partial<StatusMeta>]>): Entry<StatusMeta>[] =>
   Object.entries(meta).map(([key, m]) => {
@@ -29,7 +30,7 @@ export const AVIATION: Pack = {
   },
   modules: {
     procurement: true, vendorRepair: true, priority: true, incidents: true, tools: true, training: true,
-    invoicing: true, registers: true, assets: false, pm: false,
+    invoicing: true, registers: true, assets: false, pm: false, stock: false,
   },
   statuses: {
     JOB: statuses(JOB_STATUS_META, {
@@ -52,7 +53,7 @@ export const AVIATION: Pack = {
   transitions: { JOB: JOB_TRANSITIONS, DEMAND: DEMAND_TRANSITIONS, OV: OV_TRANSITIONS, INVOICE: INVOICE_TRANSITIONS },
   roles: [
     { key: 'ADMIN', label: 'Administrator (IT)', labelMs: 'Pentadbir (IT)', meta: { capabilities: [] } },
-    { key: 'STORES', label: 'Stores / Logistic (StS)', labelMs: 'Stor / Logistik', meta: { capabilities: ['jobs.register', 'priority.raise', 'tools.handle'] } },
+    { key: 'STORES', label: 'Stores / Logistic (StS)', labelMs: 'Stor / Logistik', meta: { capabilities: ['jobs.register', 'priority.raise', 'tools.handle', 'stock.manage', 'stock.issue'] } },
     { key: 'WORKSHOP', label: 'Workshop technician (Tst)', labelMs: 'Juruteknik bengkel', meta: { capabilities: ['tools.handle'] } },
     { key: 'MIS', label: 'Maintenance inspector (MIS)', labelMs: 'Pemeriksa penyelenggaraan', meta: { capabilities: ['tools.handle'] } },
     { key: 'MM', label: 'Maintenance manager (SMM/HOD)', labelMs: 'Pengurus penyelenggaraan', meta: { capabilities: ['jobs.assign', 'priority.raise', 'priority.close', 'invoices.documents', 'reports.billing', 'reports.audit', 'alerts.escalation'] } },
@@ -84,6 +85,9 @@ export const AVIATION: Pack = {
     course: [{ key: 'FOD_INITIAL', label: 'FOD initial' }, { key: 'FOD_RECURRENT', label: 'FOD recurrent' }],
     jobType: [{ key: 'CORRECTIVE', label: 'Repair', labelMs: 'Baik pulih' }, { key: 'PREVENTIVE', label: 'Preventive', labelMs: 'Pencegahan' }],
     assetType: [],
+    store: [store('MAIN', 'Main store', 'Stor utama', 'HQ')],
+    unit: UNITS,
+    partGroup: [],
   },
   slaRules: SLA_RULES,
   invoiceStreams: INVOICE_STREAMS,

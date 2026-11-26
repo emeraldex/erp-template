@@ -7,11 +7,12 @@ import type { Role } from '../common/types';
 import { computeAlerts, SlaAlert } from '../dashboard/sla';
 import { Mailer } from './mailer';
 
-const LINKS: Record<SlaAlert['entity'], (ref: string) => string> = {
+const LINKS: Record<string, (ref: string) => string> = {
   JOB: (r) => `/jobs/${encodeURIComponent(r)}`,
   DEMAND: () => '/demands',
   OV: () => '/ov',
   INVOICE: () => '/invoicing',
+  STOCK: (r) => `/stock?part=${encodeURIComponent(r)}`,
 };
 
 export interface AlertRunResult { checked: number; newAlerts: number; notifications: number; emails: number }
@@ -108,7 +109,7 @@ export class NotificationsService {
       unread,
       items: items.map((n) => {
         const [entity, ref] = (n.ref ?? '').split(':');
-        const link = entity in LINKS && ref ? LINKS[entity as SlaAlert['entity']](ref) : undefined;
+        const link = entity in LINKS && ref ? LINKS[entity](ref) : undefined;
         return { id: n.id, kind: n.kind, title: n.title, body: n.body, ref, link, createdAt: n.createdAt.toISOString(), read: !!n.readAt };
       }),
     };

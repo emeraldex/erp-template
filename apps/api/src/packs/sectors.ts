@@ -1,4 +1,5 @@
 import { field, maintenancePack } from './maintenance';
+import { store } from './stock-lists';
 import type { Entry } from './types';
 
 const e = (key: string, label: string, labelMs: string, meta?: Record<string, unknown>): Entry => ({ key, label, labelMs, ...(meta ? { meta } : {}) });
@@ -18,6 +19,8 @@ export const GENERAL = maintenancePack({
   dictionaries: {
     category: [e('MECHANICAL', 'Mechanical', 'Mekanikal'), e('ELECTRICAL', 'Electrical', 'Elektrik'), e('GENERAL', 'General', 'Am')],
     assetType: [e('EQUIPMENT', 'Equipment', 'Peralatan'), e('VEHICLE', 'Vehicle', 'Kenderaan'), e('BUILDING', 'Building system', 'Sistem bangunan')],
+    store: [store('MAIN', 'Main store', 'Stor utama', 'HQ'), store('VAN1', 'Service van 1', 'Van servis 1', 'HQ')],
+    partGroup: [e('MECHANICAL', 'Mechanical spares', 'Alat ganti mekanikal'), e('ELECTRICAL', 'Electrical spares', 'Alat ganti elektrik'), e('CONSUMABLES', 'Consumables', 'Bahan guna habis')],
   },
   minQuotations: 1,
   defaults: { jobPrefix: 'WO', initialLocation: 'ON_SITE', tax: { label: 'SST', ratePct: 8 } },
@@ -60,6 +63,8 @@ export const FACILITIES = maintenancePack({
       e('CHILLER', 'Chiller', 'Penyejuk'), e('AHU', 'Air handling unit', 'Unit pengendali udara'), e('LIFT', 'Lift', 'Lif'),
       e('GENSET', 'Generator set', 'Set penjana'), e('FIRE_PANEL', 'Fire alarm panel', 'Panel penggera kebakaran'), e('PUMP', 'Pump', 'Pam'),
     ],
+    store: [store('MAIN', 'Main store', 'Stor utama', 'HQ'), store('ANNEX_STORE', 'Annex store', 'Stor anjung', 'ANNEX')],
+    partGroup: [e('FILTERS', 'Filters', 'Penapis'), e('BELTS', 'Belts', 'Tali sawat'), e('ELECTRICAL', 'Electrical', 'Elektrik'), e('PLUMBING', 'Plumbing', 'Paip'), e('FIRE', 'Fire protection', 'Perlindungan kebakaran'), e('CONSUMABLES', 'Consumables', 'Bahan guna habis')],
   },
   completeRequires: [
     field('rootCause', 'Cause of fault'),
@@ -113,6 +118,8 @@ export const FLEET = maintenancePack({
       e('CAR', 'Car', 'Kereta'), e('VAN', 'Van', 'Van'), e('TRUCK', 'Truck', 'Lori'), e('BUS', 'Bus', 'Bas'),
       e('TRAILER', 'Trailer', 'Treler'), e('FORKLIFT', 'Forklift', 'Forklift'),
     ],
+    store: [store('MAIN', 'Main depot store', 'Stor depoh utama', 'HQ'), store('NORTH_STORE', 'North depot store', 'Stor depoh utara', 'NORTH')],
+    partGroup: [e('FILTERS', 'Filters', 'Penapis'), e('BRAKES', 'Brakes', 'Brek'), e('TYRES', 'Tyres', 'Tayar'), e('FLUIDS', 'Oils and fluids', 'Minyak dan cecair'), e('ELECTRICAL', 'Electrical', 'Elektrik')],
   },
   startRequires: [field('odometer', 'Odometer reading', 'number')],
   startEffects: [{ type: 'recordMeter', params: { field: 'odometer', meterKey: 'ODOMETER' } }],
@@ -166,6 +173,8 @@ export const INDUSTRIAL = maintenancePack({
       e('MOTOR', 'Electric motor', 'Motor elektrik'), e('PUMP', 'Pump', 'Pam'), e('COMPRESSOR', 'Compressor', 'Pemampat'),
       e('CONVEYOR', 'Conveyor', 'Penghantar'), e('BOILER', 'Boiler', 'Dandang'), e('PLC', 'PLC / control panel', 'PLC / panel kawalan'),
     ],
+    store: [store('MAIN', 'Main store', 'Stor utama', 'HQ'), store('PLANT2_STORE', 'Plant 2 store', 'Stor loji 2', 'PLANT2')],
+    partGroup: [e('BEARINGS', 'Bearings', 'Galas'), e('SEALS', 'Seals and gaskets', 'Pengedap dan gasket'), e('ELECTRICAL', 'Electrical', 'Elektrik'), e('LUBRICANTS', 'Lubricants', 'Pelincir'), e('INSTRUMENT', 'Instrumentation', 'Instrumentasi')],
   },
   startRequires: [field('permitRef', 'Permit to work no.'), field('isolationRef', 'Isolation / LOTO ref')],
   completeRequires: [field('rootCause', 'Root cause'), field('downtimeHours', 'Downtime (hours)', 'number')],
@@ -214,6 +223,8 @@ export const MEDICAL = maintenancePack({
       e('INFUSION_PUMP', 'Infusion pump', 'Pam infusi'), e('VENTILATOR', 'Ventilator', 'Ventilator'), e('DEFIBRILLATOR', 'Defibrillator', 'Defibrilator'),
       e('MONITOR', 'Patient monitor', 'Monitor pesakit'), e('ULTRASOUND', 'Ultrasound', 'Ultrabunyi'), e('XRAY', 'X-ray', 'X-ray'),
     ],
+    store: [store('MAIN', 'Biomedical store', 'Stor bioperubatan', 'HQ'), store('CLINIC_STORE', 'Clinic store', 'Stor klinik', 'CLINIC')],
+    partGroup: [e('ACCESSORIES', 'Accessories', 'Aksesori'), e('BATTERIES', 'Batteries', 'Bateri'), e('SPARES', 'Spare parts', 'Alat ganti'), e('CONSUMABLES', 'Consumables', 'Bahan guna habis')],
   },
   startRequires: [field('decontaminated', 'Decontamination certificate ref')],
   inspection: {

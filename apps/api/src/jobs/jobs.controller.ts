@@ -39,6 +39,12 @@ export class JobsController {
     return this.svc.register(dto, { name: req.user.name, role: req.user.role });
   }
 
+  /** Parts used on the job, with their cost. */
+  @Get(':id/parts')
+  parts(@Param('id') id: string) {
+    return this.svc.parts(id);
+  }
+
   /** Everything the phone needs for one job (and keeps for offline use). */
   @Get(':id/pack')
   pack(@Param('id') id: string, @Req() req: any) {

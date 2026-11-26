@@ -55,6 +55,8 @@ export const CAPABILITIES = {
   'tools.handle': 'Sign tools in and out',
   'assets.manage': 'Create and edit assets and PM schedules',
   'meters.record': 'Record meter readings',
+  'stock.manage': 'Parts catalogue, stock levels, counts, transfers and buying for stock',
+  'stock.issue': 'Issue parts to work orders and take returns',
   'reports.billing': 'Revenue and outstanding-payment reports',
   'reports.payments': 'Payment-system export files',
   'reports.audit': 'Audit trail, retention report, attachment checks',
@@ -78,12 +80,14 @@ export interface Modules {
   procurement: boolean; vendorRepair: boolean; priority: boolean; incidents: boolean;
   tools: boolean; training: boolean; invoicing: boolean; registers: boolean;
   assets: boolean; pm: boolean;
+  /** Parts catalogue and stock control. */
+  stock: boolean;
 }
 export type ModuleKey = keyof Modules;
-export const MODULE_KEYS: (keyof Modules)[] = ['procurement', 'vendorRepair', 'priority', 'incidents', 'tools', 'training', 'invoicing', 'registers', 'assets', 'pm'];
+export const MODULE_KEYS: (keyof Modules)[] = ['procurement', 'vendorRepair', 'priority', 'incidents', 'tools', 'training', 'invoicing', 'registers', 'assets', 'pm', 'stock'];
 
 /** Dictionary kinds a pack fills in (besides statuses and roles). */
-export const DICT_KINDS = ['site', 'location', 'category', 'priority', 'route', 'incidentArea', 'course', 'jobType', 'assetType'] as const;
+export const DICT_KINDS = ['site', 'location', 'category', 'priority', 'route', 'incidentArea', 'course', 'jobType', 'assetType', 'store', 'unit', 'partGroup'] as const;
 export type DictKind = (typeof DICT_KINDS)[number];
 
 export interface Pack {

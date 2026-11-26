@@ -116,10 +116,13 @@ export const mapQuotation = (r: any): Quotation =>
 export function mapDemand(r: any): Demand {
   return compact({
     id: r.id,
-    jobId: r.jobId,
+    jobId: r.jobId ?? undefined,
+    partId: r.partId ?? undefined,
+    forStore: r.forStore ?? undefined,
+    unitCost: r.unitCost == null ? undefined : Number(r.unitCost),
     partDescription: r.partDescription,
     partNo: r.partNo,
-    qty: r.qty,
+    qty: Number(r.qty),
     status: r.status,
     statusSince: iso(r.statusSince),
     raisedBy: r.raisedBy,

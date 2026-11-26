@@ -125,7 +125,14 @@ export interface Quotation {
 
 export interface Demand {
   id: string;              // F212 ref
-  jobId: string;
+  /** The work order the part is for; absent on a purchase request for stock. */
+  jobId?: string;
+  /** The catalogue part, when there is one (stock moves only then). */
+  partId?: string;
+  /** Purchase request for stock: the store it replenishes (also where it was received). */
+  forStore?: string;
+  /** Unit cost recorded at receipt. */
+  unitCost?: number;
   partDescription: string;
   partNo: string;
   qty: number;

@@ -606,8 +606,9 @@ export class StoreService {
   private async insertDemand(tx: any, dm: Demand): Promise<void> {
     await tx.demand.create({
       data: {
-        id: dm.id, jobId: dm.jobId, partDescription: dm.partDescription, partNo: dm.partNo,
+        id: dm.id, jobId: dm.jobId ?? null, partDescription: dm.partDescription, partNo: dm.partNo,
         qty: dm.qty, status: dm.status, statusSince: new Date(dm.statusSince),
+        partId: dm.partId ?? null, forStore: dm.forStore ?? null, unitCost: dm.unitCost ?? null,
         raisedBy: dm.raisedBy, branch: fromBranch(dm.branch),
         ordinal: await this.ordinalIn(tx.demand),
         records: { create: this.recordCreate(dm.records) },
@@ -826,6 +827,8 @@ export class StoreService {
         poRef: dm.poRef ?? null,
         discF217Ref: dm.discrepancy?.f217Ref ?? null,
         discNote: dm.discrepancy?.note ?? null,
+        forStore: dm.forStore ?? null,
+        unitCost: dm.unitCost ?? null,
         version: { increment: 1 },
       },
     });

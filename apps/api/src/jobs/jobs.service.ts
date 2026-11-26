@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { AssetsService } from '../assets/assets.service';
 import { PmService } from '../assets/pm.service';
+import { StockService } from '../stock/stock.service';
 import { StoreService } from '../common/store.service';
 import { applyTransition } from '../common/transition.engine';
 import { Branch, ChecklistItem, Job, JobStatus, PriorityType, RepairRoute, Role } from '../common/types';
@@ -19,7 +20,15 @@ export class JobsService {
     private readonly settings: SettingsService,
     @Optional() private readonly assets?: AssetsService,
     @Optional() private readonly pm?: PmService,
+    @Optional() private readonly stock?: StockService,
   ) {}
+
+  /** Parts used on a job (issues net of returns) with their cost. */
+  async parts(id: string) {
+    await this.get(id);
+    if (!this.stock || !this.settings.modules.stock) return { lines: [], total: 0 };
+    return this.stock.jobParts(id);
+  }
 
   /** Aviation keeps its COL (AOG/ROA column) wording; other sectors get plain words. */
   private get aviation(): boolean {
@@ -222,10 +231,11 @@ export class JobsService {
   /** Everything the phone needs to work on one job, in one call (and to keep offline). */
   async pack(id: string, actor: Actor) {
     const job = await this.get(id);
-    const [asset, attachments, pm] = await Promise.all([
+    const [asset, attachments, pm, parts] = await Promise.all([
       job.assetId ? this.assets?.forJob(job.assetId) ?? null : null,
       this.store.attachmentsOf('JOB', job.id),
       job.pmScheduleId ? this.pm?.get(job.pmScheduleId).catch(() => null) ?? null : null,
+      this.stock && this.settings.modules.stock ? this.stock.jobParts(job.id) : null,
     ]);
     const steps = this.store.jobTransitions
       .filter((r) => r.from === job.status && (actor.role === 'ADMIN' || r.roles.includes(actor.role)))
@@ -235,6 +245,7 @@ export class JobsService {
       asset,
       pm: pm ? { id: pm.id, title: pm.title, instructions: pm.instructions } : null,
       attachments,
+      parts,
       steps,
       locked: !!job.archivedAt || this.store.isFinal('JOB', job.status),
       fetchedAt: new Date().toISOString(),
