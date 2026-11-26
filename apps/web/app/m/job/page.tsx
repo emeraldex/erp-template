@@ -33,13 +33,15 @@ function JobView() {
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Ticks show at once, before the phone has finished saving them.
+  const [ticks, setTicks] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     if (!id) return;
     setError(null);
     try {
       const r = await f.loadPack(id);
-      setPack(r.data); setFromCache(r.fromCache);
+      setPack(r.data); setFromCache(r.fromCache); setTicks({});
     } catch (e) {
       setError((e as Error).message);
     }
@@ -68,7 +70,7 @@ function JobView() {
   const job = pack.job;
   const locked = pack.locked;
   // Show queued changes straight away, marked as waiting.
-  const checks = applyPendingChecks(job.checklist ?? [], pending);
+  const checks = applyPendingChecks(job.checklist ?? [], pending).map((c) => (c.key in ticks ? { ...c, done: ticks[c.key], pending: true } : c));
   const pendingNotes = pending.filter((p) => p.type === "note").map((p) => ({ id: p.id, text: String(p.payload.text), failed: p.state === "failed" }));
   const pendingPhotos = pending.filter((p) => p.type === "photo");
   const photos = pack.attachments.filter((a) => a.kind === "photo" || a.contentType.startsWith("image/"));
@@ -144,7 +146,11 @@ function JobView() {
               <li key={c.key}>
                 <label className={`flex min-h-[52px] items-center gap-3 rounded-lg border px-3 py-2 ${c.pending ? "border-amber/40" : "hairline"} bg-panel/50`}>
                   <input type="checkbox" checked={c.done} disabled={locked}
-                    onChange={(e) => queue(() => f.queue("checklist", job.id, { key: c.key, done: e.target.checked }))}
+                    onChange={(e) => {
+                      const done = e.target.checked;
+                      setTicks((t) => ({ ...t, [c.key]: done }));
+                      void queue(() => f.queue("checklist", job.id, { key: c.key, done }));
+                    }}
                     className="h-6 w-6 shrink-0 accent-[var(--c-red)]" />
                   <span className={`flex-1 text-base ${c.done ? "text-steel line-through" : "text-fg"}`}>
                     {c.label}{c.required && !c.done && <span className="text-brand-bright"> *</span>}

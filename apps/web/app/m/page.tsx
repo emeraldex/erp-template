@@ -51,7 +51,7 @@ export default function MyWorkPage() {
         <p className="px-4 py-12 text-center text-steel">{tab === "mine" ? m("nothingMine") : m("nothingAvailable")}</p>
       )}
       <ul className="space-y-3 px-4 py-4">
-        {list.map((c) => <Card key={c.id} c={c} pending={pending(c.id)} siteLabel={label("site", c.site)} jobWord={terms.job} />)}
+        {list.map((c) => <Card key={c.id} c={c} pending={pending(c.id)} siteLabel={label("site", c.site)} locationLabel={label("location", c.location)} jobWord={terms.job} />)}
       </ul>
       {data && (
         <div className="px-4 pb-6">
@@ -64,7 +64,7 @@ export default function MyWorkPage() {
   );
 }
 
-function Card({ c, pending, siteLabel, jobWord }: { c: WorkCard; pending: number; siteLabel: string; jobWord: string }) {
+function Card({ c, pending, siteLabel, locationLabel, jobWord }: { c: WorkCard; pending: number; siteLabel: string; locationLabel: string; jobWord: string }) {
   const m = useM();
   const overdue = c.sla && c.sla.overdueBy > 0;
   return (
@@ -75,7 +75,7 @@ function Card({ c, pending, siteLabel, jobWord }: { c: WorkCard; pending: number
           <div className="min-w-0">
             <p className="mono text-sm text-trace">{c.id}</p>
             <p className="mt-0.5 truncate text-lg font-semibold text-fg">{c.component}</p>
-            <p className="truncate text-sm text-steel">{[c.asset?.tag ?? c.serialNo, siteLabel, c.location].filter(Boolean).join(" · ")}</p>
+            <p className="truncate text-sm text-steel">{[c.asset?.tag ?? c.serialNo, siteLabel, locationLabel].filter(Boolean).join(" · ")}</p>
           </div>
           <span className="shrink-0 rounded-full border hairline px-2.5 py-1 text-xs text-steel">{c.statusLabel}</span>
         </div>

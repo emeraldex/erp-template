@@ -211,8 +211,11 @@ export class JobsService {
     const mine = open.filter((j) => j.assigneeId === actor.sub);
     const available = open.filter((j) => !j.assigneeId && j.repairUnit === actor.branch && this.canAct(j, actor.role));
     const tags = await (this.assets?.tags([...new Set([...mine, ...available].map((j) => j.assetId).filter((x): x is string => !!x))]) ?? new Map());
+    // Work waiting for sign-off (done, not yet closed) goes last.
+    const done = (s: string) => this.store.phaseOf('JOB', s) === 'done';
     const order = (list: Job[]) => list.map((j) => this.card(j, tags)).sort((a, b) =>
-      Number(!!b.priority) - Number(!!a.priority) || (b.sla?.overdueBy ?? 0) - (a.sla?.overdueBy ?? 0) || a.statusSince.localeCompare(b.statusSince));
+      Number(done(a.status)) - Number(done(b.status)) || Number(!!b.priority) - Number(!!a.priority)
+      || (b.sla?.overdueBy ?? 0) - (a.sla?.overdueBy ?? 0) || a.statusSince.localeCompare(b.statusSince));
     return { mine: order(mine), available: order(available) };
   }
 

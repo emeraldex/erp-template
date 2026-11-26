@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, DEMO_MODE, getSession, loginPath, onConnectionChange, setSession, Session } from "@/lib/api";
 import { DictKey, useLang } from "@/lib/i18n";
 import type { Modules } from "@/lib/types";
@@ -98,13 +99,15 @@ function MobileNav() {
       <button onClick={() => setOpen(true)} aria-label="Menu" className="rounded border hairline px-2.5 py-1.5 text-steel md:hidden">
         <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden><path d="M4 6h16M4 12h16M4 18h16" /></svg>
       </button>
-      {open && (
+      {/* In a portal: the top bar's backdrop blur would otherwise trap a fixed drawer inside it. */}
+      {open && createPortal(
         <div className="fixed inset-0 z-40 md:hidden" role="dialog" aria-modal="true">
           <button aria-label="Close menu" className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} />
           <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col overflow-y-auto border-r hairline bg-ink-deep">
             <SidebarContent mobile />
           </aside>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
