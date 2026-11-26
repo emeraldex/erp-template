@@ -187,4 +187,46 @@ describe('Request portal: triage, messages, completion and rating (integration)'
     expect(csv).toMatch(/,Accepted,HD-\d{4}-\d{4},0(\.\d)?,0(\.\d)?,2,Took three days/);
     expect((await get(`/reports/requests?from=${today}&to=${today}`).then(st(200))).headers['content-type']).toContain('spreadsheetml');
   });
+
+  describe('QR posters and stickers', () => {
+    it('prints a poster for a place; a scan fills in the place and needs no access code', async () => {
+      expect((await send('post', '/requests/points', { label: 'Level 3 — east toilets', site: 'HQ' }, 'technician')).status).toBe(403);
+      expect((await send('post', '/requests/points', { label: 'x' })).body.message).toBe('Name the place the poster is for');
+      const point = (await send('post', '/requests/points', { label: 'Level 3 — east toilets', site: 'HQ' }).then(st(201))).body;
+      expect(point.code).toMatch(/^[A-Za-z0-9]{8}$/);
+      await send('patch', '/settings/portal', { accessCode: 'SECRET-1' }, 'admin').then(st(200));
+      try {
+        const info = (await http.get(`${API}/public/portal?p=${point.code}`).set('Host', HOST).then(st(200))).body;
+        expect(info).toEqual(expect.objectContaining({ needsCode: false, point: expect.objectContaining({ label: 'Level 3 — east toilets', siteLabel: 'Head office tower' }) }));
+        const req = await submit({ p: point.code, place: 'ignored', site: 'ANNEX', description: 'Tap will not turn off' });
+        const one = (await get(`/requests/${req.id}`)).body;
+        expect(one).toEqual(expect.objectContaining({ source: 'POSTER', place: 'Level 3 — east toilets', site: 'HQ', pointCode: point.code }));
+        // A made-up code is just the plain form, which needs the code.
+        expect((await http.post(`${API}/public/requests`).set('Host', HOST).field('p', 'AAAAAAAA').field('description', 'Tap will not turn off').field('name', 'Ali').field('email', 'ali@x.example')).status).toBe(400);
+      } finally {
+        await send('patch', '/settings/portal', { accessCode: '' }, 'admin').then(st(200));
+      }
+      const pdf = await get(`/requests/points/posters?codes=${point.code}`).then(st(200));
+      expect(pdf.headers['content-type']).toBe('application/pdf');
+      expect(pdf.headers['content-disposition']).toContain(`request-poster-${point.code}.pdf`);
+      expect((pdf.body as Buffer).subarray(0, 4).toString()).toBe('%PDF');
+      expect((await get('/requests/points')).body.find((p: { code: string }) => p.code === point.code)).toEqual(expect.objectContaining({ requests: 1, active: true }));
+    });
+
+    it('makes one sticker point per asset, and a switched-off point opens the plain form', async () => {
+      const assets = (await get('/assets')).body.slice(0, 2) as { id: string; tag: string }[];
+      const { codes } = (await send('post', '/requests/points/assets', { assetIds: assets.map((a) => a.id) }).then(st(200))).body;
+      expect(codes).toHaveLength(2);
+      expect((await send('post', '/requests/points/assets', { assetIds: [assets[0].id] }).then(st(200))).body.codes).toEqual([codes[0]]);
+      const stickers = await get(`/requests/points/posters?codes=${codes.join(',')}&format=stickers`).then(st(200));
+      expect(stickers.headers['content-disposition']).toContain('request-stickers-2.pdf');
+      const req = await submit({ p: codes[1], description: 'Strange noise from this unit' });
+      expect((await get(`/requests/${req.id}`)).body.asset).toEqual(expect.objectContaining({ id: assets[1].id, tag: assets[1].tag }));
+
+      await send('patch', `/requests/points/${codes[1]}`, { active: false }).then(st(200));
+      expect((await http.get(`${API}/public/portal?p=${codes[1]}`).set('Host', HOST)).body.point).toBeNull();
+      expect((await get(`/requests/points/posters?codes=${codes[1]}`)).body.message).toContain('is switched off');
+      expect((await get('/requests/points/posters?codes=nope1234')).status).toBe(404);
+    });
+  });
 });

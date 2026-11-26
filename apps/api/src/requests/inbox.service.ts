@@ -1,4 +1,9 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomInt } from 'crypto';
+import { MAX_LABELS } from '../assets/labels';
+import { SettingsService } from '../settings/settings.service';
+import { currentTenant } from '../tenancy/tenant';
+import { posterPdf, stickerPdf } from './posters';
 import { PrismaService } from '../common/prisma.service';
 import { StoreService } from '../common/store.service';
 import type { Role } from '../common/types';
@@ -22,6 +27,7 @@ export class RequestsInboxService {
     private readonly requests: RequestsService,
     private readonly jobs: JobsService,
     private readonly attachments: AttachmentsService,
+    private readonly settings: SettingsService,
   ) {}
 
   private async row(id: string): Promise<RequestRow> {
@@ -196,6 +202,86 @@ export class RequestsInboxService {
     });
     await this.requests.email(r, 'received');
     return this.get(r.id);
+  }
+
+  // ─── QR posters and stickers ───────────────────────────────────────────────
+
+  /** 8 characters from 55 that cannot be confused (no 0/O, 1/l/I): about 2^46 codes. */
+  private newCode(): string {
+    const alphabet = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    return Array.from({ length: 8 }, () => alphabet[randomInt(alphabet.length)]).join('');
+  }
+
+  private pointView(p: { code: string; label: string; site: string; assetId: string | null; active: boolean; createdBy: string; createdAt: Date }, counts: Map<string, number>, tags: Map<string, string>) {
+    return {
+      code: p.code, label: p.label, site: p.site, siteLabel: p.site ? this.store.label('site', p.site) : '', assetId: p.assetId,
+      assetTag: p.assetId ? tags.get(p.assetId) ?? null : null, active: p.active, createdBy: p.createdBy, createdAt: p.createdAt.toISOString(),
+      requests: counts.get(p.code) ?? 0,
+    };
+  }
+
+  async points() {
+    const rows = await this.prisma.requestPoint.findMany({ orderBy: [{ active: 'desc' }, { createdAt: 'desc' }], take: 2000 });
+    const counts = new Map((await this.prisma.serviceRequest.groupBy({ by: ['pointCode'], where: { pointCode: { not: null } }, _count: { _all: true } })).map((c) => [c.pointCode!, c._count._all]));
+    const assetIds = rows.map((r) => r.assetId).filter((a): a is string => !!a);
+    const tags = new Map((await this.prisma.asset.findMany({ where: { id: { in: assetIds } }, select: { id: true, tag: true } })).map((a) => [a.id, a.tag]));
+    return rows.map((r) => this.pointView(r, counts, tags));
+  }
+
+  /** A poster for a place: "Level 3 — east toilets". */
+  async addPoint(body: { label?: string; site?: string }, actor: Actor) {
+    const label = text(body.label, 80);
+    if (label.length < 2) throw new BadRequestException('Name the place the poster is for');
+    const site = text(body.site, 40);
+    if (site && !this.store.has('site', site)) throw new BadRequestException(`Unknown site ${site}`);
+    const p = await this.prisma.requestPoint.create({ data: { code: this.newCode(), label, site, createdBy: actor.name } });
+    return this.pointView(p, new Map(), new Map());
+  }
+
+  /** Points for assets (one each; an existing active one is reused), for stickers. */
+  async pointsForAssets(assetIds: unknown, actor: Actor) {
+    const ids = Array.isArray(assetIds) ? [...new Set(assetIds.map(String))] : [];
+    if (!ids.length) throw new BadRequestException('Choose at least one asset');
+    if (ids.length > MAX_LABELS) throw new BadRequestException(`At most ${MAX_LABELS} at a time`);
+    const assets = await this.prisma.asset.findMany({ where: { id: { in: ids } }, select: { id: true, tag: true, name: true, site: true } });
+    const missing = ids.find((id) => !assets.some((a) => a.id === id));
+    if (missing) throw new NotFoundException(`Asset ${missing} not found`);
+    const existing = await this.prisma.requestPoint.findMany({ where: { assetId: { in: ids }, active: true } });
+    const codes: string[] = [];
+    for (const id of ids) {
+      const have = existing.find((p) => p.assetId === id);
+      if (have) { codes.push(have.code); continue; }
+      const a = assets.find((x) => x.id === id)!;
+      const p = await this.prisma.requestPoint.create({ data: { code: this.newCode(), label: `${a.tag} · ${a.name}`.slice(0, 80), site: a.site, assetId: a.id, createdBy: actor.name } });
+      codes.push(p.code);
+    }
+    return { codes };
+  }
+
+  async updatePoint(code: string, body: { label?: string; active?: boolean }) {
+    const p = await this.prisma.requestPoint.findUnique({ where: { code } });
+    if (!p) throw new NotFoundException(`Poster ${code} not found`);
+    const label = body.label !== undefined ? text(body.label, 80) : p.label;
+    if (label.length < 2) throw new BadRequestException('Name the place the poster is for');
+    await this.prisma.requestPoint.update({ where: { code }, data: { label, ...(typeof body.active === 'boolean' ? { active: body.active } : {}) } });
+    return (await this.points()).find((x) => x.code === code);
+  }
+
+  /** A4 posters (one per page) or a sheet of stickers, for the codes asked for. */
+  async posters(codes: string[], format: string, webBase: string): Promise<{ filename: string; pdf: Buffer }> {
+    const unique = [...new Set(codes.map((c) => c.trim()).filter(Boolean))];
+    if (!unique.length) throw new BadRequestException('Choose at least one poster');
+    if (unique.length > MAX_LABELS) throw new BadRequestException(`At most ${MAX_LABELS} per print run`);
+    const rows = await this.prisma.requestPoint.findMany({ where: { code: { in: unique } } });
+    const missing = unique.find((c) => !rows.some((r) => r.code === c));
+    if (missing) throw new NotFoundException(`Poster ${missing} not found`);
+    const inactive = rows.find((r) => !r.active);
+    if (inactive) throw new BadRequestException(`${inactive.label} is switched off — switch it on before printing`);
+    const points = unique.map((c) => rows.find((r) => r.code === c)!).map((r) => ({ code: r.code, label: r.label, siteLabel: r.site ? this.store.label('site', r.site) : '' }));
+    const org = this.settings.company.name || currentTenant().name;
+    if (format === 'stickers') return { filename: `request-stickers-${points.length}.pdf`, pdf: await stickerPdf(points, webBase) };
+    if (format && format !== 'poster') throw new BadRequestException('format must be poster or stickers');
+    return { filename: points.length === 1 ? `request-poster-${points[0].code}.pdf` : `request-posters-${points.length}.pdf`, pdf: await posterPdf(points, org, webBase) };
   }
 
   /** A message to the requester, shown on their tracking page and emailed. */

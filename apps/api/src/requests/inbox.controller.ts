@@ -1,11 +1,15 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, Res, StreamableFile, UseGuards } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { webBaseFor } from '../auth/web-origin';
+import { currentTenant } from '../tenancy/tenant';
+import { TenantRegistry } from '../tenancy/tenant-registry';
 import { AuthGuard } from '../auth/auth.guard';
 import type { AuthUser } from '../auth/auth.service';
 import { InModule, Requires } from '../auth/roles.decorator';
 import { RequestsInboxService } from './inbox.service';
 import { RequestsService } from './requests.service';
 
-type Req = { user: AuthUser };
+type Req = Request & { user: AuthUser };
 const who = (r: Req) => ({ name: r.user.name, role: r.user.role });
 
 /** Triage of portal requests. Needs requests.manage. */
@@ -14,7 +18,7 @@ const who = (r: Req) => ({ name: r.user.name, role: r.user.role });
 @InModule('requests')
 @Requires('requests.manage')
 export class RequestsInboxController {
-  constructor(private readonly inbox: RequestsInboxService, private readonly requests: RequestsService) {}
+  constructor(private readonly inbox: RequestsInboxService, private readonly requests: RequestsService, private readonly registry: TenantRegistry) {}
 
   @Get()
   list(@Query('status') status?: string, @Query('q') q?: string) {
@@ -33,6 +37,39 @@ export class RequestsInboxController {
   @Requires('org.admin')
   async remind() {
     return { reminded: await this.requests.remindStale() };
+  }
+
+  // ─── QR posters (before ':id', which would otherwise catch "points") ───────
+
+  @Get('points')
+  points() {
+    return this.inbox.points();
+  }
+
+  /** A poster for a place: `{ label, site? }`. */
+  @Post('points')
+  addPoint(@Body() body: { label?: string; site?: string }, @Req() req: Req) {
+    return this.inbox.addPoint(body ?? {}, who(req));
+  }
+
+  /** Points for assets, for stickers: `{ assetIds: [...] }` → `{ codes }`. */
+  @Post('points/assets')
+  @HttpCode(200)
+  pointsForAssets(@Body() body: { assetIds?: unknown }, @Req() req: Req) {
+    return this.inbox.pointsForAssets(body?.assetIds, who(req));
+  }
+
+  @Patch('points/:code')
+  updatePoint(@Param('code') code: string, @Body() body: { label?: string; active?: boolean }) {
+    return this.inbox.updatePoint(code, body ?? {});
+  }
+
+  /** GET /requests/points/posters?codes=a,b&format=poster|stickers — a PDF to print. */
+  @Get('points/posters')
+  async posters(@Query('codes') codes: string | undefined, @Query('format') format: string | undefined, @Req() req: Req, @Res({ passthrough: true }) res: Response): Promise<StreamableFile> {
+    const { filename, pdf } = await this.inbox.posters((codes ?? '').split(','), format ?? 'poster', webBaseFor(req, this.registry, currentTenant()));
+    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${filename}"`, 'Cache-Control': 'no-store' });
+    return new StreamableFile(pdf);
   }
 
   @Get(':id')
