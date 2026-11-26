@@ -22,9 +22,10 @@ Section 4 (actors), Section 5 (workflows), Section 6 (forms register), Section 7
 | For | Read |
 |---|---|
 | Installing and running client organisations | [Administrator guide](docs/guides/admin-guide.md) |
-| Setting a client up for its sector (packs, terms, statuses, actions, permissions, assets, PM, stock) | [Setting up for any sector](docs/guides/sectors.md) |
+| Setting a client up for its sector (packs, terms, statuses, actions, permissions, assets, PM, stock, request portal) | [Setting up for any sector](docs/guides/sectors.md) |
 | Daily use, by role | [User guide](docs/guides/user-guide.md) · [Panduan pengguna](docs/guides/panduan-pengguna.md) |
 | How stock control works (ledger, costing, counts, purchasing) | [Stock](docs/architecture/stock.md) |
+| How the public request portal works (tracking links, triage, protections) | [Request portal](docs/architecture/request-portal.md) |
 | Integrations | [API guide](docs/api/README.md) and the generated reference at `/api/docs` |
 | Security reviews | [Security overview](docs/security-overview.md) |
 | Sales demos | [Running a demo](docs/demo-environment.md) |
@@ -97,6 +98,9 @@ works a job, reconnects and checks the server received everything once.
 `node scripts/stock-check.js` does the same for stock against a fresh fleet demo
 (`SEED_PACK=fleet`): catalogue, receipts, reorder, a count, import, labels,
 purchasing for stock, parts on a work order and on the phone.
+`node scripts/portal-check.js` runs the request portal end to end against a fresh
+facilities demo: a poster scan on a phone, triage on the desktop, messages,
+completion and a rating.
 
 The integration tests boot the real API against PostgreSQL. Point
 `TEST_DATABASE_URL` at a **disposable** database whose name contains `test` — its
@@ -173,6 +177,11 @@ dependency audit, on every push and pull request.
   and a reorder list that raises purchase requests, receipts into stock, counts that keep
   issues made while counting, spreadsheet import, QR shelf and bin labels, stock valuation
   and parts usage reports, and parts on the phone ([how it works](docs/architecture/stock.md)).
+- **Request portal** — anyone the team serves can report a problem without an account, from
+  a link or a "Report a problem" QR poster or sticker, with photos; the help desk accepts it
+  into a work order, adds it to existing work or declines it; private tracking links,
+  two-way messages, emails, a 1–5 rating when done, satisfaction on the dashboard and in a
+  report ([how it works](docs/architecture/request-portal.md)).
 
 ## Section 8 demonstration script
 
@@ -208,6 +217,10 @@ GET|POST /stock/parts · GET|PATCH /stock/parts/:id · PUT /stock/parts/:id/leve
 POST  /stock/{issue,return,receive,adjust,transfer} · GET /stock/movements · GET /jobs/:id/parts
 GET|POST /stock/reorder · /stock/counts[/:id[/post|/cancel]] · POST /stock/import?dryRun=1
 GET   /stock/labels?ids=…&store=… · GET /reports/{stock-valuation,parts-usage}
+GET   /public/portal · POST /public/requests · POST /public/track[/messages|/rating|/cancel]
+                                       request portal: no session; 404 while the module is off
+GET|POST /requests · GET /requests/:id · POST /requests/:id/{accept,merge,decline,messages,erase}
+GET|POST /requests/points · GET /requests/points/posters · GET /jobs/:id/requests · GET /reports/requests
 POST  /jobs/:id/priority · PATCH /jobs/:id/priority · POST /jobs/:id/priority/close
                                        AOG/ROA/Critical overlay (QP.56)
 GET   /demands · /demands/:id · POST /demands/:id/quotations · PATCH /demands/:id/transition

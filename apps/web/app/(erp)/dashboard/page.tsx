@@ -14,7 +14,7 @@ import { StatCard } from "@/components/stat-card";
 import { Bars } from "@/components/charts";
 
 // Static class names, so the stylesheet keeps them.
-const CARD_COLUMNS: Record<number, string> = { 4: "lg:grid-cols-4", 5: "lg:grid-cols-5", 6: "lg:grid-cols-6", 7: "lg:grid-cols-7" };
+const CARD_COLUMNS: Record<number, string> = { 4: "lg:grid-cols-4", 5: "lg:grid-cols-5", 6: "lg:grid-cols-3", 7: "lg:grid-cols-4" };
 
 export default function DashboardPage() {
   const cfg = useConfig();

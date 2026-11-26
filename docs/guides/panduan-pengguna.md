@@ -141,6 +141,52 @@ iPhone ketik **Kongsi**, kemudian **Tambah ke Skrin Utama**.
   arahan kerja dalam sesuatu tempoh, ditolak pemulangan, mengikut alat ganti
   dan arahan kerja).
 
+## Permohonan daripada portal
+
+Apabila pentadbir menghidupkan portal permohonan, sesiapa sahaja yang
+dilayani oleh pasukan — penyewa, pemandu, pengendali mesin, kakitangan wad —
+boleh melaporkan masalah di alamat organisasi diikuti `/r`, atau dengan
+mengimbas poster atau pelekat QR **Laporkan masalah**. Mereka tidak
+memerlukan akaun. Mereka menerangkan masalah, menyatakan lokasinya (poster
+mengisinya secara automatik), boleh menandakannya segera dan menambah sehingga
+tiga foto, serta memberikan nama dan e-mel atau telefon. Mereka menerima
+nombor rujukan dan pautan penjejakan peribadi; jika memberikan e-mel, mereka
+juga menerima kemas kini.
+
+Mereka yang menyemak permohonan (meja bantuan, penyelia, pengurus) melihat
+**Requests** dalam menu, dengan bilangan yang menunggu:
+
+- **New** menyenaraikan permohonan baharu, yang segera di atas. Buka satu
+  untuk melihat foto, butiran hubungan dan apa-apa yang **mungkin sudah
+  dilaporkan** (kerja terbuka pada aset yang sama atau dari poster yang sama).
+- **Accept → new work order** mendaftarkan arahan kerja: pilih aset (atau
+  kekalkan lokasi), kategori dan tapak. Keterangan, butiran hubungan dan foto
+  dipindahkan ke arahan kerja.
+- **Add to a work order** memautkannya kepada kerja yang sedang berjalan —
+  pemohon dimaklumkan bahawa ia sedang diuruskan.
+- **Decline** dengan sebab yang dilihat oleh pemohon. Tandakan *spam* untuk
+  memadam foto dan butiran hubungan tanpa menghantar apa-apa.
+- **Mesej**: tanya soalan kepada pemohon; mereka membalas di halaman
+  penjejakan. Mereka melihat mesej anda sebagai daripada organisasi, bukan
+  nama anda. Balasan dimaklumkan kepada meja bantuan dan juruteknik yang
+  ditugaskan.
+- **+ Log a request** untuk orang yang menelefon atau datang sendiri; salin
+  pautan penjejakan mereka untuk dibacakan atau dihantar melalui SMS.
+- **QR posters**: tambah lokasi, tandakan dan cetak poster A4 atau pelekat.
+  Di halaman aset, *Request stickers* membuat pelekat bagi aset yang
+  tersenarai. Matikan poster jika ia ditanggalkan.
+
+Apabila arahan kerja mencapai status siap, pemohon dimaklumkan dan diminta
+menilai kerja dari 1 hingga 5 bintang. Penilaian dipaparkan pada arahan kerja;
+penilaian 1 atau 2 memaklumkan meja bantuan. Papan pemuka menunjukkan
+permohonan yang menunggu dan purata penilaian 90 hari, dan *Reports →
+Requests and satisfaction* menyenaraikan setiap permohonan serta tempoh
+masanya. Permohonan yang menunggu melebihi masa peringatan organisasi (4 jam
+melainkan diubah) akan mengingatkan meja bantuan sekali.
+
+Dalam aplikasi telefon, arahan kerja yang berasal daripada permohonan
+menunjukkan siapa yang melaporkannya dengan butang untuk menelefon mereka.
+
 ## Mengikut peranan
 
 **Stor** — daftar barang masuk (*+ Register job*), hantar ke bengkel, rekod

@@ -173,7 +173,36 @@ only exception) — the reverse proxy in this repository provides it.
   adjustments use the average at that moment. The ledger is never edited — a
   mistake is put right with an adjustment.
 
-## 8. Everyday operations
+## 8. Request portal
+
+- **Switching it on**: *Settings → Your sector → Modules → Request portal*.
+  New organisations from the general-purpose packs have it on; aviation
+  organisations and organisations created before this release have it off,
+  and while it is off every public address answers *not found*.
+- **The link** is the organisation's web address followed by `/r`; *Settings →
+  Request portal* shows it with a copy button, and lets you close the form
+  (existing requests can still be followed), set an **access code** (asked for
+  on the plain form, never from a QR poster), write a short text above the
+  form in English and Bahasa Melayu (e.g. the emergency number), choose
+  whether to ask the type of problem, and set the **reminder** time.
+- **Posters**: *Requests → QR posters* (or *Assets → Request stickers*). Each
+  poster carries a random code; switch it off if a poster is taken down or
+  misused.
+- **Permission**: *Triage requests…* (`requests.manage`). New organisations
+  give it to the help desk, supervisors and managers; older ones have it only
+  for ADMIN until granted in *Workflow editor → Roles & permissions*.
+- **Email**: requesters get emails only when `SMTP_URL` is set; the tracking
+  page works without it. Emails never repeat what the requester wrote.
+- **Behind a proxy**: set `TRUST_PROXY` so rate limits count real visitors,
+  not the proxy. Limits per address: `PORTAL_RATE_LIMIT` submissions a minute
+  (default 5) and `PORTAL_HOURLY_LIMIT` an hour (default 20); also three
+  requests an hour per email address and at most 500 waiting requests.
+- **Personal data**: *Decline* with *spam* deletes the photos and contact
+  details; *Erase contact details* on any decided request blanks the name,
+  email and phone and stops the tracking link working. The report and work
+  orders keep no more than the request's reference.
+
+## 9. Everyday operations
 
 - **Health**: `GET /api/v1/health` for monitoring.
 - **Logs**: one JSON line per request in production.
@@ -184,7 +213,7 @@ only exception) — the reverse proxy in this repository provides it.
 - **Upgrades**: pull the new version and rebuild; migrations run on start.
   Take a backup first.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Symptom | Likely cause |
 |---|---|
@@ -194,4 +223,7 @@ only exception) — the reverse proxy in this repository provides it.
 | SSO save fails | The issuer URL is wrong or not reachable from the server |
 | *Only N … in …* when issuing | Not enough stock in that store; the decrement is checked in the database so stock never goes negative |
 | *already has stock history — use a count* on import | That part already has movements in that store; correct its quantity with a count or an adjustment |
+| The request page says *not available* | The request portal module is off — *Settings → Modules* |
+| Requesters get no emails | `SMTP_URL` not set, or they gave only a phone number — the tracking page still works |
+| *Too many requests* for many people at once | Everyone shares one address through a proxy — set `TRUST_PROXY` |
 | Alerts but no emails | `SMTP_URL` not set, or the mail server refused — see the API log |

@@ -49,7 +49,7 @@ general-purpose packs have one user per role — `admin@`, `helpdesk@`,
 - **Modules**: switch off what the client does not use — parts & purchasing,
   vendor repairs, priority escalation, invoicing, supplier register, safety
   incidents, tool control, training records, assets, preventive maintenance,
-  parts catalogue & stock control.
+  parts catalogue & stock control, request portal.
   Switched-off modules disappear from the menu and their API answers
   `403 MODULE_OFF`.
 - **Numbering**: the work-order prefix (`WO` → `WO-2026-0001`) and where new
@@ -139,11 +139,21 @@ with two stores, part groups for its trade and, in demo organisations, ten
 parts with stock, a few of them low. See the [user guide](user-guide.md#parts-and-stock)
 and [how stock works](../architecture/stock.md).
 
+## Requests from the people you serve
+
+With the request portal on, the people a team serves report problems
+themselves — from a link, or by scanning a *Report a problem* poster in a
+building or a sticker on a vehicle, machine or device — and the help desk
+turns them into work orders. Each pack's categories become the types of
+problem people can choose; its sites, the places they can pick. See the
+[user guide](user-guide.md#requests-from-the-portal) and [how the portal
+works](../architecture/request-portal.md).
+
 ## Existing aviation installations
 
 Upgrading keeps everything as it was: the migrations convert the old fixed
 lists into the organisation's own lists without changing any value, and an
 organisation set up before packs existed gets the aviation vocabulary and step
-actions filled in the first time it starts. Assets, preventive maintenance and
-stock control are off for aviation organisations until an administrator
+actions filled in the first time it starts. Assets, preventive maintenance,
+stock control and the request portal are off for aviation organisations until an administrator
 switches them on; aviation's spares-demand workflow is unchanged.

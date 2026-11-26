@@ -81,6 +81,35 @@ monitoring) is up to whoever operates it.
 - Changes to workflow configuration and user accounts are logged with before
   and after values.
 
+## The public request portal
+
+The request portal is the only part open to the internet without signing
+in. It is off unless the organisation switches it on, and then:
+
+- It can create a request and read or update that one request — nothing
+  else. Every other address still needs a session.
+- Each request has a private tracking link: an HMAC (keyed with a secret
+  derived from `AUTH_SECRET`) of the organisation, the request and a random
+  salt. It sits after `#` in the address, so it never reaches server logs or
+  other sites, and travels in request bodies. A wrong or altered link and an
+  unknown request get the same *not found*. Erasing a requester's details
+  changes the salt, so old links stop working.
+- The requester sees their own request, its stage in plain words and the
+  messages — never staff names, internal statuses, costs, audit trails or
+  photos.
+- Abuse: rate limits per address (configurable) and per email address, a cap
+  on waiting requests, a hidden field automated form-fillers fill in, an
+  optional access code compared in constant time, and QR codes that are
+  random and can be switched off.
+- Photos: JPEG, PNG or WebP recognised by content, 5 MB at most, three per
+  request; the browser shrinks them and strips location data first; only
+  signed-in staff can open them.
+- Email: confirmation emails carry only the reference and the link, never
+  the requester's words, so the form cannot be used to send someone
+  arbitrary mail.
+- The pages are kept out of search engines and send no `Referer`. Only a
+  keyed hash of the sender's network address is kept, for spotting abuse.
+
 ## Engineering practice
 
 - Automated tests run on every change (unit and integration tests against
