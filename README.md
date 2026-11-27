@@ -27,6 +27,7 @@ Section 4 (actors), Section 5 (workflows), Section 6 (forms register), Section 7
 | How stock control works (ledger, costing, counts, purchasing) | [Stock](docs/architecture/stock.md) |
 | How the public request portal works (tracking links, triage, protections) | [Request portal](docs/architecture/request-portal.md) |
 | Currency, branding, labour and job cost, downtime and reliability, the accounting export | [Costs and reliability](docs/architecture/costs-and-reliability.md) |
+| Quotations, purchases and invoices in other currencies; exchange rates; gain or loss | [Multi-currency](docs/architecture/multi-currency.md) |
 | Integrations | [API guide](docs/api/README.md) and the generated reference at `/api/docs` |
 | Security reviews | [Security overview](docs/security-overview.md) |
 | Sales demos | [Running a demo](docs/demo-environment.md) |
@@ -111,6 +112,15 @@ facilities demo:
 - job cost and asset reliability;
 - an invoice PDF with the logo;
 - an accounting batch.
+
+`node scripts/fx-check.js` checks transaction currencies against a fresh
+facilities demo:
+- exchange rates (a wrong-way rate is questioned);
+- quotations in US and Singapore dollars;
+- a receipt at the day's rate;
+- a US-dollar invoice and its PDF;
+- a payment with an exchange loss;
+- the accounting batch.
 
 The integration tests boot the real API against PostgreSQL. Point
 `TEST_DATABASE_URL` at a **disposable** database whose name contains `test` — its
@@ -199,6 +209,11 @@ dependency audit, on every push and pull request.
   preventive compliance per asset and in a report; asset import from CSV; and once-only
   accounting export batches in Excel or CSV with the client's account codes
   ([how it works](docs/architecture/costs-and-reliability.md)).
+- **Multi-currency** — quotations, purchases, vendor repairs and invoices in other currencies at
+  dated exchange rates kept by finance, while the books stay in the organisation's currency:
+  costs fixed at receipt, invoices fixed when the tax invoice is raised and shown in both
+  currencies, the exchange gain or loss on payment, and the currencies in reports and the
+  accounting export ([how it works](docs/architecture/multi-currency.md)).
 
 ## Section 8 demonstration script
 
@@ -260,6 +275,8 @@ GET|PUT /labour/rates · PUT /labour/people/:id/rate · GET /reports/{labour,rel
 GET   /assets/:id/reliability · POST /assets/import?dryRun=1
 GET|PUT /accounting/settings · GET /accounting/preview · GET|POST /accounting/exports
 GET   /accounting/exports/:id/file[?format=csv&sheet=sales|receipts|purchases]
+GET|PUT /fx/rates · DELETE /fx/rates/:id · PATCH /registers/partners/:id/currency
+                                       exchange rates (fx.manage to change)
 GET|POST /assets · GET|PATCH /assets/:id · POST /assets/:id/meters
 GET|POST /assets/:id/meters/:key/readings
 GET   /pm/schedules[?due=1] · /pm/schedules/:id · /pm/forecast · POST /pm/schedules · PATCH /pm/schedules/:id

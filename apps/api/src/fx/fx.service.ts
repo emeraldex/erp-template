@@ -72,7 +72,8 @@ export class FxService {
     }
     const rate = parseRate(body.rate);
     const rows = await this.rows();
-    const before = rateInForce(rows.filter((r) => r.effectiveFrom !== day), code, day) ?? rows.filter((r) => r.currency === code && r.effectiveFrom !== day).at(-1);
+    // Compare with the rate in force on that day (including one being replaced), else the nearest later one.
+    const before = rateInForce(rows, code, day) ?? rows.filter((r) => r.currency === code).at(-1);
     if (before && body.confirm !== true && jump(before.rate, rate) > RATE_JUMP_LIMIT) {
       throw new BadRequestException({ statusCode: 400, code: 'RATE_JUMP', message: jumpMessage(code, this.base, before.rate, rate), previous: before.rate });
     }

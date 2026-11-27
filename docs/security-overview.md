@@ -130,6 +130,19 @@ to people with `labour.manage`; for everyone else the fields are left out or
 (which `reports.maintenance` may also see). Hours worked are visible to
 anyone who can see the work order.
 
+## Exchange rates
+
+Only people with `fx.manage` can change the rate table, or type a rate on a
+transaction. For anyone else, a rate sent with a request is ignored and the
+table's rate is used.
+
+- **Typing mistakes:** a rate more than 20% from the previous one must be
+  confirmed. The same applies to the rate implied by an amount received.
+- **Recorded amounts are fixed:** each transaction keeps its own copy of the
+  rate, so changing or deleting a rate never alters what was recorded.
+- **Who can read rates:** anyone signed in, because forms show the
+  conversion.
+
 ## Engineering practice
 
 - Automated tests run on every change (unit and integration tests against

@@ -44,7 +44,7 @@ organisation's books in another currency than Ringgit.
 | `packs` | The sector packs an organisation can start from |
 | `set-hosts acme acme.erp.example.com erp.acme.example` | Change an organisation's addresses |
 | `suspend acme` / `activate acme` | Block / restore access (data kept) |
-| `set-currency acme SGD [--force]` | Change the currency (`default` for the default organisation). Refused once money is recorded unless `--force`, which relabels amounts without converting them |
+| `set-currency acme SGD [--force]` | Change the currency (`default` for the default organisation). Refused once money is recorded unless `--force`, which relabels amounts without converting them; always refused once anything is recorded in a foreign currency. Clears the exchange rates |
 | `migrate-all` | Apply migrations everywhere (runs automatically on start) |
 
 New organisations are picked up by running API servers within 30 seconds.
@@ -268,6 +268,32 @@ set rates (`labour.manage`); new organisations give it to supervisors and manage
   fill it in a spreadsheet, and save it as CSV. Every row is checked before
   anything is saved.
 
+**Exchange rates:** *Settings → Exchange rates*. You need `fx.manage`; new
+organisations give it to finance and managers.
+
+- **What it enables:** with no rates, everything is in the organisation's
+  currency and no currency choice appears anywhere. Add a rate for a
+  currency, and quotations, purchases, vendor repairs and invoices can be in
+  it.
+- **Direction:** a rate is what one unit of the foreign currency is worth in
+  yours. With a Ringgit organisation, enter USD 4.45, not 0.2247. The screen
+  shows the inverse, and a rate more than 20% from the last one asks you to
+  confirm it.
+- **Dates:** each transaction uses the rate in force on its date. Enter a new
+  rate when it moves; future-dated rates wait for their day. Forms warn when
+  a rate is more than 30 days old.
+- **When amounts are fixed:**
+  - a purchase on the day the goods arrive;
+  - a vendor repair on the day it is closed;
+  - an invoice on the day the tax invoice is raised.
+
+  After that, changing or removing a rate never alters it.
+- **Payments:** when a foreign invoice is paid, enter what the bank credited.
+  The difference from the invoice's Ringgit total is the exchange gain or
+  loss, and it goes to the accounting export.
+- **Overriding a rate:** people with `fx.manage` can type a rate on one
+  transaction instead of the table's.
+
 **Accounting export:** *Finance → Accounting export*. You need
 `accounting.export`; new organisations give it to finance and
 managers.
@@ -290,6 +316,10 @@ Things to know:
 - **Downloading again:** a batch downloads the same way every time, with the
   codes in force when it was made.
 - **Not included:** invoices without a tax invoice number.
+- **Foreign currencies:** the export gives the invoice or purchase currency,
+  the rate and the foreign amounts in extra columns at the end of each sheet.
+  The *Receipts* sheet adds the amount received and the exchange gain or loss
+  with the gain/loss account (*Exchange gain / loss*, default 7900).
 
 ## 10. Everyday operations
 
@@ -321,4 +351,7 @@ Things to know:
 | People cannot log time | The *Labour* module is off, or their role lacks `labour.log` |
 | Labour cost shows as blank | The person viewing lacks `labour.manage`, by design |
 | *Nothing new to export for that period* | Everything in the period is in an earlier batch; tick *Include items already exported* to repeat |
+| *No exchange rate for USD* | Finance has not entered a rate for that currency — *Settings → Exchange rates* |
+| *… is 95% below the last rate* | A rate typed the wrong way round (0.2247 instead of 4.45) — check it, then confirm |
+| *The amount must be in the invoice's currency* | A tax invoice amount was given in another currency than the invoice's |
 | Alerts but no emails | `SMTP_URL` not set, or the mail server refused — see the API log |

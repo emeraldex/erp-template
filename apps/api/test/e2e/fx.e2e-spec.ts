@@ -58,6 +58,10 @@ describe('Exchange rates and foreign-currency transactions (integration)', () =>
       expect(res.status).toBe(400);
       expect(res.body).toEqual(expect.objectContaining({ code: 'RATE_JUMP', previous: 4.45 }));
       expect(res.body.message).toMatch(/95% below the last rate \(4\.45\)/);
+      // Re-entering a day's rate is checked against the rate it replaces.
+      await send('put', '/fx/rates', { currency: 'SGD', rate: 3.31, effectiveFrom: day(-1) }).then(st(200));
+      expect((await send('put', '/fx/rates', { currency: 'SGD', rate: 0.303, effectiveFrom: day(-1) })).body.code).toBe('RATE_JUMP');
+      await send('put', '/fx/rates', { currency: 'SGD', rate: 3.3, effectiveFrom: day(-1) }).then(st(200));
       // A small move is fine; a future-dated rate waits for its day.
       await send('put', '/fx/rates', { currency: 'USD', rate: 4.5, effectiveFrom: day(30) }).then(st(200));
       const r = (await get('/fx/rates')).body;

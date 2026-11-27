@@ -156,7 +156,10 @@ Each organisation keeps its books in its own currency, chosen at setup
 recorded. Its logo and brand colour go on the screens, the sign-in page, the
 phone app, the portal and its PDFs, in a dark or light theme. Organisations
 outside aviation get plain documents: a "Tax invoice" (or "Invoice" without
-tax), a "Delivery note", a "Work order card", with no form numbers. See
+tax), a "Delivery note", a "Work order card", with no form numbers. Quotations, purchases, vendor repairs and invoices can also be in other
+currencies, at exchange rates kept by finance; the books stay in the
+organisation's own currency ([how it works](../architecture/multi-currency.md)).
+See
 [the administrator guide](admin-guide.md#9-look-money-labour-and-accounting).
 
 ## Labour, reliability and the accounts

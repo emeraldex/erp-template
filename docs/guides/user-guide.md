@@ -201,6 +201,23 @@ with a button to call them.
   between dark, light and your device's setting (phone: *More →
   Appearance*). It is remembered on that device.
 
+## Amounts in other currencies
+
+When finance has entered exchange rates, amounts can be in another currency.
+
+- **Entering an amount:** a currency choice appears beside the amount on
+  quotations, receipts, vendor repair costs and invoices. Underneath, the
+  form shows what it comes to in your organisation's currency, at which rate
+  and from which date. If it says the rate is old, ask finance to update it.
+- **Supplier's currency:** choosing a supplier who usually quotes in another
+  currency selects it for you.
+- **Comparing quotations:** quotations are compared in your organisation's
+  currency.
+- **When the amount is fixed:** a purchase is fixed at the rate on the day
+  the goods arrive, and an invoice when the tax invoice is raised.
+- **Recording payment:** on a foreign invoice, enter what the bank credited.
+  The invoice then shows the exchange gain or loss.
+
 ## By role
 
 **Stores** — register incoming items (*+ Register job*), dispatch them to the
