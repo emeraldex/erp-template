@@ -177,7 +177,9 @@ export class LabourService {
     const demands = await this.prisma.demand.findMany({ where: { jobId, partId: null, poRef: { not: null } }, include: { quotations: true } });
     const purchases = demands.map((d) => {
       const q = d.quotations.find((x) => x.supplierId === d.evalSupplierId) ?? (d.quotations.length === 1 ? d.quotations[0] : undefined);
-      return { id: d.id, description: d.partDescription, amount: q ? Number(q.priceMYR) : 0 };
+      // Fixed at receipt when bought in another currency; until then the chosen quotation's price.
+      const amount = d.purchaseAmountBase !== null ? Number(d.purchaseAmountBase) : q ? Number(q.priceMYR) : 0;
+      return { id: d.id, description: d.partDescription, amount, ...(d.purchaseCurrency ? { currency: d.purchaseCurrency, amountFx: Number(d.purchaseAmount), rate: Number(d.purchaseRate) } : q?.currency ? { currency: q.currency, amountFx: Number(q.price), rate: Number(q.fxRate) } : {}) };
     });
     const vendors = (await this.prisma.ovRepair.findMany({ where: { jobId, costMYR: { not: null } }, select: { id: true, vendorName: true, costMYR: true } }))
       .map((o) => ({ id: o.id, vendor: o.vendorName ?? '', amount: Number(o.costMYR) }));

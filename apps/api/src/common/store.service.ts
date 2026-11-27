@@ -639,7 +639,7 @@ export class StoreService {
       data: {
         id: p.id, name: p.name, type: p.type, status: p.status, country: p.country,
         certifications: p.certifications, lists: p.lists, rating: p.rating ?? null,
-        nonConformances: p.nonConformances, factorsEvaluated: p.factorsEvaluated,
+        nonConformances: p.nonConformances, factorsEvaluated: p.factorsEvaluated, currency: p.currency ?? null,
         ordinal: await this.ordinalIn(tx.partner),
         audit: { create: this.auditCreate(p.audit) },
         cars: { create: p.cars.map((c, i) => ({ ...c, seq: i })) },
@@ -843,6 +843,10 @@ export class StoreService {
         discNote: dm.discrepancy?.note ?? null,
         forStore: dm.forStore ?? null,
         unitCost: dm.unitCost ?? null,
+        purchaseCurrency: dm.purchase?.currency ?? null,
+        purchaseRate: dm.purchase?.rate ?? null,
+        purchaseAmount: dm.purchase?.amount ?? null,
+        purchaseAmountBase: dm.purchase?.amountBase ?? null,
         version: { increment: 1 },
       },
     });
@@ -867,6 +871,10 @@ export class StoreService {
         f134Ref: ov.f134Ref ?? null,
         poRef: ov.poRef ?? null,
         costMYR: ov.costMYR ?? null,
+        currency: ov.currency ?? null,
+        cost: ov.cost ?? null,
+        fxRate: ov.fxRate ?? null,
+        costFixedAt: ov.costFixedAt ? new Date(ov.costFixedAt) : null,
         eddDays: ov.eddDays ?? null,
         aboveIndent: ov.aboveIndent ?? null,
         f119Ref: ov.f119Ref ?? null,
@@ -894,6 +902,7 @@ export class StoreService {
         nextReassessment: p.nextReassessment ?? null,
         nonConformances: p.nonConformances,
         factorsEvaluated: p.factorsEvaluated,
+        currency: p.currency ?? null,
         version: { increment: 1 },
       },
     });

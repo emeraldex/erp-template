@@ -1,3 +1,4 @@
+import { withMoneyFields } from '../fx/money-fields';
 import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { Requires } from '../auth/roles.decorator';
@@ -42,9 +43,9 @@ export class DashboardController {
       priorityMeta: s.dictMeta('priority'),
       repairRouteMeta: s.dictMeta('route'),
       jobTransitions: this.store.jobTransitions,
-      demandTransitions: this.store.demandTransitions,
-      ovTransitions: this.store.ovTransitions,
-      invoiceTransitions: this.store.invoiceTransitions,
+      demandTransitions: withMoneyFields(this.store.demandTransitions),
+      ovTransitions: withMoneyFields(this.store.ovTransitions),
+      invoiceTransitions: withMoneyFields(this.store.invoiceTransitions),
       invoiceStreams: this.store.invoiceStreams,
       slaRules: this.store.slaRules,
     };

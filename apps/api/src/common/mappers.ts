@@ -112,6 +112,9 @@ export const mapQuotation = (r: any): Quotation =>
     supplierId: r.supplierId,
     supplier: r.supplier,
     priceMYR: num(r.priceMYR),
+    currency: r.currency ?? undefined,
+    price: r.price == null ? undefined : num(r.price),
+    fxRate: r.fxRate == null ? undefined : Number(r.fxRate),
     eddDays: r.eddDays,
     remarks: r.remarks ?? undefined,
   }) as Quotation;
@@ -123,6 +126,9 @@ export function mapDemand(r: any): Demand {
     partId: r.partId ?? undefined,
     forStore: r.forStore ?? undefined,
     unitCost: r.unitCost == null ? undefined : Number(r.unitCost),
+    purchase: r.purchaseCurrency
+      ? { currency: r.purchaseCurrency, rate: Number(r.purchaseRate), amount: num(r.purchaseAmount), amountBase: num(r.purchaseAmountBase) }
+      : undefined,
     partDescription: r.partDescription,
     partNo: r.partNo,
     qty: Number(r.qty),
@@ -161,6 +167,10 @@ export function mapOv(r: any): OvRepair {
     f134Ref: r.f134Ref ?? undefined,
     poRef: r.poRef ?? undefined,
     costMYR: r.costMYR === null || r.costMYR === undefined ? undefined : num(r.costMYR),
+    currency: r.currency ?? undefined,
+    cost: r.cost == null ? undefined : num(r.cost),
+    fxRate: r.fxRate == null ? undefined : Number(r.fxRate),
+    costFixedAt: r.costFixedAt ? iso(r.costFixedAt) : undefined,
     eddDays: r.eddDays ?? undefined,
     aboveIndent: r.aboveIndent ?? undefined,
     f119Ref: r.f119Ref ?? undefined,
@@ -187,6 +197,7 @@ export function mapPartner(r: any): Partner {
     nextReassessment: r.nextReassessment ?? undefined,
     nonConformances: r.nonConformances,
     factorsEvaluated: r.factorsEvaluated,
+    currency: r.currency ?? undefined,
     cars: (r.cars ?? []).map((c: any) => ({ ref: c.ref, date: c.date, reason: c.reason })),
     audit: mapAudit(r.audit ?? []),
   }) as Partner;

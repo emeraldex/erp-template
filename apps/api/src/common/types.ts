@@ -124,10 +124,18 @@ export type DemandStatus = string;
 export interface Quotation {
   supplierId: string;
   supplier: string;
+  /** Price in the organisation's currency (converted at `fxRate` when quoted in another). */
   priceMYR: number;
+  /** Quoted in another currency: that currency, the price in it, and the rate on the day recorded. */
+  currency?: string;
+  price?: number;
+  fxRate?: number;
   eddDays: number;
   remarks?: string;
 }
+
+/** A purchase fixed at receipt in another currency. */
+export interface FixedPurchase { currency: string; rate: number; amount: number; amountBase: number }
 
 export interface Demand {
   id: string;              // F212 ref
@@ -139,6 +147,8 @@ export interface Demand {
   forStore?: string;
   /** Unit cost recorded at receipt. */
   unitCost?: number;
+  /** Bought in another currency: fixed at the rate on the day the goods were received. */
+  purchase?: FixedPurchase;
   partDescription: string;
   partNo: string;
   qty: number;
@@ -170,6 +180,11 @@ export interface OvRepair {
   f134Ref?: string;
   poRef?: string;            // F312
   costMYR?: number;
+  /** Cost in another currency: that currency, the amount in it, the rate, and when it was fixed (final status). */
+  currency?: string;
+  cost?: number;
+  fxRate?: number;
+  costFixedAt?: string;
   eddDays?: number;
   aboveIndent?: boolean;
   f119Ref?: string;
@@ -205,6 +220,8 @@ export interface Partner {
   nextReassessment?: string;      // +3 years
   nonConformances: number;
   factorsEvaluated: number;
+  /** Currency they usually quote in. */
+  currency?: string;
   cars: Car[];
   audit: AuditEntry[];
 }

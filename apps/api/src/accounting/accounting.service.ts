@@ -76,7 +76,7 @@ export class AccountingService {
         const date = step?.at.toISOString().slice(0, 10);
         if (!inRange(date, from, to)) continue;
         const q = d.quotations.find((x) => x.supplierId === d.evalSupplierId) ?? (d.quotations.length === 1 ? d.quotations[0] : undefined);
-        const amount = q ? Number(q.priceMYR) : d.unitCost !== null ? Number(d.unitCost) * Number(d.qty) : 0;
+        const amount = d.purchaseAmountBase !== null ? Number(d.purchaseAmountBase) : q ? Number(q.priceMYR) : d.unitCost !== null ? Number(d.unitCost) * Number(d.qty) : 0;
         lines.push({
           kind: 'PURCHASE', ref: d.id, date: date!, data: {
             reference: d.poRef ?? d.id, date, supplier: q?.supplier ?? '', description: d.partDescription, quantity: Number(d.qty), currency: cur.code,
