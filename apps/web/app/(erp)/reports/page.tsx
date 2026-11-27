@@ -16,7 +16,7 @@ interface ReportDef {
   /** Permission needed to run it. */
   capability: string;
   /** Only shown when this module is on. */
-  module?: "invoicing" | "stock" | "requests";
+  module?: "invoicing" | "stock" | "requests" | "labour" | "assets";
   /** Aviation-only reports. */
   aviationOnly?: boolean;
   period: boolean;
@@ -31,6 +31,8 @@ const REPORTS: ReportDef[] = [
   { key: "stockValue", title: "Stock valuation", description: "Every part held, per store and bin, at its moving-average cost, with totals per store.", path: "/reports/stock-valuation", capability: "stock.manage", module: "stock", period: false, formats: ["xlsx", "csv"] },
   { key: "partsUsage", title: "Parts usage", description: "Parts issued to work orders in the period, net of returns — by part and by work order and asset, with cost.", path: "/reports/parts-usage", capability: "stock.manage", module: "stock", period: true, formats: ["xlsx", "csv"] },
   { key: "requests", title: "Requests and satisfaction", description: "Requests from the portal, QR posters and callers in the period: outcome, work order, hours to decide, days to complete and rating, with a summary by site and type.", path: "/reports/requests", capability: "requests.manage", module: "requests", period: true, formats: ["xlsx", "csv"] },
+  { key: "labour", title: "Labour hours and cost", description: "Time logged in the period by person and by work order, with hours, entries and cost at the rates in force when the time was logged.", path: "/reports/labour", capability: "labour.manage", module: "labour", period: true, formats: ["xlsx", "csv"] },
+  { key: "reliability", title: "Asset reliability", description: "Per asset, type and site: failures, downtime, availability, mean time to repair and between failures, preventive work done on time, and maintenance cost.", path: "/reports/reliability", capability: "reports.maintenance", module: "assets", period: true, formats: ["xlsx", "csv"] },
   { key: "audit", title: "Audit trail", description: "Every recorded action in the period — who, role, what and the fields entered (FR-04 / FR-12).", path: "/reports/audit", capability: "reports.audit", period: true, formats: ["xlsx", "csv"], entity: true },
   { key: "retention", title: "Record retention", description: "Closed jobs with their archive and retain-until dates; records past retention are flagged for review, never deleted.", path: "/retention/report", capability: "reports.audit", period: false, formats: ["xlsx", "csv"] },
 ];

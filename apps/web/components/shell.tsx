@@ -51,7 +51,10 @@ const NAV: { group: DictKey; items: NavItem[] }[] = [
   },
   {
     group: "finance",
-    items: [{ href: "/invoicing", label: "invoicing", code: "QP.51", tag: "INV", module: "invoicing" }],
+    items: [
+      { href: "/invoicing", label: "invoicing", code: "QP.51", tag: "INV", module: "invoicing" },
+      { href: "/accounting", label: "accounting", code: "GL", tag: "GL", module: "invoicing", capability: "accounting.export" },
+    ],
   },
   {
     group: "quality",

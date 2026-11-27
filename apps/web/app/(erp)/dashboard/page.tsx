@@ -14,7 +14,7 @@ import { StatCard } from "@/components/stat-card";
 import { Bars } from "@/components/charts";
 
 // Static class names, so the stylesheet keeps them.
-const CARD_COLUMNS: Record<number, string> = { 4: "lg:grid-cols-4", 5: "lg:grid-cols-5", 6: "lg:grid-cols-3", 7: "lg:grid-cols-4" };
+const CARD_COLUMNS: Record<number, string> = { 4: "lg:grid-cols-4", 5: "lg:grid-cols-5", 6: "lg:grid-cols-3", 7: "lg:grid-cols-4", 8: "lg:grid-cols-4", 9: "lg:grid-cols-3" };
 
 export default function DashboardPage() {
   const cfg = useConfig();
@@ -63,7 +63,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className={`mb-6 grid grid-cols-2 gap-3 ${CARD_COLUMNS[4 + (modules.stock && kpis.lowStock != null ? 1 : 0) + (modules.requests && kpis.newRequests != null ? 2 : 0)]}`}>
+      <div className={`mb-6 grid grid-cols-2 gap-3 ${CARD_COLUMNS[4 + (modules.stock && kpis.lowStock != null ? 1 : 0) + (modules.requests && kpis.newRequests != null ? 2 : 0) + (modules.assets && kpis.assetsDown != null ? 2 : 0)]}`}>
         <StatCard label={`Open ${terms.jobs.toLowerCase()}`} value={kpis.openJobs} delayClass="d1" />
         <StatCard label="Work in progress" value={kpis.wip} delayClass="d2" />
         <StatCard
@@ -102,6 +102,20 @@ export default function DashboardPage() {
           <Link href="/stock?view=reorder" className="block">
             <StatCard label="Low stock" value={kpis.lowStock} tone={kpis.lowStock ? "critical" : "good"} delayClass="d4" />
           </Link>
+        )}
+        {modules.assets && kpis.assetsDown != null && (
+          <>
+            <Link href="/assets?status=OUT_OF_SERVICE" className="block">
+              <StatCard label={`${terms.assets} out of action`} value={kpis.assetsDown} tone={kpis.assetsDown ? "critical" : "good"} delayClass="d4" />
+            </Link>
+            <StatCard
+              label={kpis.pmCompliance90?.due ? `${terms.pm} on time · ${kpis.pmCompliance90.onTime} of ${kpis.pmCompliance90.due}, 90 d` : `${terms.pm} on time · none due in 90 d`}
+              value={kpis.pmCompliance90?.pct ?? 0}
+              format={(n) => (kpis.pmCompliance90?.pct == null ? "—" : `${Math.round(n)}%`)}
+              tone={kpis.pmCompliance90?.pct == null ? "default" : kpis.pmCompliance90.pct >= 90 ? "good" : kpis.pmCompliance90.pct < 70 ? "critical" : "warn"}
+              delayClass="d4"
+            />
+          </>
         )}
       </div>
 

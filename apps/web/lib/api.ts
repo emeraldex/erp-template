@@ -184,4 +184,6 @@ export const api = {
   put: <T,>(path: string, body: unknown) =>
     request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   upload: <T,>(path: string, form: FormData, headers?: Record<string, string>) => request<T>(path, { method: "POST", body: form, headers }),
+  putForm: <T,>(path: string, form: FormData) => request<T>(path, { method: "PUT", body: form }),
+  remove: async (path: string): Promise<void> => { await send(path, { method: "DELETE" }); },
 };

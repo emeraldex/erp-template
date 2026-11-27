@@ -14,6 +14,7 @@ import { AuditTrail, RecordsList, StageRail, TransitionActions } from "@/compone
 import { AttachmentsPanel } from "@/components/attachments";
 import { JobParts } from "@/components/stock/job-parts";
 import { JobRequesters } from "@/components/requests/job-requesters";
+import { JobCostPanel, JobTime } from "@/components/labour/job-time";
 
 export default function JobDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -27,6 +28,7 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
   const [showPriority, setShowPriority] = useState(false);
   const [pForm, setPForm] = useState({ type: "", route: "", quantity: "1", suffixK: false, colRef: "" });
   const [newCheck, setNewCheck] = useState("");
+  const [costTick, setCostTick] = useState(0);
 
   const user = useSession()?.user;
   const { terms, modules, dict, label, can, ref, aviation, isFinal } = useVocab();
@@ -327,9 +329,19 @@ export default function JobDetail({ params }: { params: Promise<{ id: string }> 
 
           {modules.stock && (
             <div className="mt-6 border-t hairline pt-4">
-              <JobParts jobId={job.id} closed={closed} />
+              <JobParts jobId={job.id} closed={closed} onChanged={() => setCostTick((n) => n + 1)} />
             </div>
           )}
+
+          {modules.labour && (
+            <div className="mt-6 border-t hairline pt-4">
+              <JobTime jobId={job.id} closed={closed} onChanged={() => setCostTick((n) => n + 1)} />
+            </div>
+          )}
+
+          <div className="mt-6 border-t hairline pt-4 empty:hidden">
+            <JobCostPanel jobId={job.id} refresh={costTick} />
+          </div>
 
           <div className="mt-6 border-t hairline pt-4">
             <AttachmentsPanel

@@ -7,6 +7,7 @@ import { api, download } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { Asset } from "@/lib/types";
 import { useVocab } from "@/lib/vocab";
+import { AssetImport, AssetReliability } from "@/components/assets/reliability";
 import { Button, EmptyState, MetaPill, PageHeader, Panel, StatusPill, Table, Td, Tr } from "@/components/ui";
 
 const field = "mono rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace";
@@ -34,7 +35,9 @@ function AssetsRegister() {
   const [q, setQ] = useState("");
   const [site, setSite] = useState("");
   const [type, setType] = useState("");
+  const [status, setStatus] = useState(params.get("status") ?? "");
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [form, setForm] = useState(blank);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -46,8 +49,8 @@ function AssetsRegister() {
   useEffect(() => { load(); }, [load]);
 
   const shown = useMemo(() => (rows ?? []).filter((a) =>
-    (!site || a.site === site) && (!type || a.type === type) &&
-    (!q || `${a.tag} ${a.name} ${a.make} ${a.model} ${a.serialNo} ${a.location}`.toLowerCase().includes(q.toLowerCase()))), [rows, site, type, q]);
+    (!site || a.site === site) && (!type || a.type === type) && (!status || a.status === status) &&
+    (!q || `${a.tag} ${a.name} ${a.make} ${a.model} ${a.serialNo} ${a.location}`.toLowerCase().includes(q.toLowerCase()))), [rows, site, type, status, q]);
 
   async function create() {
     setBusy(true); setMsg(null);
@@ -90,12 +93,14 @@ function AssetsRegister() {
                 Request stickers ({Math.min(shown.length, 100)})
               </Button>
             )}
-            {canManage && <Button onClick={() => setAdding(!adding)} variant={adding ? "ghost" : "primary"}>{adding ? "Cancel" : `+ Add ${terms.asset.toLowerCase()}`}</Button>}
+            {canManage && <Button variant="ghost" onClick={() => { setImporting(!importing); setAdding(false); }}>{importing ? "Close import" : "Import CSV"}</Button>}
+            {canManage && <Button onClick={() => { setAdding(!adding); setImporting(false); }} variant={adding ? "ghost" : "primary"}>{adding ? "Cancel" : `+ Add ${terms.asset.toLowerCase()}`}</Button>}
           </>
         }
       />
       {msg && <p className={`mb-4 rounded border px-3 py-2 text-sm ${msg.ok ? "border-phosphor/40 text-phosphor" : "border-brand-bright/40 bg-brand-bright/10 text-brand-bright"}`}>{msg.text}</p>}
 
+      {importing && <AssetImport onDone={load} />}
       {adding && (
         <div className="panel ticked fade-up mb-6 p-5">
           <div className="grid gap-3 sm:grid-cols-4">
@@ -141,6 +146,12 @@ function AssetsRegister() {
           <option value="">All types</option>
           {dict("assetType").map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className={`${field} w-44`} aria-label="Status">
+          <option value="">Any status</option>
+          <option value="IN_SERVICE">In service</option>
+          <option value="OUT_OF_SERVICE">Out of action</option>
+          <option value="RETIRED">Retired</option>
+        </select>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tag, name, model…" className={`${field} ml-auto w-64`} />
       </div>
 
@@ -178,7 +189,8 @@ function AssetDetail({ id, canManage, onChanged }: { id: string; canManage: bool
   const [reading, setReading] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const load = useCallback(() => { api.get<Asset>(`/assets/${encodeURIComponent(id)}`).then(setA).catch((e) => setMsg({ ok: false, text: (e as Error).message })); }, [id]);
+  const [tick, setTick] = useState(0);
+  const load = useCallback(() => { setTick((t) => t + 1); api.get<Asset>(`/assets/${encodeURIComponent(id)}`).then(setA).catch((e) => setMsg({ ok: false, text: (e as Error).message })); }, [id]);
   useEffect(() => { setA(null); setMsg(null); load(); }, [load]);
 
   async function record(key: string) {
@@ -262,6 +274,8 @@ function AssetDetail({ id, canManage, onChanged }: { id: string; canManage: bool
           )}
         </div>
       )}
+
+      <AssetReliability id={a.id} tick={tick} />
 
       {children.length > 0 && (
         <div className="mt-4">

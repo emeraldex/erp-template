@@ -82,6 +82,12 @@ export class ReliabilityService {
     };
   }
 
+  /** Asset cost includes labour cost, which only people who manage labour or read maintenance reports see. */
+  maySeeCost(role: string): boolean {
+    const caps = this.store.capabilitiesOf(role);
+    return caps.includes('labour.manage') || caps.includes('reports.maintenance');
+  }
+
   /** An asset's last twelve months (or `months`), its downtime history and cost. */
   async forAsset(assetId: string, months = 12, now = new Date()) {
     const asset = await this.prisma.asset.findUnique({ where: { id: assetId }, select: { id: true, commissionedOn: true, status: true } });

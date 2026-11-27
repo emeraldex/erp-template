@@ -61,6 +61,8 @@ describe('Downtime, reliability and asset import (integration)', () => {
     expect(r.mttrHours).not.toBeNull();
     expect(r.availabilityPct).toBeLessThanOrEqual(100);
     expect((await get(`/assets/${assetId}`)).body.status).toBe('IN_SERVICE');
+    expect(r.cost).toEqual(expect.any(Number));
+    expect((await get(`/assets/${assetId}/reliability`, 'technician')).body.cost).toBeNull(); // cost includes labour
   });
 
   it('opens and closes downtime when an asset is put out of service and back by hand', async () => {

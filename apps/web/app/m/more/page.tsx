@@ -37,7 +37,7 @@ export default function MoreScreen() {
   const waiting = f.outbox.filter((i) => i.state === "pending");
   const failed = f.outbox.filter((i) => i.state === "failed");
   const describe = (type: string, p: Record<string, unknown>) =>
-    type === "note" ? `“${String(p.text).slice(0, 60)}”` : type === "meter" ? `${p.key} ${p.value}` : type === "checklist" ? `☑ ${p.key}` : `📷 ${p.caption || p.filename}`;
+    type === "note" ? `“${String(p.text).slice(0, 60)}”` : type === "meter" ? `${p.key} ${p.value}` : type === "checklist" ? `☑ ${p.key}` : type === "time" ? `⏱ ${p.minutes} min` : `📷 ${p.caption || p.filename}`;
 
   async function signOut() {
     if (f.outbox.length && !window.confirm(`${f.outbox.length} ${m("unsentWarning")}`)) return;

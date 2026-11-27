@@ -55,9 +55,11 @@ export class AssetsController {
 
   /** The last twelve months: failures, downtime, availability, repair time, preventive compliance, cost; and downtime spells. */
   @Get(':id/reliability')
-  reliabilityOf(@Param('id') id: string, @Query('months') months?: string) {
+  async reliabilityOf(@Param('id') id: string, @Req() req: Req, @Query('months') months?: string) {
     const n = Math.min(Math.max(Number(months) || 12, 1), 36);
-    return this.reliability.forAsset(id, n);
+    const r = await this.reliability.forAsset(id, n);
+    // Cost includes labour, so only people who may see labour cost or maintenance reports see it.
+    return this.reliability.maySeeCost(req.user.role) ? r : { ...r, cost: null };
   }
 
   @Post()

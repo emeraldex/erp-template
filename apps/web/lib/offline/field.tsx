@@ -92,6 +92,10 @@ async function send(item: OutboxItem): Promise<SendResult> {
       case "meter":
         await api.post(`/assets/${encodeURIComponent(String(p.assetId))}/meters/${encodeURIComponent(String(p.key))}/readings`, { value: p.value, at: item.createdAt }, op);
         break;
+      case "time":
+        // The work date is the phone's own date when the time was logged.
+        await api.post(`/jobs/${job}/time`, { minutes: p.minutes, workDate: p.workDate, ...(p.note ? { note: p.note } : {}) }, op);
+        break;
       case "photo": {
         const form = new FormData();
         form.append("file", p.blob as Blob, String(p.filename ?? "photo.jpg"));
