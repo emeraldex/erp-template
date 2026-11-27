@@ -1,4 +1,6 @@
 import { CURRENCIES, Currency, currencyOf } from './currency';
+import { accentProblem, imageInfo, LOGO_MAX_BYTES, LOGO_MIN_EDGE } from './brand';
+import { createHash } from 'crypto';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { currentTenant } from '../tenancy/tenant';
 import { AVIATION } from '../packs/aviation';
@@ -53,7 +55,13 @@ export interface Settings {
   portal: PortalSettings;
   /** The currency the organisation keeps its books in (ISO code). */
   currency: { code: string };
+  /** Brand colour (null = the product's own) and the theme people start with. */
+  brand: BrandSettings;
 }
+
+export type Theme = 'dark' | 'light' | 'system';
+export interface BrandSettings { accent: string | null; defaultTheme: Theme }
+export interface Logo { contentType: 'image/png' | 'image/jpeg'; data: string; sha256: string; width: number; height: number; updatedAt: string }
 
 export const DEFAULT_SETTINGS: Settings = {
   company: {
@@ -76,6 +84,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaults: { jobPrefix: AVIATION.defaults.jobPrefix, initialLocation: AVIATION.defaults.initialLocation },
   portal: { open: true, accessCode: '', intro: '', introMs: '', askCategory: true, triageHours: 4 },
   currency: { code: 'MYR' },
+  brand: { accent: null, defaultTheme: 'dark' },
 };
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : undefined);
@@ -84,7 +93,7 @@ const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice
 @Injectable()
 export class SettingsService {
   /** Per tenant, re-read every 30 s so changes made on another replica show up. */
-  private readonly caches = new Map<string, { settings: Settings; loadedAt: number }>();
+  private readonly caches = new Map<string, { settings: Settings; logo: Logo | null; loadedAt: number }>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -112,7 +121,9 @@ export class SettingsService {
         defaults: { ...DEFAULT_SETTINGS.defaults, ...(byKey.defaults ?? {}) },
         portal: { ...DEFAULT_SETTINGS.portal, ...(byKey.portal ?? {}) },
         currency: { ...DEFAULT_SETTINGS.currency, ...(byKey.currency ?? {}) },
+        brand: { ...DEFAULT_SETTINGS.brand, ...(byKey.brand ?? {}) },
       },
+      logo: (byKey.logo as Logo | undefined)?.data ? (byKey.logo as Logo) : null,
       loadedAt: Date.now(),
     });
   }
@@ -163,6 +174,62 @@ export class SettingsService {
     }
     await this.save('currency', { code: next.code }, by);
     return next;
+  }
+
+  get brand(): BrandSettings {
+    return { ...this.cache.brand };
+  }
+
+  async updateBrand(patch: Partial<BrandSettings>, by: string): Promise<BrandSettings> {
+    const next = { ...this.cache.brand };
+    if (patch.accent !== undefined) {
+      if (patch.accent === null || patch.accent === '') next.accent = null;
+      else {
+        const problem = accentProblem(patch.accent);
+        if (problem) throw new BadRequestException(problem);
+        next.accent = String(patch.accent).toLowerCase();
+      }
+    }
+    if (patch.defaultTheme !== undefined) {
+      if (!['dark', 'light', 'system'].includes(String(patch.defaultTheme))) throw new BadRequestException('Theme: dark, light or system');
+      next.defaultTheme = patch.defaultTheme as Theme;
+    }
+    await this.save('brand', next, by);
+    return next;
+  }
+
+  /** The organisation's logo, if it has one. */
+  get logo(): { buffer: Buffer; contentType: string; sha256: string; width: number; height: number } | null {
+    const l = this.caches.get(currentTenant().id)?.logo ?? null;
+    return l ? { buffer: Buffer.from(l.data, 'base64'), contentType: l.contentType, sha256: l.sha256, width: l.width, height: l.height } : null;
+  }
+
+  /** PNG or JPEG, recognised by content (never SVG, which can carry scripts), up to 512 KB, at least 64 px. */
+  async setLogo(file: { buffer: Buffer; size: number } | undefined, by: string) {
+    if (!file?.buffer?.length) throw new BadRequestException('Attach the logo in the "file" field');
+    if (file.size > LOGO_MAX_BYTES) throw new BadRequestException('The logo must be 512 KB or smaller');
+    const info = imageInfo(file.buffer);
+    if (!info) throw new BadRequestException('The logo must be a PNG or JPEG image');
+    if (Math.min(info.width, info.height) < LOGO_MIN_EDGE) throw new BadRequestException(`The logo is too small (${info.width} × ${info.height}); it needs at least ${LOGO_MIN_EDGE} pixels on its short side`);
+    if (Math.max(info.width, info.height) > 4000) throw new BadRequestException('The logo is too large (more than 4000 pixels on a side)');
+    const logo: Logo = {
+      contentType: info.type, data: file.buffer.toString('base64'), sha256: createHash('sha256').update(file.buffer).digest('hex'),
+      width: info.width, height: info.height, updatedAt: new Date().toISOString(),
+    };
+    await this.prisma.setting.upsert({ where: { key: 'logo' }, create: { key: 'logo', value: logo as never, updatedBy: by }, update: { value: logo as never, updatedBy: by } });
+    await this.reload();
+    return { width: info.width, height: info.height, contentType: info.type, version: logo.sha256.slice(0, 12) };
+  }
+
+  async removeLogo(): Promise<void> {
+    await this.prisma.setting.deleteMany({ where: { key: 'logo' } });
+    await this.reload();
+  }
+
+  /** What screens need to brand themselves (no image bytes). */
+  get branding() {
+    const l = this.caches.get(currentTenant().id)?.logo ?? null;
+    return { ...this.cache.brand, logo: l ? l.sha256.slice(0, 12) : null };
   }
 
   get portal(): PortalSettings {

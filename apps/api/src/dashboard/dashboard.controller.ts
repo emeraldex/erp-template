@@ -30,6 +30,7 @@ export class DashboardController {
       terms: this.settings.terms,
       modules: this.settings.modules,
       currency: this.settings.currency,
+      brand: this.settings.branding,
       phases: PHASES,
       capabilities: CAPABILITIES,
       // Every vocabulary the organisation has defined, in display order.

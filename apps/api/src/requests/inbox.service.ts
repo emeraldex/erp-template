@@ -281,7 +281,7 @@ export class RequestsInboxService {
     const org = this.settings.company.name || currentTenant().name;
     if (format === 'stickers') return { filename: `request-stickers-${points.length}.pdf`, pdf: await stickerPdf(points, webBase) };
     if (format && format !== 'poster') throw new BadRequestException('format must be poster or stickers');
-    return { filename: points.length === 1 ? `request-poster-${points[0].code}.pdf` : `request-posters-${points.length}.pdf`, pdf: await posterPdf(points, org, webBase) };
+    return { filename: points.length === 1 ? `request-poster-${points[0].code}.pdf` : `request-posters-${points.length}.pdf`, pdf: await posterPdf(points, org, webBase, this.settings.logo) };
   }
 
   /** A message to the requester, shown on their tracking page and emailed. */

@@ -208,7 +208,7 @@ export default function InvoicingPage() {
                       <p className="mono text-sm text-trace">{fmtMYR(inv.gstMYR)}</p>
                     </div>
                     <div className="rounded-md border hairline bg-ink-deep/40 px-3 py-2">
-                      <p className="eyebrow">Total (F311)</p>
+                      <p className="eyebrow">{aviation ? "Total (F311)" : "Total"}</p>
                       <p className="mono text-sm text-phosphor">{fmtMYR(inv.totalMYR)}</p>
                     </div>
                     <div className={`rounded-md border px-3 py-2 ${inv.correctnessBy ? "border-phosphor/40" : "hairline"}`}>

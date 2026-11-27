@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { BrandLogo } from "@/lib/brand";
 import { useSearchParams } from "next/navigation";
 import { resizePhoto } from "@/lib/images";
 import { initialLang, portal, PortalError, PortalInfo, PT, rememberLang, saveRequest, savedRequests, SavedRequest } from "@/lib/portal";
@@ -71,6 +72,7 @@ function RequestForm() {
   const header = (
     <header className="flex items-start justify-between gap-3 border-b hairline px-4 pb-4 pt-6">
       <div className="min-w-0">
+        <BrandLogo className="mb-2 h-10 max-w-[180px]" />
         <p className="mono text-[11px] uppercase tracking-widest text-steel">{info?.org ?? " "}</p>
         <h1 className="display text-3xl font-bold leading-tight">{t("title")}</h1>
       </div>

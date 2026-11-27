@@ -99,7 +99,7 @@ export function Button({
 }) {
   const styles = {
     primary:
-      "bg-brand text-white hover:bg-brand-bright shadow-[0_0_18px_rgba(200,16,46,0.35)] hover:shadow-[0_0_26px_rgba(255,59,78,0.45)]",
+      "bg-brand text-white hover:brightness-110 shadow-[0_0_18px_color-mix(in_srgb,var(--c-red)_35%,transparent)] hover:shadow-[0_0_26px_color-mix(in_srgb,var(--c-red)_45%,transparent)]",
     ghost: "border hairline bg-panel-2/40 text-steel hover:text-fg hover:border-steel/50",
     danger: "border border-brand-bright/50 text-brand-bright hover:bg-brand-bright/10",
   }[variant];

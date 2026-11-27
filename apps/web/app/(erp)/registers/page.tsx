@@ -110,8 +110,8 @@ export default function RegistersPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {open.evaluationRef && <FormChip formNo={open.type === "SUPPLIER" ? "F225" : "F228"} refNo={open.evaluationRef} />}
-              {open.siteAuditRef && <FormChip formNo="F225A" refNo={open.siteAuditRef} />}
+              {open.evaluationRef && <FormChip formNo={aviation ? (open.type === "SUPPLIER" ? "F225" : "F228") : "Evaluation"} refNo={open.evaluationRef} />}
+              {open.siteAuditRef && <FormChip formNo={aviation ? "F225A" : "Site audit"} refNo={open.siteAuditRef} />}
               {open.cars.map((c) => <FormChip key={c.ref} formNo="F516" refNo={c.ref} />)}
             </div>
           </div>

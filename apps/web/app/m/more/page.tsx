@@ -6,6 +6,7 @@ import { BigButton, MHeader, Section } from "@/components/m/ui";
 import { api, setSession } from "@/lib/api";
 import { useLang } from "@/lib/i18n";
 import { useM } from "@/lib/m-text";
+import { setThemeChoice, useThemeChoice } from "@/lib/brand";
 import { useField } from "@/lib/offline/field";
 import { setFullSite } from "@/lib/phone";
 import { useSession } from "@/lib/use-session";
@@ -16,6 +17,7 @@ export default function MoreScreen() {
   const router = useRouter();
   const f = useField();
   const m = useM();
+  const theme = useThemeChoice();
   const { lang, setLang } = useLang();
   const me = useSession()?.user;
   const [usage, setUsage] = useState<string | null>(null);
@@ -55,6 +57,16 @@ export default function MoreScreen() {
           {(["en", "ms"] as const).map((l) => (
             <button key={l} onClick={() => setLang(l)} className={`min-h-[48px] rounded-lg border text-base ${lang === l ? "border-brand bg-brand/20" : "hairline text-steel"}`}>
               {l === "en" ? "English" : "Bahasa Melayu"}
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      <Section title={m("theme")}>
+        <div className="grid grid-cols-3 gap-2">
+          {(["dark", "light", "system"] as const).map((t) => (
+            <button key={t} onClick={() => setThemeChoice(t)} className={`min-h-[48px] rounded-lg border text-base ${theme === t ? "border-brand bg-brand/20" : "hairline text-steel"}`}>
+              {m(t === "dark" ? "themeDark" : t === "light" ? "themeLight" : "themeDevice")}
             </button>
           ))}
         </div>

@@ -58,20 +58,42 @@ export class DocumentsService {
     return { filename: `${ref}-${kind}${suffix}.pdf`.replace(/[^A-Za-z0-9._-]/g, '_'), pdf: await done };
   }
 
+  /** Aviation organisations print their procedure's form numbers; everyone else gets plain words. */
+  private get aviation(): boolean {
+    return this.store.packId() === 'aviation';
+  }
+
+  /** "Job (PS no.)" for aviation; the organisation's own word ("Work order", "Job card") otherwise. */
+  private get jobLabel(): string {
+    return this.aviation ? 'Job (PS no.)' : this.settings.terms.job;
+  }
+
+  /** When the tax invoice was raised: the record carrying its number. */
+  private taxInvoiceDate(inv: Ctx['inv']): string {
+    if (!inv.f311Ref) return today();
+    const rec = inv.records.find((r) => r.refNo === inv.f311Ref) ?? inv.records.find((r) => r.formNo === 'F311');
+    return rec?.date ?? today();
+  }
+
+  private invoiceTitle(inv: Ctx['inv']): string {
+    if (this.aviation) return 'TAX INVOICE';
+    return inv.gstRate > 0 ? 'TAX INVOICE' : 'INVOICE';
+  }
+
   private taxInvoice(doc: Doc, { inv, job, stream }: Ctx): void {
     const c = this.settings.company;
-    letterhead(doc, c);
-    heading(doc, 'TAX INVOICE');
+    letterhead(doc, c, this.settings.logo);
+    heading(doc, this.invoiceTitle(inv));
     const top = doc.y;
     fields(doc, [
       ['Invoice no.', inv.f311Ref ?? `${inv.id} (not yet raised)`],
-      ['Date', inv.f311Ref ? (inv.records.find((r) => r.formNo === 'F311')?.date ?? today()) : today()],
+      ['Date', this.taxInvoiceDate(inv)],
       ['Billing stream', stream?.label ?? inv.stream],
-      ['Branch', inv.branch],
+      [this.aviation ? 'Branch' : this.settings.terms.site, inv.branch],
     ]);
     const leftEnd = doc.y;
     doc.y = top;
-    fields(doc, [['Bill to', inv.customer], ['Period', inv.period], ['Job (PS no.)', inv.jobId]], 310, 75);
+    fields(doc, [['Bill to', inv.customer], ['Period', inv.period], [this.jobLabel, inv.jobId]], 310, 75);
     doc.y = Math.max(leftEnd, doc.y) + 10;
 
     const description = job
@@ -108,20 +130,20 @@ export class DocumentsService {
 
   private coveringLetter(doc: Doc, { inv, job, stream }: Ctx): void {
     const c = this.settings.company;
-    letterhead(doc, c);
+    letterhead(doc, c, this.settings.logo);
     doc.fontSize(10).text(`Our ref: ${pdfText(inv.f311Ref ?? inv.id)}`).text(`Date: ${today()}`).moveDown();
     doc.text(pdfText(inv.customer)).moveDown();
     doc.font('Helvetica-Bold').text(pdfText(
-      `SUBMISSION OF TAX INVOICE ${inv.f311Ref ?? inv.id} — ${(stream?.label ?? inv.stream).toUpperCase()}`,
+      `SUBMISSION OF ${this.invoiceTitle(inv)} ${inv.f311Ref ?? inv.id} — ${(stream?.label ?? inv.stream).toUpperCase()}`,
     )).font('Helvetica').moveDown();
     doc.text('Dear Sir/Madam,').moveDown(0.6);
-    const subject = job ? `the repair of ${job.component} (part no. ${job.partNo}, serial no. ${job.serialNo}, PS no. ${job.id})` : `the ${stream?.label ?? inv.stream}${inv.period ? ` for ${inv.period}` : ''}`;
+    const subject = job ? `the repair of ${job.component} (part no. ${job.partNo}, serial no. ${job.serialNo}, ${this.aviation ? 'PS no.' : this.settings.terms.jobNo} ${job.id})` : `the ${stream?.label ?? inv.stream}${inv.period ? ` for ${inv.period}` : ''}`;
     doc.text(pdfText(
       `We enclose our tax invoice for ${subject}, amounting to ${myr(inv.totalMYR, this.settings.currency)} inclusive of ` +
       `${inv.taxLabel ?? 'GST'} at ${inv.gstRate}%, together with the supporting documents listed below for your verification and further action.`,
     ), { align: 'justify' }).moveDown(0.8);
     doc.font('Helvetica-Bold').text('Enclosures').font('Helvetica').moveDown(0.3);
-    ['Tax Invoice (F311)', ...(stream?.docSet ?? []).filter((d) => !/tax invoice/i.test(d))]
+    [this.aviation ? 'Tax Invoice (F311)' : this.invoiceTitle(inv) === 'INVOICE' ? 'Invoice' : 'Tax invoice', ...(stream?.docSet ?? []).filter((d) => !/tax invoice/i.test(d))]
       .forEach((d, i) => doc.text(`${i + 1}.  ${pdfText(d)}`, MARGIN + 10));
     doc.moveDown(0.8).text('Kindly contact us should you require any clarification.', MARGIN)
       .moveDown(0.6).text('Thank you.', MARGIN).moveDown(0.5).text('Yours faithfully,', MARGIN);
@@ -131,14 +153,14 @@ export class DocumentsService {
 
   private deliveryNote(doc: Doc, { inv, job }: Ctx): void {
     const j = job!;
-    letterhead(doc, this.settings.company);
+    letterhead(doc, this.settings.company, this.settings.logo);
     heading(doc, 'DELIVERY NOTE');
     const dn = j.records.find((r) => r.formNo === 'F218');
     fields(doc, [
-      ['DN no. (F218)', dn?.refNo ?? '(to be assigned)'],
+      [this.aviation ? 'DN no. (F218)' : 'Delivery note no.', dn?.refNo ?? '(to be assigned)'],
       ['Date', dn?.date ?? today()],
       ['Deliver to', j.originUnit],
-      ['Job (PS no.)', j.id],
+      [this.jobLabel, j.id],
       ['Invoice', inv.f311Ref ?? inv.id],
       ['Indent', j.indentRef],
     ]);
@@ -158,7 +180,7 @@ export class DocumentsService {
   }
 
   private checklist(doc: Doc, { inv, job, stream }: Ctx): void {
-    letterhead(doc, this.settings.company);
+    letterhead(doc, this.settings.company, this.settings.logo);
     heading(doc, 'DOCUMENT SET CHECKLIST');
     doc.fontSize(9.5).fillColor('#666666')
       .text(pdfText(`${stream?.label ?? inv.stream} — tick each item before the set leaves for ${inv.customer}.`))

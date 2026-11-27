@@ -24,7 +24,30 @@
 
   --c-text: #e8eff9;
   --c-steel: #93a8c4;      /* secondary text */
-  --c-dim: #5c7395;        /* tertiary text */
+  --c-dim: #7a92b3;        /* tertiary text (4.5:1 or more on every surface) */
+  color-scheme: dark;
+}
+
+/* Light theme: the same roles, re-tuned so every text colour keeps at least
+   4.5:1 contrast on its surface (WCAG AA). The accent (--c-red) may be the
+   organisation's brand colour, set on <html> from its settings. */
+:root[data-theme="light"] {
+  --c-ink: #f3f5f9;
+  --c-ink-deep: #ffffff;
+  --c-panel: #ffffff;
+  --c-panel-2: #eaeff6;
+  --c-line: rgba(15, 30, 51, 0.13);
+  --c-line-strong: rgba(15, 30, 51, 0.26);
+
+  --c-red-bright: #b00c24; /* errors and danger text */
+  --c-phosphor: #0a7a4c;   /* ok / live */
+  --c-amber: #8a5800;      /* caution */
+  --c-cyan: #0b65a0;       /* links, informational */
+
+  --c-text: #0f1e33;
+  --c-steel: #43566f;
+  --c-dim: #58697f;
+  color-scheme: light;
 }
 
 @theme inline {

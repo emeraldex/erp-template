@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { BrandLogo } from "@/lib/brand";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useM } from "@/lib/m-text";
@@ -15,6 +16,7 @@ export function MHeader({ title, back }: { title: string; back?: boolean }) {
       {back && (
         <button onClick={() => router.back()} aria-label={m("back")} className="-ml-1 rounded-md px-2 py-1 text-2xl leading-none text-steel">‹</button>
       )}
+      {!back && <BrandLogo className="h-7 max-w-[96px]" />}
       <h1 className="min-w-0 flex-1 truncate text-lg font-semibold text-fg">{title}</h1>
       <SyncChip />
     </header>
