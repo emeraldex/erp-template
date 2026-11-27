@@ -127,12 +127,12 @@ export default function JobsPage() {
                   <option value="">— not in the register —</option>
                   {assets.filter((a) => a.status !== "RETIRED").map((a) => <option key={a.id} value={a.id}>{a.tag} · {a.name} · {label("site", a.site)}</option>)}
                 </select>
-                {form.assetId && (
-                  <span className="mt-2 flex items-center gap-2 text-sm text-fg">
-                    <input type="checkbox" checked={assetDown} onChange={(e) => setAssetDown(e.target.checked)} className="accent-[var(--c-red)]" />
-                    The {terms.asset.toLowerCase()} is out of action — record downtime until this work is done
-                  </span>
-                )}
+              </label>
+            )}
+            {modules.assets && form.assetId && (
+              <label className="flex items-center gap-2 text-sm text-fg sm:col-span-3">
+                <input type="checkbox" checked={assetDown} onChange={(e) => setAssetDown(e.target.checked)} className="accent-[var(--c-red)]" />
+                The {terms.asset.toLowerCase()} is out of action — record downtime until this work is done
               </label>
             )}
             {(

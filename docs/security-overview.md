@@ -110,6 +110,26 @@ in. It is off unless the organisation switches it on, and then:
 - The pages are kept out of search engines and send no `Referer`. Only a
   keyed hash of the sender's network address is kept, for spotting abuse.
 
+## The organisation's logo
+
+The logo is the only other thing served without signing in (`GET
+/tenant/logo`), because the sign-in page and the request portal show it.
+
+- **What is accepted:** PNG or JPEG only, recognised by content, at most
+  512 KB. SVG is refused, because it can carry scripts.
+- **How it is served:** with `X-Content-Type-Options: nosniff` and
+  `Content-Security-Policy: default-src 'none'`, so even a disguised file
+  cannot run in the browser.
+- **Who can change it:** only administrators.
+
+## Labour cost and rates
+
+Hourly rates and labour cost are pay information. The API returns them only
+to people with `labour.manage`; for everyone else the fields are left out or
+`null`. That includes totals that contain labour: job cost, and asset cost
+(which `reports.maintenance` may also see). Hours worked are visible to
+anyone who can see the work order.
+
 ## Engineering practice
 
 - Automated tests run on every change (unit and integration tests against

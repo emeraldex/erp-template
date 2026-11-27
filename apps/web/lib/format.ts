@@ -21,6 +21,13 @@ export const fmtMYR = (n: number) => fmt(n, 0);
 /** An exact amount: "RM 18,400.50", "Rp 1,250,000". */
 export const fmtMoney = (n: number) => fmt(n, currency.decimals);
 
+/** A moment in the viewer's own time zone: "2026-11-27 11:18". */
+export const fmtDateTime = (iso: string) => {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
 export const fmtNum = (n: number) => new Intl.NumberFormat("en-MY").format(n);
 
 export const fmtDate = (iso: string) =>

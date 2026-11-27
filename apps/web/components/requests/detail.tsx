@@ -132,12 +132,12 @@ export function RequestDetail({ id, onChanged }: { id: string; onChanged: () => 
                     <option value="">— none: use the place —</option>
                     {(assets ?? []).filter((a) => a.status !== "RETIRED").map((a) => <option key={a.id} value={a.id}>{a.tag} · {a.name} · {label("site", a.site)}</option>)}
                   </select>
-                  {accept.assetId && (
-                    <span className="mt-2 flex items-center gap-2 text-sm text-fg">
-                      <input type="checkbox" checked={accept.assetDown} onChange={(e) => setAccept({ ...accept, assetDown: e.target.checked })} className="accent-[var(--c-red)]" />
-                      Out of action — record downtime until the work is done
-                    </span>
-                  )}
+                </label>
+              )}
+              {modules.assets && accept.assetId && (
+                <label className="flex items-center gap-2 text-sm text-fg sm:col-span-2">
+                  <input type="checkbox" checked={accept.assetDown} onChange={(e) => setAccept({ ...accept, assetDown: e.target.checked })} className="accent-[var(--c-red)]" />
+                  Out of action — record downtime until the work is done
                 </label>
               )}
               {!accept.assetId && (

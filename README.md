@@ -22,10 +22,11 @@ Section 4 (actors), Section 5 (workflows), Section 6 (forms register), Section 7
 | For | Read |
 |---|---|
 | Installing and running client organisations | [Administrator guide](docs/guides/admin-guide.md) |
-| Setting a client up for its sector (packs, terms, statuses, actions, permissions, assets, PM, stock, request portal) | [Setting up for any sector](docs/guides/sectors.md) |
+| Setting a client up for its sector (packs, terms, statuses, actions, permissions, assets, PM, stock, request portal, currency, look, labour) | [Setting up for any sector](docs/guides/sectors.md) |
 | Daily use, by role | [User guide](docs/guides/user-guide.md) · [Panduan pengguna](docs/guides/panduan-pengguna.md) |
 | How stock control works (ledger, costing, counts, purchasing) | [Stock](docs/architecture/stock.md) |
 | How the public request portal works (tracking links, triage, protections) | [Request portal](docs/architecture/request-portal.md) |
+| Currency, branding, labour and job cost, downtime and reliability, the accounting export | [Costs and reliability](docs/architecture/costs-and-reliability.md) |
 | Integrations | [API guide](docs/api/README.md) and the generated reference at `/api/docs` |
 | Security reviews | [Security overview](docs/security-overview.md) |
 | Sales demos | [Running a demo](docs/demo-environment.md) |
@@ -101,6 +102,15 @@ purchasing for stock, parts on a work order and on the phone.
 `node scripts/portal-check.js` runs the request portal end to end against a fresh
 facilities demo: a poster scan on a phone, triage on the desktop, messages,
 completion and a rating.
+`node scripts/polish-check.js` checks this release's features against a fresh
+facilities demo:
+- a logo, brand colour and the light theme;
+- labour rates;
+- a breakdown with the asset out of action;
+- time logged offline on a phone;
+- job cost and asset reliability;
+- an invoice PDF with the logo;
+- an accounting batch.
 
 The integration tests boot the real API against PostgreSQL. Point
 `TEST_DATABASE_URL` at a **disposable** database whose name contains `test` — its
@@ -182,6 +192,13 @@ dependency audit, on every push and pull request.
   into a work order, adds it to existing work or declines it; private tracking links,
   two-way messages, emails, a 1–5 rating when done, satisfaction on the dashboard and in a
   report ([how it works](docs/architecture/request-portal.md)).
+- **Commercial polish** — each organisation's own currency (28, with amounts in words), its
+  logo and brand colour on screens and PDFs, a light theme, plain documents outside aviation;
+  labour time (desktop and offline phone) costed at person/role rates and a cost per work
+  order; downtime from "out of action" breakdowns with availability, MTTR, MTBF and
+  preventive compliance per asset and in a report; asset import from CSV; and once-only
+  accounting export batches in Excel or CSV with the client's account codes
+  ([how it works](docs/architecture/costs-and-reliability.md)).
 
 ## Section 8 demonstration script
 
@@ -236,7 +253,13 @@ GET   /reports/{sales-performance|e-payment|outstanding|audit}?from&to&format=xl
 GET   /retention/report · POST /retention/archive (ADMIN)
 GET|POST /attachments/:entity/:id · GET /attachments/file/:id[/verify]
 GET   /notifications · POST /notifications/:id/read · /notifications/read-all · POST /alerts/run (ADMIN)
-GET   /settings · PATCH /settings/{company,tax,terms,modules,defaults} (org.admin)
+GET   /settings · PATCH /settings/{company,tax,terms,modules,defaults,currency,brand,maintenance} (org.admin)
+GET   /settings/currencies · PUT|DELETE /settings/logo · GET /tenant/logo (no sign-in)
+GET|POST /jobs/:id/time · PATCH|DELETE /time/:id · GET /jobs/:id/cost
+GET|PUT /labour/rates · PUT /labour/people/:id/rate · GET /reports/{labour,reliability}
+GET   /assets/:id/reliability · POST /assets/import?dryRun=1
+GET|PUT /accounting/settings · GET /accounting/preview · GET|POST /accounting/exports
+GET   /accounting/exports/:id/file[?format=csv&sheet=sales|receipts|purchases]
 GET|POST /assets · GET|PATCH /assets/:id · POST /assets/:id/meters
 GET|POST /assets/:id/meters/:key/readings
 GET   /pm/schedules[?due=1] · /pm/schedules/:id · /pm/forecast · POST /pm/schedules · PATCH /pm/schedules/:id
@@ -253,8 +276,9 @@ The generated OpenAPI reference is served at /api/docs (API_DOCS).
 
 ## Design system
 
-Radar-console identity in Company navy/red. All brand tokens live in
-`apps/web/app/globals.css` — a one-file swap when the official brand guide is applied.
+Radar-console identity in Company navy/red, dark by default with a light theme. All tokens
+live in `apps/web/app/globals.css` (both themes meet WCAG AA contrast); each organisation can
+set its own logo and accent colour in *Settings*, without a rebuild.
 Typography: Rajdhani (display) · IBM Plex Sans (body) · IBM Plex Mono (refs/telemetry).
 Signature elements: the operations radar (each blip a live open job by branch bearing),
 the QP.44 lifecycle rail, count-up KPIs, telemetry ticker, staggered reveals — all

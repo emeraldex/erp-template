@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, download } from "@/lib/api";
+import { fmtDateTime } from "@/lib/format";
 import { useVocab } from "@/lib/vocab";
 import { Button, EmptyState, PageHeader, Panel, Table, Td, Tr } from "@/components/ui";
 
@@ -108,7 +109,7 @@ export default function AccountingPage() {
                 <Td className="mono">{b.sales}</Td>
                 <Td className="mono">{b.receipts}</Td>
                 <Td className="mono">{b.purchases}</Td>
-                <Td><span className="text-xs">{b.createdBy}</span><span className="mono block text-[10px] text-dim">{b.createdAt.slice(0, 16).replace("T", " ")}</span></Td>
+                <Td><span className="text-xs">{b.createdBy}</span><span className="mono block text-[10px] text-dim">{fmtDateTime(b.createdAt)}</span></Td>
                 <Td>
                   <span className="flex flex-wrap gap-2">
                     <button className="mono text-[10px] tracking-widest text-trace hover:underline" onClick={() => get(b, "xlsx")}>EXCEL</button>

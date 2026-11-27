@@ -159,7 +159,7 @@ Triage (`requests.manage`):
 
 - `GET /requests?status=NEW|ACCEPTED|DECLINED|CANCELLED|ALL&q=`,
   `GET /requests/:id`, `POST /requests` (log one for a caller).
-- `POST /requests/:id/accept` `{ assetId?, category?, site?, jobType?, component? }`,
+- `POST /requests/:id/accept` `{ assetId?, category?, site?, jobType?, component?, assetDown? }`,
   `POST /requests/:id/merge` `{ jobId }`, `POST /requests/:id/decline`
   `{ reason, spam? }`, `POST /requests/:id/messages` `{ body }`,
   `POST /requests/:id/erase`.
@@ -168,6 +168,43 @@ Triage (`requests.manage`):
   `GET /requests/points/posters?codes=&format=poster|stickers`.
 - `GET /jobs/:id/requests` (anyone signed in) — a work order's requesters.
 - `GET /reports/requests?from&to`; `POST /requests/remind` (`org.admin`).
+
+### Money, look, labour, reliability and accounting
+
+Amounts are in the organisation's currency, whatever the field name: `…MYR`
+fields keep their names for compatibility. `GET /config` and `GET /tenant`
+give `currency` (`code`, `symbol`, `decimals`).
+
+- Settings (`org.admin`): `GET /settings/currencies`,
+  `PATCH /settings/currency { code }` (400 once money is recorded),
+  `PATCH /settings/brand { accent, defaultTheme }`,
+  `PUT /settings/logo` (multipart `file`, PNG/JPEG ≤ 512 KB),
+  `DELETE /settings/logo`, `PATCH /settings/maintenance { pmGraceDays }`.
+  `GET /tenant/logo` is public.
+- Labour (module `labour`): `GET /jobs/:id/time`,
+  `POST /jobs/:id/time { minutes, workDate?, note?, userId? }` (honours
+  `X-Client-Op`), `PATCH /time/:id`, `DELETE /time/:id`,
+  `GET /jobs/:id/cost`; with `labour.manage`: `GET|PUT /labour/rates
+  { defaultRate, roleRates }`, `PUT /labour/people/:id/rate { hourlyRate }`,
+  `GET /reports/labour?from&to[&format=csv]`. Rates and costs are left out
+  (or `null`) without `labour.manage`.
+- Reliability: `POST /jobs { …, assetId, assetDown: true }` records downtime
+  until the work is done; `GET /assets/:id/reliability[?months=12]`;
+  `GET /reports/reliability?from&to[&format=csv]` (`reports.maintenance`).
+- Asset import (`assets.manage`): `POST /assets/import[?dryRun=1]`, multipart
+  `file` (CSV) → `{ rows, created, updated, meters, errors: [{ row, message }] }`.
+- Accounting (`accounting.export`, module `invoicing`):
+  `GET|PUT /accounting/settings`, `GET /accounting/preview?from&to`,
+  `GET /accounting/exports`, `POST /accounting/exports { from, to,
+  includeExported? }`, `GET /accounting/exports/:id/file[?format=csv&sheet=sales|receipts|purchases]`.
+
+```bash
+# Log 90 minutes on a work order, then read its cost
+curl -s -X POST "https://acme.erp.example.com/api/v1/jobs/HD-2026-0007/time" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"minutes":90,"note":"Replaced belt"}'
+curl -s "https://acme.erp.example.com/api/v1/jobs/HD-2026-0007/cost" -H "Authorization: Bearer $TOKEN"
+```
 
 ## Errors
 

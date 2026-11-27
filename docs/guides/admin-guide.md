@@ -34,7 +34,9 @@ This creates the schema, applies migrations, loads a sector pack and prints a
 `--pack general|facilities|fleet|industrial|medical` to start from another
 sector than aviation (see [Setting up for any sector](sectors.md)). Add
 `--demo` instead of `--admin-email` for a demonstration organisation with
-sample data and a demo user per role (password `demo123`).
+sample data and a demo user per role (password `demo123`). Add
+`--currency SGD` (or any code listed in *Settings → Currency and maintenance measures*) to keep the
+organisation's books in another currency than Ringgit.
 
 | Command | What it does |
 |---|---|
@@ -42,6 +44,7 @@ sample data and a demo user per role (password `demo123`).
 | `packs` | The sector packs an organisation can start from |
 | `set-hosts acme acme.erp.example.com erp.acme.example` | Change an organisation's addresses |
 | `suspend acme` / `activate acme` | Block / restore access (data kept) |
+| `set-currency acme SGD [--force]` | Change the currency (`default` for the default organisation). Refused once money is recorded unless `--force`, which relabels amounts without converting them |
 | `migrate-all` | Apply migrations everywhere (runs automatically on start) |
 
 New organisations are picked up by running API servers within 30 seconds.
@@ -202,7 +205,93 @@ only exception) — the reverse proxy in this repository provides it.
   email and phone and stops the tracking link working. The report and work
   orders keep no more than the request's reference.
 
-## 9. Everyday operations
+## 9. Look, money, labour and accounting
+
+**Your look:** *Settings → Look* (administrators).
+
+- **Logo:** PNG or JPEG, at most 512 KB and at least 64 pixels on the short
+  side. A wide logo on a transparent background works best. It appears in
+  the sidebar, on the sign-in page, the phone app, the request portal, and
+  on invoices, delivery notes, work order cards and posters. SVG is not
+  accepted, because an SVG file can carry scripts.
+- **Brand colour:** replaces the red on buttons, links and the active menu
+  item. A colour on which white text would be hard to read (below 4.5:1) is
+  refused; choose a darker shade.
+- **Default theme:** dark, light, or "match the device". Each person can
+  still choose their own in the top bar (phone: *More → Appearance*). The
+  choice is kept on their device.
+
+**Currency:** *Settings → Currency and maintenance measures* (administrators).
+
+- **Choosing it:** pick it before anyone records an amount. Once there is an
+  invoice, a quotation, a costed stock movement or costed time, the setting
+  is locked, because changing it would relabel amounts without converting
+  them. If the wrong currency was chosen during setup, `set-currency … --force`
+  relabels everything (see *Organisations* above).
+- **Where it applies:** every screen, report, PDF and the amount in words use
+  it. Tax is rounded to the currency's decimals: none for rupiah, dong and
+  yen.
+- **For integrators:** API fields keep their `…MYR` names. They hold the
+  organisation's currency.
+
+**Preventive grace days:** the second field in the same panel.
+
+- Preventive work done up to this many days after its due date counts as on
+  time. The default is 7.
+- It feeds the reliability report and the dashboard.
+
+**Labour rates:** *Settings → Labour rates*. You need the permission to
+set rates (`labour.manage`); new organisations give it to supervisors and managers.
+
+- **Which rate applies:** a person's own rate is used first, then their
+  role's rate, then the organisation default.
+- **Rates are kept with the time:** time already logged keeps the rate it was
+  logged at.
+- **Who sees money:** only people with `labour.manage` see rates and
+  labour cost. Everyone else sees hours only.
+- **Switching it on:** the *Labour* module is under *Settings → Your sector →
+  Modules*. It is off for aviation organisations and for organisations
+  created before this release. Give `labour.log` (log your own time) to the
+  people who should record time, in *Workflow editor → Roles & permissions*.
+
+**Breakdowns and reliability**
+
+- **Recording downtime:** tick *out of action* when registering work,
+  accepting a request, or reporting from the phone. The asset is set out of
+  service, and downtime is recorded until that work is done or the asset is
+  put back in service.
+- **Job types:** the reliability figures treat job types as corrective or
+  preventive by their key (`CORRECTIVE`, `PREVENTIVE`). If you renamed or
+  added types, set each type's `meaning` in its dictionary entry.
+- **The report:** *Reports → Asset reliability* needs `reports.maintenance`.
+- **Loading the register:** *Assets → Import CSV*. Download the template,
+  fill it in a spreadsheet, and save it as CSV. Every row is checked before
+  anything is saved.
+
+**Accounting export:** *Finance → Accounting export*. You need
+`accounting.export`; new organisations give it to finance and
+managers.
+
+1. Enter the codes from your chart of accounts under *Account codes*. Revenue
+   can differ by invoicing stream.
+2. Each month, choose the period and *Create batch*. A batch holds:
+   - tax invoices raised;
+   - payments recorded;
+   - goods received on orders;
+   - vendor repairs closed.
+3. Download it as Excel, or as one CSV per sheet, and import it into your
+   accounting system.
+
+Things to know:
+
+- **Nothing twice:** an item goes into one batch only, so nothing is posted
+  twice. If a file was lost or rejected, tick *Include items already
+  exported* to make a repeat batch.
+- **Downloading again:** a batch downloads the same way every time, with the
+  codes in force when it was made.
+- **Not included:** invoices without a tax invoice number.
+
+## 10. Everyday operations
 
 - **Health**: `GET /api/v1/health` for monitoring.
 - **Logs**: one JSON line per request in production.
@@ -213,7 +302,7 @@ only exception) — the reverse proxy in this repository provides it.
 - **Upgrades**: pull the new version and rebuild; migrations run on start.
   Take a backup first.
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 | Symptom | Likely cause |
 |---|---|
@@ -226,4 +315,10 @@ only exception) — the reverse proxy in this repository provides it.
 | The request page says *not available* | The request portal module is off — *Settings → Modules* |
 | Requesters get no emails | `SMTP_URL` not set, or they gave only a phone number — the tracking page still works |
 | *Too many requests* for many people at once | Everyone shares one address through a proxy — set `TRUST_PROXY` |
+| *Currency is locked* | Money has been recorded; use `tenants-cli set-currency … --force` only to fix a wrong setup choice |
+| Logo refused | Not PNG or JPEG, larger than 512 KB, or smaller than 64 px on a side |
+| *White text on this colour is hard to read* | Choose a darker brand colour |
+| People cannot log time | The *Labour* module is off, or their role lacks `labour.log` |
+| Labour cost shows as blank | The person viewing lacks `labour.manage`, by design |
+| *Nothing new to export for that period* | Everything in the period is in an earlier batch; tick *Include items already exported* to repeat |
 | Alerts but no emails | `SMTP_URL` not set, or the mail server refused — see the API log |

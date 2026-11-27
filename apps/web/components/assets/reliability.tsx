@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { fmtMoney } from "@/lib/format";
+import { fmtDateTime, fmtMoney } from "@/lib/format";
 import { Button, Panel } from "@/components/ui";
 
 type Spell = { id: number; fromAt: string; toAt: string | null; jobId: string | null; reason: string; hours: number };
@@ -14,7 +14,7 @@ type Reliability = {
   cost: number | null; down: boolean; downtime: Spell[];
 };
 
-const when = (iso: string) => iso.slice(0, 16).replace("T", " ");
+const when = fmtDateTime;
 const hrs = (n: number | null) => (n === null ? "—" : n >= 48 ? `${Math.round(n / 24)} d` : `${n} h`);
 
 function Figure({ label, value, hint }: { label: string; value: string; hint?: string }) {
