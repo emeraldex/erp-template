@@ -60,7 +60,7 @@ export const AVIATION: Pack = {
     { key: 'PURCHASING', label: 'Purchasing (PcE)', labelMs: 'Perolehan', meta: { capabilities: ['procurement.quote', 'registers.propose', 'registers.evaluate'] } },
     { key: 'PCE', label: 'Production control (PCE)', labelMs: 'Kawalan pengeluaran', meta: { capabilities: ['jobs.assign', 'priority.raise', 'priority.close', 'invoices.create', 'invoices.documents', 'registers.propose', 'registers.evaluate', 'reports.billing', 'reports.payments'] } },
     { key: 'QUALITY', label: 'Quality (QAD / JTP)', labelMs: 'Kualiti', meta: { capabilities: ['workflow.edit', 'registers.evaluate', 'registers.approve', 'incidents.manage', 'tools.handle', 'reports.audit'] } },
-    { key: 'FINANCE', label: 'Finance', labelMs: 'Kewangan', meta: { capabilities: ['invoices.create', 'invoices.documents', 'reports.billing', 'reports.payments'] } },
+    { key: 'FINANCE', label: 'Finance', labelMs: 'Kewangan', meta: { capabilities: ['invoices.create', 'invoices.documents', 'reports.billing', 'reports.payments', 'accounting.export'] } },
     { key: 'BILLING', label: 'Billing', labelMs: 'Bil', meta: { capabilities: ['invoices.create', 'invoices.documents', 'reports.billing', 'reports.payments'] } },
   ],
   dictionaries: {

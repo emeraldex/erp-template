@@ -30,7 +30,14 @@ export function parsePeriod(from?: string, to?: string, now = new Date()): Perio
 /** When the invoice was drafted (its first audit entry). */
 export const draftedOn = (i: Invoice) => (i.audit[0]?.at ?? i.statusSince).slice(0, 10);
 /** Date on the tax invoice (F311 record), if raised. */
-export const taxInvoiceDate = (i: Invoice) => i.records.find((r) => r.formNo === 'F311')?.date;
+/** When the tax invoice was raised: the record carrying its number, else the step that entered it. */
+export const taxInvoiceDate = (i: Invoice): string | undefined => {
+  if (!i.f311Ref) return i.records.find((r) => r.formNo === 'F311')?.date;
+  const rec = i.records.find((r) => r.refNo === i.f311Ref) ?? i.records.find((r) => r.formNo === 'F311');
+  if (rec) return rec.date;
+  const step = i.audit.find((a) => a.fields && Object.values(a.fields).includes(i.f311Ref!));
+  return step?.at.slice(0, 10);
+};
 
 /** Days an unpaid invoice has been outstanding, counted from the tax invoice date (or drafting). */
 export function daysOutstanding(i: Invoice, now: number): number | null {

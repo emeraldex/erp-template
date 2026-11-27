@@ -35,8 +35,8 @@ const CAPS: Record<keyof typeof ROLE, Capability[]> = {
   TECHNICIAN: ['meters.record', 'tools.handle', 'stock.issue', 'labour.log'],
   STORES: ['tools.handle', 'stock.manage', 'stock.issue'],
   PURCHASING: ['procurement.quote', 'registers.propose', 'registers.evaluate'],
-  FINANCE: ['invoices.create', 'invoices.documents', 'reports.billing', 'reports.payments'],
-  MANAGER: ['workflow.edit', 'jobs.assign', 'requests.manage', 'labour.manage', 'stock.manage', 'stock.issue', 'priority.raise', 'priority.close', 'registers.evaluate', 'registers.approve', 'assets.manage', 'invoices.documents', 'reports.billing', 'reports.audit', 'reports.maintenance', 'alerts.escalation'],
+  FINANCE: ['invoices.create', 'invoices.documents', 'reports.billing', 'reports.payments', 'accounting.export'],
+  MANAGER: ['workflow.edit', 'jobs.assign', 'requests.manage', 'labour.manage', 'stock.manage', 'stock.issue', 'priority.raise', 'priority.close', 'registers.evaluate', 'registers.approve', 'assets.manage', 'invoices.documents', 'reports.billing', 'reports.audit', 'reports.maintenance', 'accounting.export', 'alerts.escalation'],
 };
 
 export function roles(titles: Record<keyof typeof ROLE, [string, string]>): Entry<RoleMeta>[] {

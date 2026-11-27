@@ -61,6 +61,13 @@ export interface Settings {
   labour: LabourSettings;
   /** Preventive work counts as on time if done by its due date plus this many days. */
   maintenance: { pmGraceDays: number };
+  /** Account codes for the accounting export. */
+  accounting: AccountingSettings;
+}
+
+export interface AccountingSettings {
+  receivables: string; bank: string; outputTax: string; taxCode: string; purchases: string; stock: string;
+  revenueDefault: string; revenueByStream: Record<string, string>;
 }
 
 export interface LabourSettings { defaultRate: number | null; roleRates: Record<string, number> }
@@ -93,6 +100,7 @@ export const DEFAULT_SETTINGS: Settings = {
   brand: { accent: null, defaultTheme: 'dark' },
   labour: { defaultRate: null, roleRates: {} },
   maintenance: { pmGraceDays: 7 },
+  accounting: { receivables: '1200', bank: '1000', outputTax: '2200', taxCode: 'SR', purchases: '5000', stock: '1300', revenueDefault: '4000', revenueByStream: {} },
 };
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : undefined);
@@ -132,6 +140,7 @@ export class SettingsService {
         brand: { ...DEFAULT_SETTINGS.brand, ...(byKey.brand ?? {}) },
         labour: { ...DEFAULT_SETTINGS.labour, ...(byKey.labour ?? {}) },
         maintenance: { ...DEFAULT_SETTINGS.maintenance, ...(byKey.maintenance ?? {}) },
+        accounting: { ...DEFAULT_SETTINGS.accounting, ...(byKey.accounting ?? {}) },
       },
       logo: (byKey.logo as Logo | undefined)?.data ? (byKey.logo as Logo) : null,
       loadedAt: Date.now(),
@@ -282,6 +291,32 @@ export class SettingsService {
       next.pmGraceDays = n;
     }
     await this.save('maintenance', next, by);
+    return next;
+  }
+
+  get accounting(): AccountingSettings {
+    return { ...this.cache.accounting, revenueByStream: { ...this.cache.accounting.revenueByStream } };
+  }
+
+  async updateAccounting(patch: Partial<AccountingSettings>, streams: string[], by: string): Promise<AccountingSettings> {
+    const code = (v: unknown, label: string) => {
+      const s = String(v ?? '').trim();
+      if (!/^[A-Za-z0-9][A-Za-z0-9 ./-]{0,23}$/.test(s)) throw new BadRequestException(`${label}: 1–24 letters, digits, spaces or . / -`);
+      return s;
+    };
+    const next = this.accounting;
+    const labels: [keyof AccountingSettings, string][] = [['receivables', 'Receivables account'], ['bank', 'Bank account'], ['outputTax', 'Output tax account'], ['taxCode', 'Tax code'], ['purchases', 'Purchases account'], ['stock', 'Stock account'], ['revenueDefault', 'Revenue account']];
+    for (const [k, label] of labels) if (patch[k] !== undefined) (next as unknown as Record<string, string>)[k] = code(patch[k], label);
+    if (patch.revenueByStream !== undefined) {
+      if (typeof patch.revenueByStream !== 'object' || patch.revenueByStream === null) throw new BadRequestException('revenueByStream: { STREAM: account }');
+      const out: Record<string, string> = {};
+      for (const [stream, v] of Object.entries(patch.revenueByStream)) {
+        if (!streams.includes(stream)) throw new BadRequestException(`Unknown invoicing stream ${stream}`);
+        if (v !== null && v !== '') out[stream] = code(v, `Revenue account for ${stream}`);
+      }
+      next.revenueByStream = out;
+    }
+    await this.save('accounting', next, by);
     return next;
   }
 

@@ -989,3 +989,33 @@ model AssetDowntime {
   @@index([jobId])
   @@map("asset_downtime")
 }
+
+/// A batch of figures handed to the accounting system. Each item remembers
+/// what was exported, so nothing goes out twice and a batch can be re-downloaded.
+model AccountingExport {
+  id              String                 @id
+  fromDate        DateTime               @db.Date
+  toDate          DateTime               @db.Date
+  includeExported Boolean                @default(false)
+  createdBy       String
+  createdAt       DateTime               @default(now())
+  items           AccountingExportItem[]
+
+  @@map("accounting_exports")
+}
+
+model AccountingExportItem {
+  id       Int              @id @default(autoincrement())
+  exportId String
+  export   AccountingExport @relation(fields: [exportId], references: [id], onDelete: Cascade)
+  /// SALE, RECEIPT or PURCHASE.
+  kind     String
+  /// The invoice, request or vendor repair it came from.
+  ref      String
+  /// The row as exported.
+  data     Json
+
+  @@index([kind, ref])
+  @@index([exportId])
+  @@map("accounting_export_items")
+}

@@ -62,6 +62,7 @@ export const CAPABILITIES = {
   'labour.manage': 'Log or correct anyone\'s time, set hourly rates, see labour cost',
   'reports.billing': 'Revenue and outstanding-payment reports',
   'reports.payments': 'Payment-system export files',
+  'accounting.export': 'Export sales, receipts and purchases for the accounting system; set account codes',
   'reports.audit': 'Audit trail, retention report, attachment checks',
   'reports.maintenance': 'Reliability: downtime, repair time, preventive compliance and cost per asset',
   'alerts.escalation': 'Receive escalations for every SLA breach',
