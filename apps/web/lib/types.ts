@@ -107,7 +107,11 @@ export type DemandStatus = string;
 export interface Quotation {
   supplierId: string;
   supplier: string;
+  /** In the organisation's currency (converted when quoted in another). */
   priceMYR: number;
+  currency?: string;
+  price?: number;
+  fxRate?: number;
   eddDays: number;
   remarks?: string;
 }
@@ -122,6 +126,8 @@ export interface Demand {
   forStore?: string;
   /** Cost per unit when received into stock. */
   unitCost?: number;
+  /** Bought in another currency: fixed at the rate on the day the goods arrived. */
+  purchase?: { currency: string; rate: number; amount: number; amountBase: number };
   partDescription: string;
   partNo: string;
   qty: number;
@@ -173,6 +179,8 @@ export interface Car {
 export interface Partner {
   id: string;
   name: string;
+  /** Currency they usually quote in. */
+  currency?: string;
   type: PartnerType;
   status: PartnerStatus;
   country: string;
@@ -246,6 +254,15 @@ export interface Invoice {
   salesPerfRef?: string;
   paymentRef?: string;
   paidAt?: string;
+  /** Raised in another currency (the …MYR amounts are then the organisation-currency equivalents). */
+  currency?: string;
+  fxRate?: number;
+  amount?: number;
+  tax?: number;
+  total?: number;
+  paidRate?: number;
+  paidBase?: number;
+  fxGain?: number;
   outstanding: boolean;
   raisedBy: string;
   branch: Branch;
@@ -297,7 +314,7 @@ export interface TransitionRule<S extends string = string> {
   effects?: { type: string; params?: Record<string, unknown> }[];
 }
 
-export type FieldType = "text" | "number" | "date" | "user" | "photo" | "signature" | "part" | "store";
+export type FieldType = "text" | "number" | "date" | "user" | "photo" | "signature" | "part" | "store" | "money";
 
 /** A field on a workflow step: mandatory unless marked optional. Untyped fields are free text. */
 export interface StepField { key: string; label: string; formNo?: string; type?: FieldType; optional?: boolean }

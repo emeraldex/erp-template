@@ -6,6 +6,7 @@ import { useLang } from "@/lib/i18n";
 import { photoName, resizePhoto } from "@/lib/images";
 import type { Attachment, Part, StaffMember, StepField } from "@/lib/types";
 import { useVocab } from "@/lib/vocab";
+import { MoneyInput, moneyFromFields, moneyToFields } from "@/lib/fx";
 
 let staffCache: Promise<StaffMember[]> | null = null;
 /** Active staff for person pickers, fetched once per page load. */
@@ -53,6 +54,8 @@ export interface StepFormProps {
   /** Bigger inputs for phones. */
   large?: boolean;
   disabled?: boolean;
+  /** Money fields must be in this currency (an invoice's own); otherwise one can be chosen. */
+  moneyCurrency?: string;
 }
 
 /**
@@ -60,7 +63,7 @@ export interface StepFormProps {
  * pad, date picker, staff picker, camera, or signature pad. Photo and
  * signature fields upload straight away and hold the attachment id.
  */
-export function StepForm({ fields, values, onChange, entity, entityId, large, disabled }: StepFormProps) {
+export function StepForm({ fields, values, onChange, entity, entityId, large, disabled, moneyCurrency }: StepFormProps) {
   const { lang } = useLang();
   const set = (key: string, v: string) => onChange({ ...values, [key]: v });
   const input = `mono w-full rounded-md border hairline bg-panel text-fg outline-none transition-colors focus:border-trace disabled:opacity-60 ${
@@ -71,13 +74,18 @@ export function StepForm({ fields, values, onChange, entity, entityId, large, di
       {fields.map((f) => {
         const type = f.type ?? "text";
         const wide = type === "photo" || type === "signature";
+        // A money field holds several inputs (each labelled), so it is not wrapped in one label.
+        const Wrap = type === "money" ? "div" : "label";
         return (
-          <label key={f.key} className={`block ${wide && !large ? "sm:col-span-2" : ""}`}>
+          <Wrap key={f.key} className={`block ${wide && !large ? "sm:col-span-2" : ""}`}>
             <span className={`mb-1 block tracking-wide text-steel ${large ? "text-sm" : "mono text-[10.5px] tracking-widest"}`}>
               {f.formNo && <span className="mr-1.5 text-brand-bright">{f.formNo}</span>}
               {f.label} {f.optional ? <span className="text-dim">({T.optional[lang]})</span> : "*"}
             </span>
-            {type === "number" ? (
+            {type === "money" ? (
+              <MoneyInput value={moneyFromFields(values, f.key)} onChange={(m) => onChange(moneyToFields(values, f.key, m, moneyCurrency))} lockedCurrency={moneyCurrency}
+                className={input} disabled={disabled} label={f.label} />
+            ) : type === "number" ? (
               <input type="text" inputMode="decimal" value={values[f.key] ?? ""} disabled={disabled} onChange={(e) => set(f.key, e.target.value)} className={input} />
             ) : type === "date" ? (
               <input type="date" value={values[f.key] ?? ""} disabled={disabled} onChange={(e) => set(f.key, e.target.value)} className={input} />
@@ -94,7 +102,7 @@ export function StepForm({ fields, values, onChange, entity, entityId, large, di
             ) : (
               <input value={values[f.key] ?? ""} disabled={disabled} onChange={(e) => set(f.key, e.target.value)} className={input} />
             )}
-          </label>
+          </Wrap>
         );
       })}
     </div>

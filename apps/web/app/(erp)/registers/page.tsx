@@ -1,5 +1,7 @@
 "use client";
 
+import { offered, useRates } from "@/lib/fx";
+import { currencyCode } from "@/lib/format";
 import { useSession } from "@/lib/use-session";
 import { useEffect, useMemo, useState } from "react";
 import { api, getWithFallback } from "@/lib/api";
@@ -42,6 +44,11 @@ export default function RegistersPage() {
   }, []);
 
   const patch = (u: Partner) => setRows((p) => p.map((x) => (x.id === u.id ? u : x)));
+  const offeredCodes = offered(useRates());
+  async function setCurrency(id: string, currency: string) {
+    try { patch(await api.patch<Partner>(`/registers/partners/${encodeURIComponent(id)}/currency`, { currency })); }
+    catch (e) { setError((e as Error).message); }
+  }
   const filtered = useMemo(() => rows.filter((p) => p.type === tab), [rows, tab]);
   const open = filtered.find((p) => p.id === openId);
 
@@ -108,6 +115,15 @@ export default function RegistersPage() {
               <p className="mono mt-0.5 text-[10.5px] tracking-widest text-steel">
                 Non-conformances {open.nonConformances} ÷ factors {open.factorsEvaluated} × 100% = {perfPct(open)}%
               </p>
+              {(can("registers.propose") || can("procurement.quote")) && offeredCodes.length > 1 ? (
+                <label className="mt-2 flex items-center gap-2 text-xs text-steel">
+                  Usually quotes in
+                  <select value={open.currency ?? ""} onChange={(e) => setCurrency(open.id, e.target.value)} className="mono rounded-md border hairline bg-panel px-2 py-1 text-xs text-fg">
+                    <option value="">{currencyCode()} (ours)</option>
+                    {offeredCodes.filter((c) => c !== currencyCode()).map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </label>
+              ) : open.currency ? <p className="mt-2 text-xs text-steel">Usually quotes in {open.currency}</p> : null}
             </div>
             <div className="flex flex-wrap gap-1.5">
               {open.evaluationRef && <FormChip formNo={aviation ? (open.type === "SUPPLIER" ? "F225" : "F228") : "Evaluation"} refNo={open.evaluationRef} />}

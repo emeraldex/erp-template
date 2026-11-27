@@ -4,11 +4,12 @@ import { useSession } from "@/lib/use-session";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, getWithFallback } from "@/lib/api";
-import { Demand, DemandStatus, Part, Partner, Quotation } from "@/lib/types";
+import { Demand, DemandStatus, Part, Partner } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
 import { useVocab } from "@/lib/vocab";
 import { useLang } from "@/lib/i18n";
-import { currencyCode, fmtMYR } from "@/lib/format";
+import { fmtMYR, fmtMoney } from "@/lib/format";
+import { Dual, MoneyInput, MoneyValue } from "@/lib/fx";
 import { Button, MetaPill, OfflineNotice, PageHeader, Panel } from "@/components/ui";
 import { AuditTrail, RecordsList, TransitionActions } from "@/components/workflow";
 
@@ -24,7 +25,8 @@ export default function DemandsPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [quote, setQuote] = useState({ supplierId: "", priceMYR: "", eddDays: "" });
+  const [quote, setQuote] = useState({ supplierId: "", eddDays: "" });
+  const [price, setPrice] = useState<MoneyValue>({ amount: "", currency: "", rate: "", confirm: false });
   const [show, setShow] = useState<"all" | "job" | "stock">("all");
   const [stockOf, setStockOf] = useState<Record<string, Part | null>>({});
 
@@ -77,12 +79,13 @@ export default function DemandsPage() {
     if (!supplier) return;
     setBusy(true); setError(null);
     try {
-      const q: Quotation = {
-        supplierId: supplier.id, supplier: supplier.name,
-        priceMYR: Number(quote.priceMYR), eddDays: Number(quote.eddDays),
-      };
-      patch(await api.post<Demand>(`/demands/${dm.id}/quotations`, q));
-      setQuote({ supplierId: "", priceMYR: "", eddDays: "" });
+      patch(await api.post<Demand>(`/demands/${dm.id}/quotations`, {
+        supplierId: supplier.id, supplier: supplier.name, eddDays: Number(quote.eddDays),
+        price: Number(price.amount.replace(/,/g, "")), currency: price.currency,
+        ...(price.rate.trim() ? { rate: Number(price.rate), confirm: price.confirm } : {}),
+      }));
+      setQuote({ supplierId: "", eddDays: "" });
+      setPrice({ amount: "", currency: "", rate: "", confirm: false });
     } catch (e) {
       setError(offline ? "Actions need the live API — start apps/api." : (e as Error).message);
     } finally { setBusy(false); }
@@ -150,7 +153,8 @@ export default function DemandsPage() {
                             return (
                               <div key={q.supplierId} className={`rounded-md border p-3 ${selected ? "border-phosphor/50 bg-phosphor/5" : "hairline bg-ink-deep/40"}`}>
                                 <p className="text-sm">{q.supplier}</p>
-                                <p className="display mt-1 text-lg font-bold">{fmtMYR(q.priceMYR)}</p>
+                                <p className="display mt-1 text-lg font-bold">{q.currency ? `${q.currency} ${q.price?.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : fmtMYR(q.priceMYR)}</p>
+                                {q.currency && <p className="mono text-[10.5px] text-steel">= {fmtMoney(q.priceMYR)} at {q.fxRate}</p>}
                                 <p className="mono text-[10.5px] tracking-widest text-steel">
                                   EDD {q.eddDays}D {cheapest && <span className="text-phosphor">· LOWEST</span>} {selected && <span className="text-phosphor">· SELECTED</span>}
                                 </p>
@@ -163,20 +167,25 @@ export default function DemandsPage() {
                         <div className="flex flex-wrap items-end gap-2 rounded-md border hairline bg-ink-deep/40 p-3">
                           <label className="block">
                             <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Approved supplier{ref(" (F224)")}</span>
-                            <select value={quote.supplierId} onChange={(e) => setQuote({ ...quote, supplierId: e.target.value })} className="mono rounded-md border hairline bg-panel px-3 py-2 text-xs text-fg outline-none focus:border-trace">
+                            <select value={quote.supplierId} onChange={(e) => {
+                              setQuote({ ...quote, supplierId: e.target.value });
+                              // Their usual currency, if they have one.
+                              const usual = partners.find((p) => p.id === e.target.value)?.currency;
+                              setPrice((m) => ({ ...m, currency: usual ?? "", rate: "", confirm: false }));
+                            }} className="mono rounded-md border hairline bg-panel px-3 py-2 text-xs text-fg outline-none focus:border-trace">
                               <option value="">Select…</option>
                               {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                             </select>
                           </label>
-                          <label className="block">
-                            <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Price ({currencyCode()})</span>
-                            <input value={quote.priceMYR} onChange={(e) => setQuote({ ...quote, priceMYR: e.target.value })} className="mono w-28 rounded-md border hairline bg-panel px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
-                          </label>
+                          <div className="block">
+                            <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Price (whole request)</span>
+                            <MoneyInput value={price} onChange={setPrice} label="Price" className="mono w-28 rounded-md border hairline bg-panel px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
+                          </div>
                           <label className="block">
                             <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">EDD (days)</span>
                             <input value={quote.eddDays} onChange={(e) => setQuote({ ...quote, eddDays: e.target.value })} className="mono w-20 rounded-md border hairline bg-panel px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
                           </label>
-                          <Button variant="ghost" disabled={busy || !quote.supplierId || !quote.priceMYR || !quote.eddDays} onClick={() => addQuotation(dm)}>
+                          <Button variant="ghost" disabled={busy || !quote.supplierId || !price.amount || !quote.eddDays} onClick={() => addQuotation(dm)}>
                             + Record quotation
                           </Button>
                         </div>
@@ -191,6 +200,7 @@ export default function DemandsPage() {
                         <> · in stock: {held.levels.filter((l) => l.qty > 0).map((l) => `${l.qty} ${label("unit", held.unit)} in ${l.storeLabel}`).join(", ") || "none"}</>
                       )}
                       {dm.unitCost != null && <> · received{dm.forStore ? ` into ${label("store", dm.forStore)}` : ""} at {fmtMYR(dm.unitCost)} each</>}
+                      {dm.purchase && <> · bought for <Dual amount={dm.purchase.amount} currency={dm.purchase.currency} base={dm.purchase.amountBase} rate={dm.purchase.rate} /> (rate on receipt)</>}
                     </p>
                   )}
 

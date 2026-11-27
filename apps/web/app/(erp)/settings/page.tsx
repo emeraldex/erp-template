@@ -9,6 +9,7 @@ import { DEFAULT_TERMS, useVocab } from "@/lib/vocab";
 import { Button, PageHeader, Panel } from "@/components/ui";
 import { BrandPanel, MoneyPanel } from "@/components/settings/look-and-money";
 import { LabourRatesPanel } from "@/components/settings/labour-rates";
+import { ExchangeRatesPanel } from "@/components/settings/exchange-rates";
 
 const inputClass = "mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace disabled:opacity-60";
 
@@ -110,6 +111,7 @@ export default function SettingsPage() {
       {isAdmin && settings.brand && <BrandPanel initial={settings.brand} />}
       {isAdmin && <MoneyPanel graceDays={settings.maintenance?.pmGraceDays ?? 7} />}
       {settings.modules?.labour && can("labour.manage") && <LabourRatesPanel />}
+      {can("fx.manage") && <ExchangeRatesPanel />}
       {isAdmin && settings.modules?.requests && settings.portal && <PortalSettingsPanel initial={settings.portal} />}
       {isAdmin && <SsoSettings />}
     </div>
