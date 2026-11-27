@@ -3,6 +3,7 @@ import { AssetsService } from '../assets/assets.service';
 import { PmService } from '../assets/pm.service';
 import { StockService } from '../stock/stock.service';
 import { JobDoneHook } from '../requests/job-hook';
+import { DowntimeService } from '../assets/downtime.service';
 import { StoreService } from '../common/store.service';
 import { applyTransition } from '../common/transition.engine';
 import { Branch, ChecklistItem, Job, JobStatus, PriorityType, RepairRoute, Role } from '../common/types';
@@ -23,6 +24,7 @@ export class JobsService {
     @Optional() private readonly pm?: PmService,
     @Optional() private readonly stock?: StockService,
     @Optional() private readonly requests?: JobDoneHook,
+    @Optional() private readonly downtime?: DowntimeService,
   ) {}
 
   /** Parts used on a job (issues net of returns) with their cost. */
@@ -51,9 +53,11 @@ export class JobsService {
   async register(input: {
     component?: string; partNo?: string; serialNo?: string;
     category: string; originUnit: string; repairUnit?: Branch;
-    assetId?: string; jobType?: string;
+    assetId?: string; jobType?: string; assetDown?: boolean | string;
   }, actor: Actor): Promise<Job> {
-    const { assetId, jobType: requestedType, ...rest } = input;
+    const { assetId, jobType: requestedType, assetDown: down, ...rest } = input;
+    const assetDown = down === true || down === 'true';
+    if (assetDown && !assetId) throw new BadRequestException('Say which asset is out of action');
     // A registered asset fills in what the job is about and where.
     const asset = assetId ? await this.assets?.brief(assetId) : undefined;
     if (assetId && !asset) throw new BadRequestException(`Asset ${assetId} not found`);
@@ -81,6 +85,7 @@ export class JobsService {
       ...dto,
       jobType,
       ...(asset ? { assetId: asset.id } : {}),
+      ...(assetDown ? { assetDown: true } : {}),
       status: this.store.initialStatus('JOB'),
       location: initialLocation,
       receivedAt: now,
@@ -93,6 +98,7 @@ export class JobsService {
     };
     this.store.newJob(job);
     await this.store.save(job);
+    if (assetDown && asset && this.downtime) await this.downtime.open(asset.id, { jobId: job.id, reason: `Out of action — ${job.id}`, by: actor.name });
     return job;
   }
 
@@ -111,6 +117,7 @@ export class JobsService {
       if (open.length) throw new BadRequestException(`Checklist incomplete: ${open.map((c) => c.label).join('; ')}`);
     }
     const rule = applyTransition(job, this.store.jobTransitions, to, fields ?? {}, actor);
+    if (toPhase === 'done' && fromPhase !== 'done') job.doneAt = new Date().toISOString();
     await this.store.checkStepFields(rule, fields ?? {}, job, 'JOB', job.id);
     if (fields?.indentRef) job.indentRef = fields.indentRef;
 
@@ -128,6 +135,8 @@ export class JobsService {
       if (toPhase === 'done' && fromPhase !== 'done') await this.pm.completed(job);
       else if (this.store.isFinal('JOB', to) && fromPhase !== 'done') await this.pm.cancelled(job);
     }
+    // The asset is back once the work is done (or closed).
+    if (toPhase !== fromPhase && (toPhase === 'done' || toPhase === 'closed') && fromPhase !== 'done') await this.downtime?.closeForJob(job.id, actor.name);
     // Whoever reported the problem through the portal hears that it is done.
     if (toPhase !== fromPhase && (toPhase === 'done' || toPhase === 'closed')) await this.requests?.jobChanged(job.id, to);
     return job;

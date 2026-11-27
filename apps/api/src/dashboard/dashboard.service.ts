@@ -2,6 +2,7 @@ import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { StoreService } from '../common/store.service';
 import { SettingsService } from '../settings/settings.service';
+import { ReliabilityService } from '../assets/reliability.service';
 import { JobStatus } from '../common/types';
 import { computeBreaches, daysSince, SlaBreach } from './sla';
 
@@ -16,6 +17,7 @@ export class DashboardService {
     private readonly store: StoreService,
     @Optional() private readonly prisma?: PrismaService,
     @Optional() private readonly settings?: SettingsService,
+    @Optional() private readonly reliability?: ReliabilityService,
   ) {}
 
   /** Store places at or below their reorder point (active parts), when stock control is on. */
@@ -50,7 +52,10 @@ export class DashboardService {
   }
 
   async kpis() {
-    const [snap, lowStock, portal] = await Promise.all([this.store.dashboardSnapshot(), this.lowStock(), this.requests()]);
+    const [snap, lowStock, portal, assets] = await Promise.all([
+      this.store.dashboardSnapshot(), this.lowStock(), this.requests(),
+      this.reliability && this.settings?.modules.assets ? this.reliability.dashboard() : Promise.resolve(null),
+    ]);
     const jobs = snap.jobs;
     // Counts work from status phases, so they hold for any sector's workflow.
     const final = new Set(this.store.finalStatuses('JOB'));
@@ -108,6 +113,9 @@ export class DashboardService {
       weeklyClosures: snap.closures,
       lowStock,
       ...portal,
+      /** Assets out of action now, and preventive compliance over 90 days (null when assets are off). */
+      assetsDown: assets?.assetsDown ?? null,
+      pmCompliance90: assets?.pmCompliance90 ?? null,
     };
   }
 }

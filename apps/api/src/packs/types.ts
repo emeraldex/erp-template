@@ -63,6 +63,7 @@ export const CAPABILITIES = {
   'reports.billing': 'Revenue and outstanding-payment reports',
   'reports.payments': 'Payment-system export files',
   'reports.audit': 'Audit trail, retention report, attachment checks',
+  'reports.maintenance': 'Reliability: downtime, repair time, preventive compliance and cost per asset',
   'alerts.escalation': 'Receive escalations for every SLA breach',
 } as const;
 export type Capability = keyof typeof CAPABILITIES;

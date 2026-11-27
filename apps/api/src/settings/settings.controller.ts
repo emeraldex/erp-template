@@ -44,6 +44,13 @@ export class SettingsController {
     await this.settings.removeLogo();
   }
 
+  /** How many days late preventive work may be and still count as on time. */
+  @Patch('maintenance')
+  @Requires('org.admin')
+  maintenance(@Body() body: { pmGraceDays?: number }, @Req() req: { user: AuthUser }) {
+    return this.settings.updateMaintenance(body ?? {}, req.user.name);
+  }
+
   /** The currency the organisation keeps its books in. Locked once amounts are recorded. */
   @Get('currencies')
   async currencies() {

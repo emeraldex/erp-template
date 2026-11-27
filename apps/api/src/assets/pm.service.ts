@@ -238,6 +238,7 @@ export class PmService {
       status: this.store.initialStatus('JOB'), location: initialLocation,
       receivedAt: now, statusSince: now, demandIds: [], records: [],
       jobType: s.jobType, assetId: s.asset.id, pmScheduleId: s.id, checklist,
+      ...(s.nextDueAt ? { pmDueAt: s.nextDueAt.toISOString() } : {}),
       audit: [this.store.audit(PM_ACTOR.name, PM_ACTOR.role, `Raised by ${s.id} — ${s.title} (${due})`, s.instructions ? { instructions: s.instructions } : undefined)],
     };
   }

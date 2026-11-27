@@ -34,7 +34,7 @@ export class JobsController {
   @Post()
   @Requires('jobs.register')
   register(
-    @Body() dto: { component?: string; partNo?: string; serialNo?: string; category: string; originUnit: string; repairUnit?: Branch; assetId?: string; jobType?: string },
+    @Body() dto: { component?: string; partNo?: string; serialNo?: string; category: string; originUnit: string; repairUnit?: Branch; assetId?: string; jobType?: string; assetDown?: boolean },
     @Req() req: any,
   ) {
     return this.svc.register(dto, { name: req.user.name, role: req.user.role });

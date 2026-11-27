@@ -31,12 +31,12 @@ export const ROLE = {
 const CAPS: Record<keyof typeof ROLE, Capability[]> = {
   ADMIN: [],
   HELPDESK: ['jobs.register', 'jobs.assign', 'priority.raise', 'requests.manage'],
-  SUPERVISOR: ['jobs.register', 'jobs.assign', 'requests.manage', 'labour.log', 'labour.manage', 'stock.manage', 'stock.issue', 'priority.raise', 'priority.close', 'assets.manage', 'meters.record', 'incidents.manage', 'tools.handle', 'reports.audit', 'alerts.escalation'],
+  SUPERVISOR: ['jobs.register', 'jobs.assign', 'requests.manage', 'labour.log', 'labour.manage', 'stock.manage', 'stock.issue', 'priority.raise', 'priority.close', 'assets.manage', 'meters.record', 'incidents.manage', 'tools.handle', 'reports.audit', 'reports.maintenance', 'alerts.escalation'],
   TECHNICIAN: ['meters.record', 'tools.handle', 'stock.issue', 'labour.log'],
   STORES: ['tools.handle', 'stock.manage', 'stock.issue'],
   PURCHASING: ['procurement.quote', 'registers.propose', 'registers.evaluate'],
   FINANCE: ['invoices.create', 'invoices.documents', 'reports.billing', 'reports.payments'],
-  MANAGER: ['workflow.edit', 'jobs.assign', 'requests.manage', 'labour.manage', 'stock.manage', 'stock.issue', 'priority.raise', 'priority.close', 'registers.evaluate', 'registers.approve', 'assets.manage', 'invoices.documents', 'reports.billing', 'reports.audit', 'alerts.escalation'],
+  MANAGER: ['workflow.edit', 'jobs.assign', 'requests.manage', 'labour.manage', 'stock.manage', 'stock.issue', 'priority.raise', 'priority.close', 'registers.evaluate', 'registers.approve', 'assets.manage', 'invoices.documents', 'reports.billing', 'reports.audit', 'reports.maintenance', 'alerts.escalation'],
 };
 
 export function roles(titles: Record<keyof typeof ROLE, [string, string]>): Entry<RoleMeta>[] {

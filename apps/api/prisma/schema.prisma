@@ -141,6 +141,12 @@ model Job {
   asset        Asset?    @relation(fields: [assetId], references: [id], onDelete: SetNull)
   /// Set when a preventive-maintenance schedule raised the job.
   pmScheduleId String?
+  /// When the preventive cycle that raised it was due.
+  pmDueAt      DateTime?
+  /// When it last entered a done phase.
+  doneAt       DateTime?
+  /// The asset was out of action when the work was raised.
+  assetDown    Boolean   @default(false)
   /// Checklist items: [{ key, label, required, done, by, at, note }].
   checklist    Json      @default("[]")
   /// The person the work is assigned to (users are never deleted, so no foreign key).
@@ -965,4 +971,21 @@ model TimeEntry {
   @@index([userId, workDate])
   @@index([workDate])
   @@map("time_entries")
+}
+
+/// A spell when an asset was out of action: opened when work says so or the
+/// asset is put out of service, closed when the work is done or it is back.
+model AssetDowntime {
+  id       Int       @id @default(autoincrement())
+  assetId  String
+  fromAt   DateTime
+  toAt     DateTime?
+  jobId    String?
+  reason   String    @default("")
+  openedBy String
+  closedBy String?
+
+  @@index([assetId, fromAt])
+  @@index([jobId])
+  @@map("asset_downtime")
 }

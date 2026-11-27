@@ -596,6 +596,7 @@ export class StoreService {
         receivedAt: new Date(job.receivedAt), statusSince: new Date(job.statusSince),
         indentRef: job.indentRef ?? null, ovId: job.ovId ?? null,
         jobType: job.jobType ?? 'CORRECTIVE', assetId: job.assetId ?? null, pmScheduleId: job.pmScheduleId ?? null,
+        pmDueAt: job.pmDueAt ? new Date(job.pmDueAt) : null, doneAt: job.doneAt ? new Date(job.doneAt) : null, assetDown: !!job.assetDown,
         checklist: (job.checklist ?? []) as never,
         assigneeId: job.assigneeId ?? null, assigneeName: job.assigneeName ?? null,
         assignedAt: job.assignedAt ? new Date(job.assignedAt) : null,
@@ -788,6 +789,7 @@ export class StoreService {
         assigneeId: job.assigneeId ?? null,
         assigneeName: job.assigneeName ?? null,
         assignedAt: job.assignedAt ? new Date(job.assignedAt) : null,
+        doneAt: job.doneAt ? new Date(job.doneAt) : null,
         version: { increment: 1 },
       },
     });

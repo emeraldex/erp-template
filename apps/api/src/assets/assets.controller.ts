@@ -10,6 +10,10 @@ import type { AuthUser } from '../auth/auth.service';
 import { InModule, Requires } from '../auth/roles.decorator';
 import { AssetInput, AssetsService } from './assets.service';
 import { PmService, ScheduleInput } from './pm.service';
+import { ReliabilityService } from './reliability.service';
+import { AssetImportService } from './import.service';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { UploadedFile } from '@nestjs/common';
 
 type Req = { user: AuthUser };
 const who = (req: Req) => ({ name: req.user.name, role: req.user.role });
@@ -19,7 +23,7 @@ const who = (req: Req) => ({ name: req.user.name, role: req.user.role });
 @UseGuards(AuthGuard)
 @InModule('assets')
 export class AssetsController {
-  constructor(private readonly assets: AssetsService, private readonly registry: TenantRegistry) {}
+  constructor(private readonly assets: AssetsService, private readonly registry: TenantRegistry, private readonly reliability: ReliabilityService, private readonly importer: AssetImportService) {}
 
   @Get()
   list(@Query('site') site?: string, @Query('type') type?: string, @Query('status') status?: string, @Query('parentId') parentId?: string, @Query('q') search?: string) {
@@ -35,9 +39,25 @@ export class AssetsController {
     return new StreamableFile(pdf);
   }
 
+  /** POST /assets/import[?dryRun=1] — a CSV file ("file") of assets; checked in full, imported all or nothing. */
+  @Post('import')
+  @HttpCode(200)
+  @Requires('assets.manage')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 1024 * 1024 + 1, files: 1, fields: 2 } }))
+  import(@UploadedFile() file: Express.Multer.File | undefined, @Query('dryRun') dryRun: string | undefined, @Req() req: Req) {
+    return this.importer.run(file?.buffer, dryRun === '1' || dryRun === 'true', who(req));
+  }
+
   @Get(':id')
   get(@Param('id') id: string) {
     return this.assets.get(id);
+  }
+
+  /** The last twelve months: failures, downtime, availability, repair time, preventive compliance, cost; and downtime spells. */
+  @Get(':id/reliability')
+  reliabilityOf(@Param('id') id: string, @Query('months') months?: string) {
+    const n = Math.min(Math.max(Number(months) || 12, 1), 36);
+    return this.reliability.forAsset(id, n);
   }
 
   @Post()

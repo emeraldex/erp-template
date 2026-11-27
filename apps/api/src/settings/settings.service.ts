@@ -59,6 +59,8 @@ export interface Settings {
   brand: BrandSettings;
   /** Cost per hour by role, and the organisation's default (null = labour is not costed). */
   labour: LabourSettings;
+  /** Preventive work counts as on time if done by its due date plus this many days. */
+  maintenance: { pmGraceDays: number };
 }
 
 export interface LabourSettings { defaultRate: number | null; roleRates: Record<string, number> }
@@ -90,6 +92,7 @@ export const DEFAULT_SETTINGS: Settings = {
   currency: { code: 'MYR' },
   brand: { accent: null, defaultTheme: 'dark' },
   labour: { defaultRate: null, roleRates: {} },
+  maintenance: { pmGraceDays: 7 },
 };
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : undefined);
@@ -128,6 +131,7 @@ export class SettingsService {
         currency: { ...DEFAULT_SETTINGS.currency, ...(byKey.currency ?? {}) },
         brand: { ...DEFAULT_SETTINGS.brand, ...(byKey.brand ?? {}) },
         labour: { ...DEFAULT_SETTINGS.labour, ...(byKey.labour ?? {}) },
+        maintenance: { ...DEFAULT_SETTINGS.maintenance, ...(byKey.maintenance ?? {}) },
       },
       logo: (byKey.logo as Logo | undefined)?.data ? (byKey.logo as Logo) : null,
       loadedAt: Date.now(),
@@ -263,6 +267,21 @@ export class SettingsService {
       next.roleRates = out;
     }
     await this.save('labour', next, by);
+    return next;
+  }
+
+  get maintenance(): { pmGraceDays: number } {
+    return { ...this.cache.maintenance };
+  }
+
+  async updateMaintenance(patch: { pmGraceDays?: unknown }, by: string) {
+    const next = this.maintenance;
+    if (patch.pmGraceDays !== undefined) {
+      const n = Number(patch.pmGraceDays);
+      if (!Number.isInteger(n) || n < 0 || n > 90) throw new BadRequestException('Grace for preventive work: 0 to 90 days');
+      next.pmGraceDays = n;
+    }
+    await this.save('maintenance', next, by);
     return next;
   }
 

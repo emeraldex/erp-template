@@ -4,13 +4,14 @@ import { AuthGuard } from '../auth/auth.guard';
 import { InModule, Requires } from '../auth/roles.decorator';
 import { parsePeriod, ReportsService } from './reports.service';
 import { Report, toCsv, toXlsx } from './tabular';
+import { ReliabilityService } from '../assets/reliability.service';
 
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 @Controller('reports')
 @UseGuards(AuthGuard)
 export class ReportsController {
-  constructor(private readonly reports: ReportsService) {}
+  constructor(private readonly reports: ReportsService, private readonly reliability: ReliabilityService) {}
 
   private async send(report: Report, base: string, format: string | undefined, res: Response): Promise<StreamableFile> {
     const fmt = format ?? 'xlsx';
@@ -76,6 +77,14 @@ export class ReportsController {
   async labour(@Query('from') from: string, @Query('to') to: string, @Query('format') format: string, @Res({ passthrough: true }) res: Response) {
     const p = parsePeriod(from, to);
     return this.send(await this.reports.labourReport(p), `labour_${p.from}_${p.to}`, format, res);
+  }
+
+  @Get('reliability')
+  @InModule('assets')
+  @Requires('reports.maintenance')
+  async reliabilityReport(@Query('from') from: string, @Query('to') to: string, @Query('format') format: string, @Res({ passthrough: true }) res: Response) {
+    const p = parsePeriod(from, to);
+    return this.send(await this.reliability.report(p), `reliability_${p.from}_${p.to}`, format, res);
   }
 
   @Get('audit')
