@@ -365,6 +365,66 @@ export class ReportsService {
     };
   }
 
+  /** Time logged on work orders in a period: by person, by work order, and every entry. */
+  async labourReport(period: Period): Promise<Report> {
+    const rows = await this.prisma.timeEntry.findMany({
+      where: { workDate: { gte: new Date(`${period.from}T00:00:00Z`), lte: new Date(`${period.to}T00:00:00Z`) } },
+      orderBy: [{ workDate: 'asc' }, { userName: 'asc' }],
+    });
+    const jobs = new Map((await this.prisma.job.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.jobId))] } }, select: { id: true, component: true, status: true } })).map((j) => [j.id, j]));
+    const hours = (m: number) => Math.round((m / 60) * 100) / 100;
+    const group = <K extends string>(key: (r: (typeof rows)[number]) => K) => {
+      const out = new Map<K, { minutes: number; cost: number; entries: number; jobs: Set<string>; people: Set<string> }>();
+      for (const r of rows) {
+        const g = out.get(key(r)) ?? { minutes: 0, cost: 0, entries: 0, jobs: new Set<string>(), people: new Set<string>() };
+        g.minutes += r.minutes; g.cost += Number(r.cost); g.entries += 1; g.jobs.add(r.jobId); g.people.add(r.userId);
+        out.set(key(r), g);
+      }
+      return out;
+    };
+    const byPerson = group((r) => `${r.userId}\u0000${r.userName}`);
+    const byJob = group((r) => r.jobId);
+    const totalMin = rows.reduce((s, r) => s + r.minutes, 0);
+    const totalCost = round2(rows.reduce((s, r) => s + Number(r.cost), 0));
+    return {
+      title: 'Labour',
+      subtitle: `${period.from} to ${period.to} — time logged on work orders, at the rates in force when it was logged`,
+      sheets: [
+        {
+          name: 'By person',
+          columns: [
+            { key: 'person', header: 'Person', width: 26 }, { key: 'hours', header: 'Hours', type: 'qty' }, { key: 'entries', header: 'Entries', type: 'int' },
+            { key: 'jobs', header: 'Work orders', type: 'int', width: 12 }, { key: 'cost', header: `Cost (${this.cur})`, type: 'money', width: 15 },
+          ],
+          rows: [...byPerson.entries()].map(([k, g]) => ({ person: k.split('\u0000')[1], hours: hours(g.minutes), entries: g.entries, jobs: g.jobs.size, cost: round2(g.cost) }))
+            .sort((a, b) => Number(b.hours) - Number(a.hours)),
+          totals: { person: 'TOTAL', hours: hours(totalMin), entries: rows.length, cost: totalCost },
+        },
+        {
+          name: 'By work order',
+          columns: [
+            { key: 'jobId', header: 'Work order', width: 16 }, { key: 'item', header: 'Item', width: 30 }, { key: 'status', header: 'Status', width: 18 },
+            { key: 'hours', header: 'Hours', type: 'qty' }, { key: 'people', header: 'People', type: 'int' }, { key: 'cost', header: `Cost (${this.cur})`, type: 'money', width: 15 },
+          ],
+          rows: [...byJob.entries()].map(([id, g]) => ({
+            jobId: id, item: jobs.get(id)?.component ?? '', status: jobs.get(id) ? this.store.label('status:JOB', jobs.get(id)!.status) : '',
+            hours: hours(g.minutes), people: g.people.size, cost: round2(g.cost),
+          })).sort((a, b) => Number(b.cost) - Number(a.cost)),
+          totals: { jobId: `TOTAL (${byJob.size})`, hours: hours(totalMin), cost: totalCost },
+        },
+        {
+          name: 'Entries',
+          columns: [
+            { key: 'date', header: 'Date', type: 'date', width: 12 }, { key: 'person', header: 'Person', width: 24 }, { key: 'jobId', header: 'Work order', width: 16 },
+            { key: 'minutes', header: 'Minutes', type: 'int' }, { key: 'rate', header: 'Rate', type: 'money' }, { key: 'cost', header: `Cost (${this.cur})`, type: 'money' },
+            { key: 'note', header: 'Note', width: 40 },
+          ],
+          rows: rows.map((r) => ({ date: r.workDate.toISOString().slice(0, 10), person: r.userName, jobId: r.jobId, minutes: r.minutes, rate: r.rate === null ? null : Number(r.rate), cost: Number(r.cost), note: r.note })),
+        },
+      ],
+    };
+  }
+
   /** FR-04 / FR-12 — the audit trail for a period, optionally for one kind of record. */
   async auditTrail(period: Period, entity?: string): Promise<Report> {
     if (entity && !(entity in AUDIT_ENTITIES)) {

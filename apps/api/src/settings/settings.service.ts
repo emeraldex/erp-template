@@ -57,7 +57,11 @@ export interface Settings {
   currency: { code: string };
   /** Brand colour (null = the product's own) and the theme people start with. */
   brand: BrandSettings;
+  /** Cost per hour by role, and the organisation's default (null = labour is not costed). */
+  labour: LabourSettings;
 }
+
+export interface LabourSettings { defaultRate: number | null; roleRates: Record<string, number> }
 
 export type Theme = 'dark' | 'light' | 'system';
 export interface BrandSettings { accent: string | null; defaultTheme: Theme }
@@ -85,6 +89,7 @@ export const DEFAULT_SETTINGS: Settings = {
   portal: { open: true, accessCode: '', intro: '', introMs: '', askCategory: true, triageHours: 4 },
   currency: { code: 'MYR' },
   brand: { accent: null, defaultTheme: 'dark' },
+  labour: { defaultRate: null, roleRates: {} },
 };
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : undefined);
@@ -122,6 +127,7 @@ export class SettingsService {
         portal: { ...DEFAULT_SETTINGS.portal, ...(byKey.portal ?? {}) },
         currency: { ...DEFAULT_SETTINGS.currency, ...(byKey.currency ?? {}) },
         brand: { ...DEFAULT_SETTINGS.brand, ...(byKey.brand ?? {}) },
+        labour: { ...DEFAULT_SETTINGS.labour, ...(byKey.labour ?? {}) },
       },
       logo: (byKey.logo as Logo | undefined)?.data ? (byKey.logo as Logo) : null,
       loadedAt: Date.now(),
@@ -159,10 +165,11 @@ export class SettingsService {
 
   /** Has the organisation recorded any money yet? Then its currency can no longer be changed here. */
   async moneyRecorded(): Promise<boolean> {
-    const [invoices, quotes, moves] = await Promise.all([
+    const [invoices, quotes, moves, time] = await Promise.all([
       this.prisma.invoice.count(), this.prisma.quotation.count(), this.prisma.stockMovement.count({ where: { unitCost: { gt: 0 } } }),
+      this.prisma.timeEntry.count({ where: { cost: { gt: 0 } } }),
     ]);
-    return invoices + quotes + moves > 0;
+    return invoices + quotes + moves + time > 0;
   }
 
   async updateCurrency(code: unknown, by: string): Promise<Currency> {
@@ -230,6 +237,33 @@ export class SettingsService {
   get branding() {
     const l = this.caches.get(currentTenant().id)?.logo ?? null;
     return { ...this.cache.brand, logo: l ? l.sha256.slice(0, 12) : null };
+  }
+
+  get labour(): LabourSettings {
+    return { defaultRate: this.cache.labour.defaultRate, roleRates: { ...this.cache.labour.roleRates } };
+  }
+
+  async updateLabour(patch: Partial<LabourSettings>, roles: string[], by: string): Promise<LabourSettings> {
+    const rate = (v: unknown, label: string) => {
+      if (v === null || v === '' || v === undefined) return null;
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 0 || n > 1e6) throw new BadRequestException(`${label}: a cost per hour from 0 to 1,000,000`);
+      return Math.round(n * 10_000) / 10_000;
+    };
+    const next = this.labour;
+    if (patch.defaultRate !== undefined) next.defaultRate = rate(patch.defaultRate, 'Default rate');
+    if (patch.roleRates !== undefined) {
+      if (typeof patch.roleRates !== 'object' || patch.roleRates === null || Array.isArray(patch.roleRates)) throw new BadRequestException('roleRates: { ROLE: rate }');
+      const out: Record<string, number> = {};
+      for (const [role, v] of Object.entries(patch.roleRates)) {
+        if (!roles.includes(role)) throw new BadRequestException(`Unknown role ${role}`);
+        const r = rate(v, role);
+        if (r !== null) out[role] = r;
+      }
+      next.roleRates = out;
+    }
+    await this.save('labour', next, by);
+    return next;
   }
 
   get portal(): PortalSettings {

@@ -30,7 +30,7 @@ export const AVIATION: Pack = {
   },
   modules: {
     procurement: true, vendorRepair: true, priority: true, incidents: true, tools: true, training: true,
-    invoicing: true, registers: true, assets: false, pm: false, stock: false, requests: false,
+    invoicing: true, registers: true, assets: false, pm: false, stock: false, requests: false, labour: false,
   },
   statuses: {
     JOB: statuses(JOB_STATUS_META, {

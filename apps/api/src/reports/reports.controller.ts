@@ -70,6 +70,14 @@ export class ReportsController {
     return this.send(await this.reports.requestsReport(p), `requests_${p.from}_${p.to}`, format, res);
   }
 
+  @Get('labour')
+  @InModule('labour')
+  @Requires('labour.manage')
+  async labour(@Query('from') from: string, @Query('to') to: string, @Query('format') format: string, @Res({ passthrough: true }) res: Response) {
+    const p = parsePeriod(from, to);
+    return this.send(await this.reports.labourReport(p), `labour_${p.from}_${p.to}`, format, res);
+  }
+
   @Get('audit')
   @Requires('reports.audit')
   async audit(

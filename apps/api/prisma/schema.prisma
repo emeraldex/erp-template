@@ -90,6 +90,8 @@ model User {
   passwordChangedAt  DateTime?
   /// Set when an administrator deactivates the account; history stays attributed.
   deactivatedAt      DateTime?
+  /// Labour: this person's cost per hour (else their role's, else the organisation's).
+  hourlyRate         Decimal?       @db.Decimal(14, 4)
   sessions           Session[]
   notifications      Notification[]
 
@@ -940,4 +942,27 @@ model RequestPoint {
 
   @@index([assetId])
   @@map("request_points")
+}
+
+/// Time someone spent on a work order. The rate in force when it was logged
+/// stays with it, so later rate changes never rewrite labour cost.
+model TimeEntry {
+  id        String   @id
+  jobId     String
+  userId    String
+  userName  String
+  workDate  DateTime @db.Date
+  minutes   Int
+  note      String   @default("")
+  /// Cost per hour when logged; null when no rate was set.
+  rate      Decimal? @db.Decimal(14, 4)
+  cost      Decimal  @default(0) @db.Decimal(14, 2)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobId])
+  @@index([userId, workDate])
+  @@index([workDate])
+  @@map("time_entries")
 }
