@@ -5,6 +5,7 @@ import Link from "next/link";
 import { api, download } from "@/lib/api";
 import type { Part, StockLevel } from "@/lib/types";
 import { useVocab } from "@/lib/vocab";
+import { currencySymbol } from "@/lib/format";
 import { Button, Panel, StatusPill } from "@/components/ui";
 import { errText, input, Labelled, money, MOVEMENT_LABEL, Msg, qty } from "./common";
 
@@ -188,7 +189,7 @@ export function PartDetail({ id, onChanged }: { id: string; onChanged: () => voi
                 <Labelled label={`${terms.job} no.`}><input value={f.jobId} onChange={(e) => setF({ ...f, jobId: e.target.value })} placeholder="WO-2026-0001" className={input} /></Labelled>
               )}
               {action === "receive" && (
-                <Labelled label="Unit cost (RM)"><input inputMode="decimal" value={f.unitCost} onChange={(e) => setF({ ...f, unitCost: e.target.value })} className={input} /></Labelled>
+                <Labelled label={`Unit cost (${currencySymbol()})`}><input inputMode="decimal" value={f.unitCost} onChange={(e) => setF({ ...f, unitCost: e.target.value })} className={input} /></Labelled>
               )}
               {(action === "receive" || action === "adjust") && (
                 <Labelled label={action === "receive" ? "Where it came from" : "Reason"} className="sm:col-span-2">

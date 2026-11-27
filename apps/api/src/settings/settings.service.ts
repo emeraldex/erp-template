@@ -1,3 +1,4 @@
+import { CURRENCIES, Currency, currencyOf } from './currency';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { currentTenant } from '../tenancy/tenant';
 import { AVIATION } from '../packs/aviation';
@@ -50,6 +51,8 @@ export interface Settings {
   modules: Modules;
   defaults: WorkflowDefaults;
   portal: PortalSettings;
+  /** The currency the organisation keeps its books in (ISO code). */
+  currency: { code: string };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -72,6 +75,7 @@ export const DEFAULT_SETTINGS: Settings = {
   modules: AVIATION.modules,
   defaults: { jobPrefix: AVIATION.defaults.jobPrefix, initialLocation: AVIATION.defaults.initialLocation },
   portal: { open: true, accessCode: '', intro: '', introMs: '', askCategory: true, triageHours: 4 },
+  currency: { code: 'MYR' },
 };
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : undefined);
@@ -107,6 +111,7 @@ export class SettingsService {
         modules: { ...DEFAULT_SETTINGS.modules, ...(byKey.modules ?? {}) },
         defaults: { ...DEFAULT_SETTINGS.defaults, ...(byKey.defaults ?? {}) },
         portal: { ...DEFAULT_SETTINGS.portal, ...(byKey.portal ?? {}) },
+        currency: { ...DEFAULT_SETTINGS.currency, ...(byKey.currency ?? {}) },
       },
       loadedAt: Date.now(),
     });
@@ -134,6 +139,30 @@ export class SettingsService {
 
   get defaults(): WorkflowDefaults {
     return { ...this.cache.defaults };
+  }
+
+  /** The organisation's currency: symbol, decimals and the words invoices use. */
+  get currency(): Currency {
+    return currencyOf(this.cache.currency.code);
+  }
+
+  /** Has the organisation recorded any money yet? Then its currency can no longer be changed here. */
+  async moneyRecorded(): Promise<boolean> {
+    const [invoices, quotes, moves] = await Promise.all([
+      this.prisma.invoice.count(), this.prisma.quotation.count(), this.prisma.stockMovement.count({ where: { unitCost: { gt: 0 } } }),
+    ]);
+    return invoices + quotes + moves > 0;
+  }
+
+  async updateCurrency(code: unknown, by: string): Promise<Currency> {
+    const next = CURRENCIES.find((x) => x.code === String(code ?? '').toUpperCase());
+    if (!next) throw new BadRequestException(`Choose one of: ${CURRENCIES.map((x) => x.code).join(', ')}`);
+    if (next.code === this.cache.currency.code) return next;
+    if (await this.moneyRecorded()) {
+      throw new BadRequestException('Amounts are already recorded in this currency — changing it would relabel them without converting. Ask your system administrator (tenants-cli set-currency --force).');
+    }
+    await this.save('currency', { code: next.code }, by);
+    return next;
   }
 
   get portal(): PortalSettings {

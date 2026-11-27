@@ -28,6 +28,8 @@ export default async function globalSetup(): Promise<void> {
   execSync('npx ts-node --transpile-only src/tenants-cli.ts create fleet --name "Metro Fleet" --host fleet.test --pack fleet --demo', opts);
   // A facilities company, for proof-of-work steps (photo + signature).
   execSync('npx ts-node --transpile-only src/tenants-cli.ts create fm --name "North FM" --host fm.test --pack facilities --demo', opts);
+  // A Singapore client keeping its books in Singapore dollars.
+  execSync('npx ts-node --transpile-only src/tenants-cli.ts create sg --name "Lion City Facilities" --host sg.test --pack general --currency SGD --demo', opts);
   // Used only by the SSO tests, which change how its users may sign in.
   execSync('npx ts-node --transpile-only src/tenants-cli.ts create gamma --name "Gamma Avionics" --host gamma.test --host gamma.test:3000 --demo', opts);
 }

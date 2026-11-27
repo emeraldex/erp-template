@@ -32,7 +32,7 @@ export class InvoicingService {
   }
 
   private gst(amount: number, rate: number) {
-    const { taxMYR, totalMYR } = computeTax(amount, rate);
+    const { taxMYR, totalMYR } = computeTax(amount, rate, this.settings.currency?.decimals ?? 2);
     return { gstMYR: taxMYR, totalMYR };
   }
 

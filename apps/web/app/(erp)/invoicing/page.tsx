@@ -9,7 +9,7 @@ import { Invoice, InvoiceStatus, InvoiceStream, Job } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
 import { railOf, useVocab } from "@/lib/vocab";
 import { useLang } from "@/lib/i18n";
-import { fmtMYR } from "@/lib/format";
+import { currencyCode, fmtMYR } from "@/lib/format";
 import { Button, MetaPill, OfflineNotice, PageHeader, Panel, StatusPill } from "@/components/ui";
 import { AuditTrail, RecordsList, StageRail, TransitionActions } from "@/components/workflow";
 
@@ -124,7 +124,7 @@ export default function InvoicingPage() {
               </label>
             )}
             <label className="block">
-              <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Amount before tax (MYR)</span>
+              <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Amount before tax ({currencyCode()})</span>
               <input value={form.amountMYR} onChange={(e) => setForm({ ...form, amountMYR: e.target.value })}
                 className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
             </label>

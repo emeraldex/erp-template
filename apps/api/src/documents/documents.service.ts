@@ -4,7 +4,7 @@ import type { Invoice, Job } from '../common/types';
 import type { InvoiceStreamDef } from '../common/workflow-config';
 import { SettingsService } from '../settings/settings.service';
 import { Doc, fields, finish, heading, letterhead, MARGIN, Marks, myr, newDoc, pdfText, rule, signature, table } from './pdf';
-import { ringgitInWords } from './words';
+import { amountInWords } from './words';
 
 export const INVOICE_DOCUMENTS = ['tax-invoice', 'covering-letter', 'delivery-note', 'pack'] as const;
 export type InvoiceDocument = (typeof INVOICE_DOCUMENTS)[number];
@@ -81,13 +81,13 @@ export class DocumentsService {
     table(doc, [
       { header: 'Description', width: 300 },
       { header: 'Qty', width: 45, align: 'right' },
-      { header: 'Amount (MYR)', width: 150, align: 'right' },
-    ], [[description, '1', myr(inv.amountMYR)]]);
+      { header: `Amount (${this.settings.currency.code})`, width: 150, align: 'right' },
+    ], [[description, '1', myr(inv.amountMYR, this.settings.currency)]]);
 
     const totals: [string, string][] = [
-      ['Subtotal', myr(inv.amountMYR)],
-      [`${label} @ ${inv.gstRate}%`, myr(inv.gstMYR)],
-      ['Total payable', myr(inv.totalMYR)],
+      ['Subtotal', myr(inv.amountMYR, this.settings.currency)],
+      [`${label} @ ${inv.gstRate}%`, myr(inv.gstMYR, this.settings.currency)],
+      ['Total payable', myr(inv.totalMYR, this.settings.currency)],
     ];
     totals.forEach(([k, v], i) => {
       const y = doc.y;
@@ -97,7 +97,7 @@ export class DocumentsService {
       doc.moveDown(0.3);
     });
     doc.x = MARGIN;
-    doc.moveDown(0.6).font('Helvetica-Oblique').fontSize(9.5).text(pdfText(ringgitInWords(inv.totalMYR)), MARGIN);
+    doc.moveDown(0.6).font('Helvetica-Oblique').fontSize(9.5).text(pdfText(amountInWords(inv.totalMYR, this.settings.currency)), MARGIN);
     doc.font('Helvetica').moveDown(1.2);
     if (inv.ctcRef || inv.customerSignRef) {
       fields(doc, [['Customer signature', inv.customerSignRef], ['CTC reference', inv.ctcRef]]);
@@ -117,7 +117,7 @@ export class DocumentsService {
     doc.text('Dear Sir/Madam,').moveDown(0.6);
     const subject = job ? `the repair of ${job.component} (part no. ${job.partNo}, serial no. ${job.serialNo}, PS no. ${job.id})` : `the ${stream?.label ?? inv.stream}${inv.period ? ` for ${inv.period}` : ''}`;
     doc.text(pdfText(
-      `We enclose our tax invoice for ${subject}, amounting to ${myr(inv.totalMYR)} inclusive of ` +
+      `We enclose our tax invoice for ${subject}, amounting to ${myr(inv.totalMYR, this.settings.currency)} inclusive of ` +
       `${inv.taxLabel ?? 'GST'} at ${inv.gstRate}%, together with the supporting documents listed below for your verification and further action.`,
     ), { align: 'justify' }).moveDown(0.8);
     doc.font('Helvetica-Bold').text('Enclosures').font('Helvetica').moveDown(0.3);

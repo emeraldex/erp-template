@@ -5,6 +5,7 @@ import { AuthUser } from '../auth/auth.service';
 import { Requires } from '../auth/roles.decorator';
 import type { Modules, Terms } from '../packs/types';
 import { CompanyProfile, PortalSettings, SettingsService, TaxSettings, WorkflowDefaults } from './settings.service';
+import { CURRENCIES } from './currency';
 
 @Controller('settings')
 @UseGuards(AuthGuard)
@@ -17,6 +18,18 @@ export class SettingsController {
     // The portal's access code is for administrators to set and hand out.
     if (!this.store.capabilitiesOf(req.user.role).includes('org.admin')) s.portal = { ...s.portal, accessCode: s.portal.accessCode ? '********' : '' };
     return s;
+  }
+
+  /** The currency the organisation keeps its books in. Locked once amounts are recorded. */
+  @Get('currencies')
+  async currencies() {
+    return { current: this.settings.currency.code, locked: await this.settings.moneyRecorded(), list: CURRENCIES };
+  }
+
+  @Patch('currency')
+  @Requires('org.admin')
+  currency(@Body() body: { code?: string }, @Req() req: { user: AuthUser }) {
+    return this.settings.updateCurrency(body?.code, req.user.name);
   }
 
   /** The public request portal: open or closed, access code, intro text, triage reminder. */

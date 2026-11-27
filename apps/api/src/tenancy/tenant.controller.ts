@@ -13,6 +13,6 @@ export class TenantController {
   info() {
     const t = currentTenant();
     // The sector pack lets the sign-in page offer the right demo accounts.
-    return { id: t.id, name: this.settings.company.name || t.name, pack: this.settings.get().pack?.id ?? 'aviation' };
+    return { id: t.id, name: this.settings.company.name || t.name, pack: this.settings.get().pack?.id ?? 'aviation', currency: this.settings.currency.code };
   }
 }

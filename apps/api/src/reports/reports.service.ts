@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
+import { SettingsService } from '../settings/settings.service';
 import { PrismaService } from '../common/prisma.service';
 import { StoreService } from '../common/store.service';
 import type { Invoice } from '../common/types';
@@ -49,7 +50,12 @@ export type AuditEntity = keyof typeof AUDIT_ENTITIES;
 /** FR-14 revenue reporting and FR-12 audit reporting, as data ready for CSV/XLSX. */
 @Injectable()
 export class ReportsService {
-  constructor(private readonly store: StoreService, private readonly prisma: PrismaService) {}
+  constructor(private readonly store: StoreService, private readonly prisma: PrismaService, @Optional() private readonly settings?: SettingsService) {}
+
+  /** The organisation's currency code, for column headings. */
+  private get cur(): string {
+    return this.settings?.currency.code ?? 'MYR';
+  }
 
   private streamLabel(id: string): string {
     return this.store.invoiceStreams.find((s) => s.id === id)?.label ?? id;
@@ -77,9 +83,9 @@ export class ReportsService {
         { key: 'drafted', header: 'Drafted', type: 'date', width: 12 }, { key: 'taxDate', header: 'Tax invoice date', type: 'date', width: 15 },
         { key: 'stream', header: 'Stream', width: 30 }, { key: 'customer', header: 'Customer', width: 30 },
         { key: 'branch', header: 'Branch' }, { key: 'job', header: 'Job (PS no.)', width: 15 }, { key: 'period', header: 'Period' },
-        { key: 'amount', header: 'Amount (MYR)', type: 'money', width: 15 }, { key: 'taxLabel', header: 'Tax' },
-        { key: 'taxRate', header: 'Tax rate', type: 'pct' }, { key: 'tax', header: 'Tax (MYR)', type: 'money', width: 13 },
-        { key: 'total', header: 'Total (MYR)', type: 'money', width: 15 }, { key: 'status', header: 'Status', width: 18 },
+        { key: 'amount', header: `Amount (${this.cur})`, type: 'money', width: 15 }, { key: 'taxLabel', header: 'Tax' },
+        { key: 'taxRate', header: 'Tax rate', type: 'pct' }, { key: 'tax', header: `Tax (${this.cur})`, type: 'money', width: 13 },
+        { key: 'total', header: `Total (${this.cur})`, type: 'money', width: 15 }, { key: 'status', header: 'Status', width: 18 },
         { key: 'sprRef', header: 'SPR / e-Payment ref', width: 18 }, { key: 'paymentRef', header: 'Payment ref', width: 15 },
         { key: 'paidAt', header: 'Paid on', type: 'date', width: 12 }, { key: 'outstanding', header: 'Outstanding' },
         { key: 'days', header: 'Days outstanding', type: 'int' },
@@ -100,8 +106,8 @@ export class ReportsService {
       name: 'Summary',
       columns: [
         { key: 'stream', header: 'Stream', width: 32 }, { key: 'count', header: 'Invoices', type: 'int' },
-        { key: 'billed', header: 'Billed (MYR)', type: 'money', width: 15 }, { key: 'tax', header: 'Tax (MYR)', type: 'money', width: 13 },
-        { key: 'paid', header: 'Paid (MYR)', type: 'money', width: 15 }, { key: 'outstanding', header: 'Outstanding (MYR)', type: 'money', width: 17 },
+        { key: 'billed', header: `Billed (${this.cur})`, type: 'money', width: 15 }, { key: 'tax', header: `Tax (${this.cur})`, type: 'money', width: 13 },
+        { key: 'paid', header: `Paid (${this.cur})`, type: 'money', width: 15 }, { key: 'outstanding', header: `Outstanding (${this.cur})`, type: 'money', width: 17 },
       ],
       rows: byStream,
       totals: {
@@ -157,7 +163,7 @@ export class ReportsService {
           { key: 'invoiceNo', header: 'Invoice', width: 18 }, { key: 'stream', header: 'Stream', width: 30 },
           { key: 'customer', header: 'Customer', width: 30 }, { key: 'status', header: 'Status', width: 18 },
           { key: 'since', header: 'Since', type: 'date', width: 12 }, { key: 'days', header: 'Days', type: 'int' },
-          { key: 'bucket', header: 'Ageing' }, { key: 'total', header: 'Total (MYR)', type: 'money', width: 15 },
+          { key: 'bucket', header: 'Ageing' }, { key: 'total', header: `Total (${this.cur})`, type: 'money', width: 15 },
         ],
         rows,
         totals: { invoiceNo: `TOTAL (${rows.length})`, total: round2(open.reduce((s, i) => s + i.totalMYR, 0)) },
@@ -187,7 +193,7 @@ export class ReportsService {
       { key: 'partNo', header: 'Part no.', width: 16 }, { key: 'name', header: 'Name', width: 34 },
       { key: 'group', header: 'Group', width: 16 }, { key: 'bin', header: 'Bin', width: 10 },
       { key: 'qty', header: 'On hand', type: 'qty' }, { key: 'unit', header: 'Unit', width: 8 },
-      { key: 'avgCost', header: 'Average cost', type: 'money', width: 14 }, { key: 'value', header: 'Value (MYR)', type: 'money', width: 15 },
+      { key: 'avgCost', header: 'Average cost', type: 'money', width: 14 }, { key: 'value', header: `Value (${this.cur})`, type: 'money', width: 15 },
     ];
     const stores = [...byStore.keys()].sort();
     const all: Row[] = [];
@@ -203,7 +209,7 @@ export class ReportsService {
         { name: 'Stock', columns, rows: all, totals: { store: `TOTAL (${all.length})`, value: total(all) } },
         {
           name: 'By store',
-          columns: [{ key: 'store', header: 'Store', width: 26 }, { key: 'lines', header: 'Parts held', type: 'int', width: 12 }, { key: 'value', header: 'Value (MYR)', type: 'money', width: 15 }],
+          columns: [{ key: 'store', header: 'Store', width: 26 }, { key: 'lines', header: 'Parts held', type: 'int', width: 12 }, { key: 'value', header: `Value (${this.cur})`, type: 'money', width: 15 }],
           rows: summary,
           totals: { store: 'TOTAL', lines: all.length, value: total(all) },
         },
@@ -266,7 +272,7 @@ export class ReportsService {
           columns: [
             { key: 'partNo', header: 'Part no.', width: 16 }, { key: 'name', header: 'Name', width: 34 },
             { key: 'qty', header: 'Used', type: 'qty' }, { key: 'unit', header: 'Unit', width: 8 },
-            { key: 'jobs', header: 'Work orders', type: 'int', width: 12 }, { key: 'cost', header: 'Cost (MYR)', type: 'money', width: 15 },
+            { key: 'jobs', header: 'Work orders', type: 'int', width: 12 }, { key: 'cost', header: `Cost (${this.cur})`, type: 'money', width: 15 },
           ],
           rows: summary,
           totals: { partNo: `TOTAL (${summary.length})`, cost: total },
@@ -276,7 +282,7 @@ export class ReportsService {
           columns: [
             { key: 'partNo', header: 'Part no.', width: 16 }, { key: 'name', header: 'Name', width: 30 },
             { key: 'jobId', header: 'Work order', width: 16 }, { key: 'asset', header: 'Asset', width: 14 }, { key: 'item', header: 'Item', width: 26 },
-            { key: 'qty', header: 'Used', type: 'qty' }, { key: 'unit', header: 'Unit', width: 8 }, { key: 'cost', header: 'Cost (MYR)', type: 'money', width: 15 },
+            { key: 'qty', header: 'Used', type: 'qty' }, { key: 'unit', header: 'Unit', width: 8 }, { key: 'cost', header: `Cost (${this.cur})`, type: 'money', width: 15 },
           ],
           rows: detail,
           totals: { partNo: `TOTAL (${detail.length})`, cost: total },

@@ -330,6 +330,8 @@ export interface WorkflowConfig {
   pack?: { id: string; name: string };
   terms?: Terms;
   modules?: Modules;
+  /** The organisation's currency. */
+  currency?: { code: string; symbol: string; decimals: number; name: string; major: string; minor: string };
   phases?: Phase[];
   capabilities?: Record<string, string>;
   /** Every list the organisation keeps: status:JOB, role, site, location, category, assetType… */

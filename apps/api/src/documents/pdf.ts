@@ -1,3 +1,4 @@
+import { Currency, DEFAULT_CURRENCY, formatMoney } from '../settings/currency';
 import PDFDocument = require('pdfkit');
 import type { CompanyProfile } from '../settings/settings.service';
 
@@ -20,8 +21,8 @@ export function pdfText(s: unknown): string {
     .replace(/[^\x09\x0a\x0d\x20-\x7e -ÿ–—‘’“”•…€]/g, '?');
 }
 
-export const myr = (n: number) =>
-  `RM ${n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/** An amount in the organisation's currency, e.g. "RM 1,080.50" (Ringgit unless one is given). */
+export const myr = (n: number, cur: Currency = DEFAULT_CURRENCY) => formatMoney(n, cur);
 
 export interface Marks {
   /** Diagonal watermark, e.g. DRAFT. */

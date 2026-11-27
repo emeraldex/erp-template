@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { fmtMoney } from "@/lib/format";
 
 export const field = "mono rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace";
 export const input = `${field} w-full`;
@@ -28,8 +29,8 @@ export function Labelled({ label, children, className = "" }: { label: string; c
 /** A quantity without trailing zeros: 2, 2.5, 0.125. */
 export const qty = (n: number) => (Math.round(n * 1000) / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 });
 
-/** Ringgit with two decimals. */
-export const money = (n: number) => `RM ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/** An exact amount in the organisation's currency. */
+export const money = (n: number) => fmtMoney(n);
 
 export const MOVEMENT_LABEL: Record<string, string> = {
   OPENING: "Opening stock", RECEIPT: "Received", ISSUE: "Issued", RETURN: "Returned", ADJUST: "Adjusted",
