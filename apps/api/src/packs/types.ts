@@ -58,9 +58,13 @@ export const CAPABILITIES = {
   'stock.manage': 'Parts catalogue, stock levels, counts, transfers and buying for stock',
   'stock.issue': 'Issue parts to work orders and take returns',
   'requests.manage': 'Triage requests from the request portal, message requesters, print QR posters',
+  'labour.log': 'Log your own time on work orders',
+  'labour.manage': 'Log or correct anyone\'s time, set hourly rates, see labour cost',
   'reports.billing': 'Revenue and outstanding-payment reports',
   'reports.payments': 'Payment-system export files',
+  'accounting.export': 'Export sales, receipts and purchases for the accounting system; set account codes',
   'reports.audit': 'Audit trail, retention report, attachment checks',
+  'reports.maintenance': 'Reliability: downtime, repair time, preventive compliance and cost per asset',
   'alerts.escalation': 'Receive escalations for every SLA breach',
 } as const;
 export type Capability = keyof typeof CAPABILITIES;
@@ -85,9 +89,11 @@ export interface Modules {
   stock: boolean;
   /** The public request portal: anyone with the link can report a problem. */
   requests: boolean;
+  /** Time on work orders, hourly rates and labour cost. */
+  labour: boolean;
 }
 export type ModuleKey = keyof Modules;
-export const MODULE_KEYS: (keyof Modules)[] = ['procurement', 'vendorRepair', 'priority', 'incidents', 'tools', 'training', 'invoicing', 'registers', 'assets', 'pm', 'stock', 'requests'];
+export const MODULE_KEYS: (keyof Modules)[] = ['procurement', 'vendorRepair', 'priority', 'incidents', 'tools', 'training', 'invoicing', 'registers', 'assets', 'pm', 'stock', 'requests', 'labour'];
 
 /** Dictionary kinds a pack fills in (besides statuses and roles). */
 export const DICT_KINDS = ['site', 'location', 'category', 'priority', 'route', 'incidentArea', 'course', 'jobType', 'assetType', 'store', 'unit', 'partGroup'] as const;

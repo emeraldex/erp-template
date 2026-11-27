@@ -29,8 +29,8 @@ describe('Multi-tenancy: one schema per client organisation', () => {
   afterAll(() => app.close());
 
   it('resolves the organisation from the address, or from the page that sent the request', async () => {
-    expect((await http.get(`${API}/tenant`).set('Host', 'acme.test')).body).toEqual({ id: 'acme', name: 'Acme Aero', pack: 'aviation' });
-    expect((await http.get(`${API}/tenant`).set('Host', 'beta.test')).body).toEqual({ id: 'beta', name: 'Beta Engineering', pack: 'aviation' });
+    expect((await http.get(`${API}/tenant`).set('Host', 'acme.test')).body).toEqual({ id: 'acme', name: 'Acme Aero', pack: 'aviation', currency: 'MYR', brand: { accent: null, defaultTheme: 'dark', logo: null } });
+    expect((await http.get(`${API}/tenant`).set('Host', 'beta.test')).body).toEqual({ id: 'beta', name: 'Beta Engineering', pack: 'aviation', currency: 'MYR', brand: { accent: null, defaultTheme: 'dark', logo: null } });
     expect((await http.get(`${API}/tenant`).set('Host', 'ACME.TEST:443')).body.id).toBe('acme');
     expect((await http.get(`${API}/tenant`).set('Host', 'api.internal').set('Origin', 'http://acme.test:3000')).body.id).toBe('acme');
     expect((await http.get(`${API}/tenant`).set('Host', 'elsewhere.test')).body.id).toBe('default');

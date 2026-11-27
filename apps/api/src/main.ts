@@ -40,7 +40,7 @@ export function configureApp(app: INestApplication): void {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Client-Op'],
     // Lets the web app read download file names (labels, reports, documents) across origins.
     exposedHeaders: ['Content-Disposition'],
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     maxAge: 600,
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));

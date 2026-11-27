@@ -3,7 +3,7 @@ import QRCode = require('qrcode');
 import { StoreService } from '../common/store.service';
 import type { Job } from '../common/types';
 import { SettingsService } from '../settings/settings.service';
-import { Doc, newDoc, pdfText } from './pdf';
+import { fitLogo, Doc, newDoc, pdfText } from './pdf';
 
 const MAX_BATCH = 100;
 
@@ -40,8 +40,15 @@ export class JobCardService {
     const company = this.settings.company.name;
     const qr = await QRCode.toBuffer(url, { type: 'png', margin: 0, width: 300, errorCorrectionLevel: 'M' });
 
-    doc.font('Helvetica').fontSize(7).fillColor('#666666').text(pdfText(company), m, m, { width: width - 2 * m });
-    doc.font('Helvetica-Bold').fontSize(8).fillColor('#111111').text(`JOB CARD${this.store.procedureRef(' · QP.44')}`, m, doc.y + 1);
+    const logo = this.settings.logo;
+    const qrW = 96;
+    let textX = m;
+    if (logo) {
+      const box = fitLogo(logo, 70, 22);
+      try { doc.image(logo.buffer, m, m, box); textX = m + box.width + 6; } catch { /* unreadable image: carry on without it */ }
+    }
+    doc.font('Helvetica').fontSize(7).fillColor('#666666').text(pdfText(company), textX, m, { width: width - textX - m - qrW - 6 });
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('#111111').text(`${this.store.procedureRef('JOB CARD · QP.44') || `${this.settings.terms.job.toUpperCase()} CARD`.replace(/ CARD CARD$/, ' CARD')}`, textX, doc.y + 1);
 
     const qrSize = 96;
     doc.image(qr, width - m - qrSize, m, { width: qrSize, height: qrSize });

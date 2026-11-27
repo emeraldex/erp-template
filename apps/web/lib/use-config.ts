@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { WorkflowConfig } from "./types";
 import { getWithFallback } from "./api";
+import { setCurrency } from "./format";
 
 let cached: WorkflowConfig | null = null;
 const STORE_KEY = "erp.config";
@@ -24,13 +25,14 @@ export function useConfig(): WorkflowConfig | null {
     getWithFallback<WorkflowConfig>("/config", "config")
       .then((r) => {
         cached = r.data;
+        setCurrency(r.data.currency);
         setCfg(r.data);
         try { window.localStorage.setItem(STORE_KEY, JSON.stringify(r.data)); } catch { /* full or private */ }
       })
       .catch(() => {
         // Offline (or signed out): fall back to the last copy, if any.
         const s = saved();
-        if (s) { cached = s; setCfg(s); }
+        if (s) { cached = s; setCurrency(s.currency); setCfg(s); }
       });
   }, []);
   return cfg;

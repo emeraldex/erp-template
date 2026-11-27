@@ -9,6 +9,7 @@ import { useM } from "@/lib/m-text";
 import { uuid } from "@/lib/offline/field";
 import type { Part } from "@/lib/types";
 import { useVocab } from "@/lib/vocab";
+import { fmtMoney } from "@/lib/format";
 
 const box = "min-h-[48px] w-full rounded-lg border hairline bg-ink-deep px-3 text-base outline-none focus:border-trace";
 const q3 = (n: number) => (Math.round(n * 1000) / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 });
@@ -68,7 +69,7 @@ export function PhoneJobParts({ jobId, parts, online, locked, onChanged }: { job
               <span className="mono shrink-0 text-base">{q3(l.qty)} {label("unit", l.unit)}</span>
             </li>
           ))}
-          <li className="flex justify-between px-1 pt-1 text-sm text-steel"><span>{m("partsCost")}</span><span className="mono">RM {parts!.total.toFixed(2)}</span></li>
+          <li className="flex justify-between px-1 pt-1 text-sm text-steel"><span>{m("partsCost")}</span><span className="mono">{fmtMoney(parts!.total)}</span></li>
         </ul>
       )}
       {msg && <p className={`mt-2 text-sm ${msg.ok ? "text-phosphor" : "text-brand-bright"}`}>{msg.text}</p>}

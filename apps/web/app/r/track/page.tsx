@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { BrandLogo } from "@/lib/brand";
 import { initialLang, portal, PortalError, PT, rememberLang, saveRequest, Stage, TrackView } from "@/lib/portal";
 
 type Lang = "en" | "ms";
@@ -58,6 +59,7 @@ export default function TrackPage() {
   const header = (
     <header className="flex items-start justify-between gap-3 border-b hairline px-4 pb-4 pt-6">
       <div className="min-w-0">
+        <BrandLogo className="mb-2 h-10 max-w-[180px]" />
         <p className="mono text-[11px] uppercase tracking-widest text-steel">{v?.org ?? " "}</p>
         <h1 className="display text-3xl font-bold leading-tight">{t("yourRequest")}</h1>
         {v && <p className="mono text-base text-trace">{v.id}</p>}

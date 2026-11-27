@@ -79,7 +79,7 @@ export class RequestsInboxController {
 
   @Post(':id/accept')
   @HttpCode(200)
-  accept(@Param('id') id: string, @Body() body: { assetId?: string; category?: string; site?: string; jobType?: string; component?: string }, @Req() req: Req) {
+  accept(@Param('id') id: string, @Body() body: { assetId?: string; category?: string; site?: string; jobType?: string; component?: string; assetDown?: boolean }, @Req() req: Req) {
     return this.inbox.accept(id, body ?? {}, who(req));
   }
 

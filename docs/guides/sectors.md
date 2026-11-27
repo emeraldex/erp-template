@@ -149,11 +149,33 @@ problem people can choose; its sites, the places they can pick. See the
 [user guide](user-guide.md#requests-from-the-portal) and [how the portal
 works](../architecture/request-portal.md).
 
+## Currency, look and paperwork
+
+Each organisation keeps its books in its own currency, chosen at setup
+(`tenants-cli create … --currency SGD`) or in *Settings* before money is
+recorded. Its logo and brand colour go on the screens, the sign-in page, the
+phone app, the portal and its PDFs, in a dark or light theme. Organisations
+outside aviation get plain documents: a "Tax invoice" (or "Invoice" without
+tax), a "Delivery note", a "Work order card", with no form numbers. See
+[the administrator guide](admin-guide.md#9-look-money-labour-and-accounting).
+
+## Labour, reliability and the accounts
+
+The general-purpose packs switch on **labour**: technicians log time on the
+desktop or the phone (offline too). It is costed at each person's or role's
+hourly rate. Each work order shows its cost so far: parts, purchases, vendor
+repairs and labour. Ticking **out of action** when a breakdown is reported
+records downtime. That feeds each asset's availability, repair time, time
+between failures and preventive compliance, the **reliability report** and
+the dashboard. Finance exports invoices, payments and purchases to the
+accounting system in once-only batches with the organisation's account
+codes. See [how costs and reliability work](../architecture/costs-and-reliability.md).
+
 ## Existing aviation installations
 
 Upgrading keeps everything as it was: the migrations convert the old fixed
 lists into the organisation's own lists without changing any value, and an
 organisation set up before packs existed gets the aviation vocabulary and step
 actions filled in the first time it starts. Assets, preventive maintenance,
-stock control and the request portal are off for aviation organisations until an administrator
-switches them on; aviation's spares-demand workflow is unchanged.
+stock control, the request portal and labour are off for aviation organisations until an administrator
+switches them on; the currency stays Ringgit, documents keep their form numbers; aviation's spares-demand workflow is unchanged.

@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
+import { SettingsService } from '../settings/settings.service';
 import { PrismaService } from '../common/prisma.service';
 import { StoreService } from '../common/store.service';
 import type { Invoice } from '../common/types';
@@ -29,7 +30,14 @@ export function parsePeriod(from?: string, to?: string, now = new Date()): Perio
 /** When the invoice was drafted (its first audit entry). */
 export const draftedOn = (i: Invoice) => (i.audit[0]?.at ?? i.statusSince).slice(0, 10);
 /** Date on the tax invoice (F311 record), if raised. */
-export const taxInvoiceDate = (i: Invoice) => i.records.find((r) => r.formNo === 'F311')?.date;
+/** When the tax invoice was raised: the record carrying its number, else the step that entered it. */
+export const taxInvoiceDate = (i: Invoice): string | undefined => {
+  if (!i.f311Ref) return i.records.find((r) => r.formNo === 'F311')?.date;
+  const rec = i.records.find((r) => r.refNo === i.f311Ref) ?? i.records.find((r) => r.formNo === 'F311');
+  if (rec) return rec.date;
+  const step = i.audit.find((a) => a.fields && Object.values(a.fields).includes(i.f311Ref!));
+  return step?.at.slice(0, 10);
+};
 
 /** Days an unpaid invoice has been outstanding, counted from the tax invoice date (or drafting). */
 export function daysOutstanding(i: Invoice, now: number): number | null {
@@ -49,7 +57,12 @@ export type AuditEntity = keyof typeof AUDIT_ENTITIES;
 /** FR-14 revenue reporting and FR-12 audit reporting, as data ready for CSV/XLSX. */
 @Injectable()
 export class ReportsService {
-  constructor(private readonly store: StoreService, private readonly prisma: PrismaService) {}
+  constructor(private readonly store: StoreService, private readonly prisma: PrismaService, @Optional() private readonly settings?: SettingsService) {}
+
+  /** The organisation's currency code, for column headings. */
+  private get cur(): string {
+    return this.settings?.currency.code ?? 'MYR';
+  }
 
   private streamLabel(id: string): string {
     return this.store.invoiceStreams.find((s) => s.id === id)?.label ?? id;
@@ -77,9 +90,9 @@ export class ReportsService {
         { key: 'drafted', header: 'Drafted', type: 'date', width: 12 }, { key: 'taxDate', header: 'Tax invoice date', type: 'date', width: 15 },
         { key: 'stream', header: 'Stream', width: 30 }, { key: 'customer', header: 'Customer', width: 30 },
         { key: 'branch', header: 'Branch' }, { key: 'job', header: 'Job (PS no.)', width: 15 }, { key: 'period', header: 'Period' },
-        { key: 'amount', header: 'Amount (MYR)', type: 'money', width: 15 }, { key: 'taxLabel', header: 'Tax' },
-        { key: 'taxRate', header: 'Tax rate', type: 'pct' }, { key: 'tax', header: 'Tax (MYR)', type: 'money', width: 13 },
-        { key: 'total', header: 'Total (MYR)', type: 'money', width: 15 }, { key: 'status', header: 'Status', width: 18 },
+        { key: 'amount', header: `Amount (${this.cur})`, type: 'money', width: 15 }, { key: 'taxLabel', header: 'Tax' },
+        { key: 'taxRate', header: 'Tax rate', type: 'pct' }, { key: 'tax', header: `Tax (${this.cur})`, type: 'money', width: 13 },
+        { key: 'total', header: `Total (${this.cur})`, type: 'money', width: 15 }, { key: 'status', header: 'Status', width: 18 },
         { key: 'sprRef', header: 'SPR / e-Payment ref', width: 18 }, { key: 'paymentRef', header: 'Payment ref', width: 15 },
         { key: 'paidAt', header: 'Paid on', type: 'date', width: 12 }, { key: 'outstanding', header: 'Outstanding' },
         { key: 'days', header: 'Days outstanding', type: 'int' },
@@ -100,8 +113,8 @@ export class ReportsService {
       name: 'Summary',
       columns: [
         { key: 'stream', header: 'Stream', width: 32 }, { key: 'count', header: 'Invoices', type: 'int' },
-        { key: 'billed', header: 'Billed (MYR)', type: 'money', width: 15 }, { key: 'tax', header: 'Tax (MYR)', type: 'money', width: 13 },
-        { key: 'paid', header: 'Paid (MYR)', type: 'money', width: 15 }, { key: 'outstanding', header: 'Outstanding (MYR)', type: 'money', width: 17 },
+        { key: 'billed', header: `Billed (${this.cur})`, type: 'money', width: 15 }, { key: 'tax', header: `Tax (${this.cur})`, type: 'money', width: 13 },
+        { key: 'paid', header: `Paid (${this.cur})`, type: 'money', width: 15 }, { key: 'outstanding', header: `Outstanding (${this.cur})`, type: 'money', width: 17 },
       ],
       rows: byStream,
       totals: {
@@ -157,7 +170,7 @@ export class ReportsService {
           { key: 'invoiceNo', header: 'Invoice', width: 18 }, { key: 'stream', header: 'Stream', width: 30 },
           { key: 'customer', header: 'Customer', width: 30 }, { key: 'status', header: 'Status', width: 18 },
           { key: 'since', header: 'Since', type: 'date', width: 12 }, { key: 'days', header: 'Days', type: 'int' },
-          { key: 'bucket', header: 'Ageing' }, { key: 'total', header: 'Total (MYR)', type: 'money', width: 15 },
+          { key: 'bucket', header: 'Ageing' }, { key: 'total', header: `Total (${this.cur})`, type: 'money', width: 15 },
         ],
         rows,
         totals: { invoiceNo: `TOTAL (${rows.length})`, total: round2(open.reduce((s, i) => s + i.totalMYR, 0)) },
@@ -187,7 +200,7 @@ export class ReportsService {
       { key: 'partNo', header: 'Part no.', width: 16 }, { key: 'name', header: 'Name', width: 34 },
       { key: 'group', header: 'Group', width: 16 }, { key: 'bin', header: 'Bin', width: 10 },
       { key: 'qty', header: 'On hand', type: 'qty' }, { key: 'unit', header: 'Unit', width: 8 },
-      { key: 'avgCost', header: 'Average cost', type: 'money', width: 14 }, { key: 'value', header: 'Value (MYR)', type: 'money', width: 15 },
+      { key: 'avgCost', header: 'Average cost', type: 'money', width: 14 }, { key: 'value', header: `Value (${this.cur})`, type: 'money', width: 15 },
     ];
     const stores = [...byStore.keys()].sort();
     const all: Row[] = [];
@@ -203,7 +216,7 @@ export class ReportsService {
         { name: 'Stock', columns, rows: all, totals: { store: `TOTAL (${all.length})`, value: total(all) } },
         {
           name: 'By store',
-          columns: [{ key: 'store', header: 'Store', width: 26 }, { key: 'lines', header: 'Parts held', type: 'int', width: 12 }, { key: 'value', header: 'Value (MYR)', type: 'money', width: 15 }],
+          columns: [{ key: 'store', header: 'Store', width: 26 }, { key: 'lines', header: 'Parts held', type: 'int', width: 12 }, { key: 'value', header: `Value (${this.cur})`, type: 'money', width: 15 }],
           rows: summary,
           totals: { store: 'TOTAL', lines: all.length, value: total(all) },
         },
@@ -266,7 +279,7 @@ export class ReportsService {
           columns: [
             { key: 'partNo', header: 'Part no.', width: 16 }, { key: 'name', header: 'Name', width: 34 },
             { key: 'qty', header: 'Used', type: 'qty' }, { key: 'unit', header: 'Unit', width: 8 },
-            { key: 'jobs', header: 'Work orders', type: 'int', width: 12 }, { key: 'cost', header: 'Cost (MYR)', type: 'money', width: 15 },
+            { key: 'jobs', header: 'Work orders', type: 'int', width: 12 }, { key: 'cost', header: `Cost (${this.cur})`, type: 'money', width: 15 },
           ],
           rows: summary,
           totals: { partNo: `TOTAL (${summary.length})`, cost: total },
@@ -276,7 +289,7 @@ export class ReportsService {
           columns: [
             { key: 'partNo', header: 'Part no.', width: 16 }, { key: 'name', header: 'Name', width: 30 },
             { key: 'jobId', header: 'Work order', width: 16 }, { key: 'asset', header: 'Asset', width: 14 }, { key: 'item', header: 'Item', width: 26 },
-            { key: 'qty', header: 'Used', type: 'qty' }, { key: 'unit', header: 'Unit', width: 8 }, { key: 'cost', header: 'Cost (MYR)', type: 'money', width: 15 },
+            { key: 'qty', header: 'Used', type: 'qty' }, { key: 'unit', header: 'Unit', width: 8 }, { key: 'cost', header: `Cost (${this.cur})`, type: 'money', width: 15 },
           ],
           rows: detail,
           totals: { partNo: `TOTAL (${detail.length})`, cost: total },
@@ -354,6 +367,66 @@ export class ReportsService {
           ],
           rows: summary,
           totals: { site: 'TOTAL', requests: rows.length, avgRating: avg(allRatings), ratings: allRatings.length },
+        },
+      ],
+    };
+  }
+
+  /** Time logged on work orders in a period: by person, by work order, and every entry. */
+  async labourReport(period: Period): Promise<Report> {
+    const rows = await this.prisma.timeEntry.findMany({
+      where: { workDate: { gte: new Date(`${period.from}T00:00:00Z`), lte: new Date(`${period.to}T00:00:00Z`) } },
+      orderBy: [{ workDate: 'asc' }, { userName: 'asc' }],
+    });
+    const jobs = new Map((await this.prisma.job.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.jobId))] } }, select: { id: true, component: true, status: true } })).map((j) => [j.id, j]));
+    const hours = (m: number) => Math.round((m / 60) * 100) / 100;
+    const group = <K extends string>(key: (r: (typeof rows)[number]) => K) => {
+      const out = new Map<K, { minutes: number; cost: number; entries: number; jobs: Set<string>; people: Set<string> }>();
+      for (const r of rows) {
+        const g = out.get(key(r)) ?? { minutes: 0, cost: 0, entries: 0, jobs: new Set<string>(), people: new Set<string>() };
+        g.minutes += r.minutes; g.cost += Number(r.cost); g.entries += 1; g.jobs.add(r.jobId); g.people.add(r.userId);
+        out.set(key(r), g);
+      }
+      return out;
+    };
+    const byPerson = group((r) => `${r.userId}\u0000${r.userName}`);
+    const byJob = group((r) => r.jobId);
+    const totalMin = rows.reduce((s, r) => s + r.minutes, 0);
+    const totalCost = round2(rows.reduce((s, r) => s + Number(r.cost), 0));
+    return {
+      title: 'Labour',
+      subtitle: `${period.from} to ${period.to} — time logged on work orders, at the rates in force when it was logged`,
+      sheets: [
+        {
+          name: 'By person',
+          columns: [
+            { key: 'person', header: 'Person', width: 26 }, { key: 'hours', header: 'Hours', type: 'qty' }, { key: 'entries', header: 'Entries', type: 'int' },
+            { key: 'jobs', header: 'Work orders', type: 'int', width: 12 }, { key: 'cost', header: `Cost (${this.cur})`, type: 'money', width: 15 },
+          ],
+          rows: [...byPerson.entries()].map(([k, g]) => ({ person: k.split('\u0000')[1], hours: hours(g.minutes), entries: g.entries, jobs: g.jobs.size, cost: round2(g.cost) }))
+            .sort((a, b) => Number(b.hours) - Number(a.hours)),
+          totals: { person: 'TOTAL', hours: hours(totalMin), entries: rows.length, cost: totalCost },
+        },
+        {
+          name: 'By work order',
+          columns: [
+            { key: 'jobId', header: 'Work order', width: 16 }, { key: 'item', header: 'Item', width: 30 }, { key: 'status', header: 'Status', width: 18 },
+            { key: 'hours', header: 'Hours', type: 'qty' }, { key: 'people', header: 'People', type: 'int' }, { key: 'cost', header: `Cost (${this.cur})`, type: 'money', width: 15 },
+          ],
+          rows: [...byJob.entries()].map(([id, g]) => ({
+            jobId: id, item: jobs.get(id)?.component ?? '', status: jobs.get(id) ? this.store.label('status:JOB', jobs.get(id)!.status) : '',
+            hours: hours(g.minutes), people: g.people.size, cost: round2(g.cost),
+          })).sort((a, b) => Number(b.cost) - Number(a.cost)),
+          totals: { jobId: `TOTAL (${byJob.size})`, hours: hours(totalMin), cost: totalCost },
+        },
+        {
+          name: 'Entries',
+          columns: [
+            { key: 'date', header: 'Date', type: 'date', width: 12 }, { key: 'person', header: 'Person', width: 24 }, { key: 'jobId', header: 'Work order', width: 16 },
+            { key: 'minutes', header: 'Minutes', type: 'int' }, { key: 'rate', header: 'Rate', type: 'money' }, { key: 'cost', header: `Cost (${this.cur})`, type: 'money' },
+            { key: 'note', header: 'Note', width: 40 },
+          ],
+          rows: rows.map((r) => ({ date: r.workDate.toISOString().slice(0, 10), person: r.userName, jobId: r.jobId, minutes: r.minutes, rate: r.rate === null ? null : Number(r.rate), cost: Number(r.cost), note: r.note })),
         },
       ],
     };

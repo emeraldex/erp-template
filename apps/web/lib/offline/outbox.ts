@@ -16,7 +16,7 @@
  *   reached the server but whose answer was lost is not applied twice.
  */
 
-export type OutboxType = "checklist" | "note" | "photo" | "meter";
+export type OutboxType = "checklist" | "note" | "photo" | "meter" | "time";
 
 export interface OutboxItem {
   /** Unique id; also the X-Client-Op header. */

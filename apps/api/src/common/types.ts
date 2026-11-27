@@ -67,6 +67,12 @@ export interface Job {
   assetId?: string;
   /** The preventive-maintenance schedule that raised this job. */
   pmScheduleId?: string;
+  /** When that preventive cycle was due. */
+  pmDueAt?: string;
+  /** When the job last entered a done phase. */
+  doneAt?: string;
+  /** The asset was out of action when the work was raised. */
+  assetDown?: boolean;
   checklist?: ChecklistItem[];
   /** The person the work is assigned to. */
   assigneeId?: string;

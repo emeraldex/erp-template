@@ -3,12 +3,13 @@
  *
  *   node dist/tenants-cli.js create <id> --name "Acme Aero" --host acme.erp.example.com \
  *        [--host …] [--pack general|aviation|facilities|fleet|industrial|medical]
- *        [--admin-email ops@acme.example --admin-name "Ops Lead"] [--demo]
+ *        [--admin-email ops@acme.example --admin-name "Ops Lead"] [--currency SGD] [--demo]
  *   node dist/tenants-cli.js packs                  # the sector packs a client can start from
  *   node dist/tenants-cli.js list
  *   node dist/tenants-cli.js migrate-all            # default schema + every tenant
  *   node dist/tenants-cli.js set-hosts <id> <host> […]
  *   node dist/tenants-cli.js suspend <id> | activate <id>
+ *   node dist/tenants-cli.js set-currency <id|default> <code> [--force]   # e.g. SGD; --force relabels recorded amounts
  *
  * There is deliberately no delete: removing a client's data is a decision for
  * a person, with a backup in hand (DROP SCHEMA t_<id> CASCADE).
@@ -27,6 +28,7 @@ import { CONTROL_SCHEMA, ensureControlSchema } from './tenancy/tenant-registry';
 import { seedReferenceData, seedWorkflow } from './seed-db';
 import { DEFAULT_PACK, getPack, PACKS } from './packs';
 import { seedPackDemo } from './packs/demo';
+import { CURRENCIES } from './settings/currency';
 
 const APP_ROOT = resolve(__dirname, '..');
 const HOST = /^[a-z0-9.-]+(:\d{1,5})?$/;
@@ -81,6 +83,8 @@ async function create(pool: Pool, args: Args): Promise<void> {
   if (!hosts.length) throw new Error('At least one --host is required (the address its users will open)');
   const pack = getPack(args.flags.pack?.[0] ?? DEFAULT_PACK);
   const schema = schemaFor(id);
+  const currency = args.flags.currency?.[0]?.toUpperCase();
+  if (currency && !CURRENCIES.some((c) => c.code === currency)) throw new Error(`Unknown currency ${currency} (one of ${CURRENCIES.map((c) => c.code).join(', ')})`);
 
   const { rows: clash } = await pool.query(
     `SELECT id FROM ${CONTROL_SCHEMA}.tenants WHERE id = $1 OR hosts && $2::text[]`, [id, hosts],
@@ -115,6 +119,7 @@ async function create(pool: Pool, args: Args): Promise<void> {
     await prisma.setting.upsert({
       where: { key: 'company' }, create: { key: 'company', value: { name } as never, updatedBy: 'tenants-cli' }, update: {},
     });
+    if (currency) await prisma.setting.upsert({ where: { key: 'currency' }, create: { key: 'currency', value: { code: currency } as never, updatedBy: 'tenants-cli' }, update: { value: { code: currency } as never } });
   } finally {
     await prisma.$disconnect();
   }
@@ -167,8 +172,31 @@ async function main(): Promise<void> {
         console.log(`✓ ${id} ${command === 'suspend' ? 'suspended' : 'active'}`);
         return;
       }
+      case 'set-currency': {
+        const [id, raw] = args.positional;
+        const code = raw?.toUpperCase();
+        if (!id || !CURRENCIES.some((c) => c.code === code)) throw new Error(`Usage: set-currency <id|default> <code>; codes: ${CURRENCIES.map((c) => c.code).join(', ')}`);
+        let schema = parseDatabaseUrl().schema;
+        if (id !== 'default') {
+          const { rows } = await pool.query(`SELECT schema_name FROM ${CONTROL_SCHEMA}.tenants WHERE id = $1`, [id]);
+          if (!rows.length) throw new Error(`No tenant ${id}`);
+          schema = rows[0].schema_name;
+        }
+        const prisma = client(schema);
+        try {
+          const recorded = (await prisma.invoice.count()) + (await prisma.quotation.count()) + (await prisma.stockMovement.count({ where: { unitCost: { gt: 0 } } }));
+          if (recorded && !args.flags.force) {
+            throw new Error(`${id} already has amounts recorded; they would be relabelled as ${code}, not converted. Re-run with --force if that is what you want.`);
+          }
+          await prisma.setting.upsert({ where: { key: 'currency' }, create: { key: 'currency', value: { code } as never, updatedBy: 'tenants-cli' }, update: { value: { code } as never, updatedBy: 'tenants-cli' } });
+          console.log(`✓ ${id} now keeps its books in ${code}${recorded ? ' (existing amounts relabelled, not converted)' : ''} — running API servers pick it up within 30 s`);
+        } finally {
+          await prisma.$disconnect();
+        }
+        return;
+      }
       default:
-        console.log('Usage: tenants-cli create|list|packs|migrate-all|set-hosts|suspend|activate (see the header of src/tenants-cli.ts)');
+        console.log('Usage: tenants-cli create|list|packs|migrate-all|set-hosts|suspend|activate|set-currency (see the header of src/tenants-cli.ts)');
         process.exitCode = command ? 1 : 0;
     }
   } finally {

@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Rajdhani, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import { THEME_BOOT } from "@/lib/brand";
+import { BrandSync } from "@/components/brand-sync";
 
 const rajdhani = Rajdhani({
   variable: "--font-rajdhani",
@@ -37,8 +39,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    // The theme script sets data-theme and the brand colour before React loads.
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
+      </head>
       <body className={`${rajdhani.variable} ${plexSans.variable} ${plexMono.variable} antialiased`}>
+        <BrandSync />
         {children}
       </body>
     </html>

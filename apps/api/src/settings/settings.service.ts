@@ -1,3 +1,6 @@
+import { CURRENCIES, Currency, currencyOf } from './currency';
+import { accentProblem, imageInfo, LOGO_MAX_BYTES, LOGO_MIN_EDGE } from './brand';
+import { createHash } from 'crypto';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { currentTenant } from '../tenancy/tenant';
 import { AVIATION } from '../packs/aviation';
@@ -50,7 +53,28 @@ export interface Settings {
   modules: Modules;
   defaults: WorkflowDefaults;
   portal: PortalSettings;
+  /** The currency the organisation keeps its books in (ISO code). */
+  currency: { code: string };
+  /** Brand colour (null = the product's own) and the theme people start with. */
+  brand: BrandSettings;
+  /** Cost per hour by role, and the organisation's default (null = labour is not costed). */
+  labour: LabourSettings;
+  /** Preventive work counts as on time if done by its due date plus this many days. */
+  maintenance: { pmGraceDays: number };
+  /** Account codes for the accounting export. */
+  accounting: AccountingSettings;
 }
+
+export interface AccountingSettings {
+  receivables: string; bank: string; outputTax: string; taxCode: string; purchases: string; stock: string;
+  revenueDefault: string; revenueByStream: Record<string, string>;
+}
+
+export interface LabourSettings { defaultRate: number | null; roleRates: Record<string, number> }
+
+export type Theme = 'dark' | 'light' | 'system';
+export interface BrandSettings { accent: string | null; defaultTheme: Theme }
+export interface Logo { contentType: 'image/png' | 'image/jpeg'; data: string; sha256: string; width: number; height: number; updatedAt: string }
 
 export const DEFAULT_SETTINGS: Settings = {
   company: {
@@ -72,6 +96,11 @@ export const DEFAULT_SETTINGS: Settings = {
   modules: AVIATION.modules,
   defaults: { jobPrefix: AVIATION.defaults.jobPrefix, initialLocation: AVIATION.defaults.initialLocation },
   portal: { open: true, accessCode: '', intro: '', introMs: '', askCategory: true, triageHours: 4 },
+  currency: { code: 'MYR' },
+  brand: { accent: null, defaultTheme: 'dark' },
+  labour: { defaultRate: null, roleRates: {} },
+  maintenance: { pmGraceDays: 7 },
+  accounting: { receivables: '1200', bank: '1000', outputTax: '2200', taxCode: 'SR', purchases: '5000', stock: '1300', revenueDefault: '4000', revenueByStream: {} },
 };
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : undefined);
@@ -80,7 +109,7 @@ const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice
 @Injectable()
 export class SettingsService {
   /** Per tenant, re-read every 30 s so changes made on another replica show up. */
-  private readonly caches = new Map<string, { settings: Settings; loadedAt: number }>();
+  private readonly caches = new Map<string, { settings: Settings; logo: Logo | null; loadedAt: number }>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -107,7 +136,13 @@ export class SettingsService {
         modules: { ...DEFAULT_SETTINGS.modules, ...(byKey.modules ?? {}) },
         defaults: { ...DEFAULT_SETTINGS.defaults, ...(byKey.defaults ?? {}) },
         portal: { ...DEFAULT_SETTINGS.portal, ...(byKey.portal ?? {}) },
+        currency: { ...DEFAULT_SETTINGS.currency, ...(byKey.currency ?? {}) },
+        brand: { ...DEFAULT_SETTINGS.brand, ...(byKey.brand ?? {}) },
+        labour: { ...DEFAULT_SETTINGS.labour, ...(byKey.labour ?? {}) },
+        maintenance: { ...DEFAULT_SETTINGS.maintenance, ...(byKey.maintenance ?? {}) },
+        accounting: { ...DEFAULT_SETTINGS.accounting, ...(byKey.accounting ?? {}) },
       },
+      logo: (byKey.logo as Logo | undefined)?.data ? (byKey.logo as Logo) : null,
       loadedAt: Date.now(),
     });
   }
@@ -134,6 +169,155 @@ export class SettingsService {
 
   get defaults(): WorkflowDefaults {
     return { ...this.cache.defaults };
+  }
+
+  /** The organisation's currency: symbol, decimals and the words invoices use. */
+  get currency(): Currency {
+    return currencyOf(this.cache.currency.code);
+  }
+
+  /** Has the organisation recorded any money yet? Then its currency can no longer be changed here. */
+  async moneyRecorded(): Promise<boolean> {
+    const [invoices, quotes, moves, time] = await Promise.all([
+      this.prisma.invoice.count(), this.prisma.quotation.count(), this.prisma.stockMovement.count({ where: { unitCost: { gt: 0 } } }),
+      this.prisma.timeEntry.count({ where: { cost: { gt: 0 } } }),
+    ]);
+    return invoices + quotes + moves + time > 0;
+  }
+
+  async updateCurrency(code: unknown, by: string): Promise<Currency> {
+    const next = CURRENCIES.find((x) => x.code === String(code ?? '').toUpperCase());
+    if (!next) throw new BadRequestException(`Choose one of: ${CURRENCIES.map((x) => x.code).join(', ')}`);
+    if (next.code === this.cache.currency.code) return next;
+    if (await this.moneyRecorded()) {
+      throw new BadRequestException('Amounts are already recorded in this currency — changing it would relabel them without converting. Ask your system administrator (tenants-cli set-currency --force).');
+    }
+    await this.save('currency', { code: next.code }, by);
+    return next;
+  }
+
+  get brand(): BrandSettings {
+    return { ...this.cache.brand };
+  }
+
+  async updateBrand(patch: Partial<BrandSettings>, by: string): Promise<BrandSettings> {
+    const next = { ...this.cache.brand };
+    if (patch.accent !== undefined) {
+      if (patch.accent === null || patch.accent === '') next.accent = null;
+      else {
+        const problem = accentProblem(patch.accent);
+        if (problem) throw new BadRequestException(problem);
+        next.accent = String(patch.accent).toLowerCase();
+      }
+    }
+    if (patch.defaultTheme !== undefined) {
+      if (!['dark', 'light', 'system'].includes(String(patch.defaultTheme))) throw new BadRequestException('Theme: dark, light or system');
+      next.defaultTheme = patch.defaultTheme as Theme;
+    }
+    await this.save('brand', next, by);
+    return next;
+  }
+
+  /** The organisation's logo, if it has one. */
+  get logo(): { buffer: Buffer; contentType: string; sha256: string; width: number; height: number } | null {
+    const l = this.caches.get(currentTenant().id)?.logo ?? null;
+    return l ? { buffer: Buffer.from(l.data, 'base64'), contentType: l.contentType, sha256: l.sha256, width: l.width, height: l.height } : null;
+  }
+
+  /** PNG or JPEG, recognised by content (never SVG, which can carry scripts), up to 512 KB, at least 64 px. */
+  async setLogo(file: { buffer: Buffer; size: number } | undefined, by: string) {
+    if (!file?.buffer?.length) throw new BadRequestException('Attach the logo in the "file" field');
+    if (file.size > LOGO_MAX_BYTES) throw new BadRequestException('The logo must be 512 KB or smaller');
+    const info = imageInfo(file.buffer);
+    if (!info) throw new BadRequestException('The logo must be a PNG or JPEG image');
+    if (Math.min(info.width, info.height) < LOGO_MIN_EDGE) throw new BadRequestException(`The logo is too small (${info.width} × ${info.height}); it needs at least ${LOGO_MIN_EDGE} pixels on its short side`);
+    if (Math.max(info.width, info.height) > 4000) throw new BadRequestException('The logo is too large (more than 4000 pixels on a side)');
+    const logo: Logo = {
+      contentType: info.type, data: file.buffer.toString('base64'), sha256: createHash('sha256').update(file.buffer).digest('hex'),
+      width: info.width, height: info.height, updatedAt: new Date().toISOString(),
+    };
+    await this.prisma.setting.upsert({ where: { key: 'logo' }, create: { key: 'logo', value: logo as never, updatedBy: by }, update: { value: logo as never, updatedBy: by } });
+    await this.reload();
+    return { width: info.width, height: info.height, contentType: info.type, version: logo.sha256.slice(0, 12) };
+  }
+
+  async removeLogo(): Promise<void> {
+    await this.prisma.setting.deleteMany({ where: { key: 'logo' } });
+    await this.reload();
+  }
+
+  /** What screens need to brand themselves (no image bytes). */
+  get branding() {
+    const l = this.caches.get(currentTenant().id)?.logo ?? null;
+    return { ...this.cache.brand, logo: l ? l.sha256.slice(0, 12) : null };
+  }
+
+  get labour(): LabourSettings {
+    return { defaultRate: this.cache.labour.defaultRate, roleRates: { ...this.cache.labour.roleRates } };
+  }
+
+  async updateLabour(patch: Partial<LabourSettings>, roles: string[], by: string): Promise<LabourSettings> {
+    const rate = (v: unknown, label: string) => {
+      if (v === null || v === '' || v === undefined) return null;
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 0 || n > 1e6) throw new BadRequestException(`${label}: a cost per hour from 0 to 1,000,000`);
+      return Math.round(n * 10_000) / 10_000;
+    };
+    const next = this.labour;
+    if (patch.defaultRate !== undefined) next.defaultRate = rate(patch.defaultRate, 'Default rate');
+    if (patch.roleRates !== undefined) {
+      if (typeof patch.roleRates !== 'object' || patch.roleRates === null || Array.isArray(patch.roleRates)) throw new BadRequestException('roleRates: { ROLE: rate }');
+      const out: Record<string, number> = {};
+      for (const [role, v] of Object.entries(patch.roleRates)) {
+        if (!roles.includes(role)) throw new BadRequestException(`Unknown role ${role}`);
+        const r = rate(v, role);
+        if (r !== null) out[role] = r;
+      }
+      next.roleRates = out;
+    }
+    await this.save('labour', next, by);
+    return next;
+  }
+
+  get maintenance(): { pmGraceDays: number } {
+    return { ...this.cache.maintenance };
+  }
+
+  async updateMaintenance(patch: { pmGraceDays?: unknown }, by: string) {
+    const next = this.maintenance;
+    if (patch.pmGraceDays !== undefined) {
+      const n = Number(patch.pmGraceDays);
+      if (!Number.isInteger(n) || n < 0 || n > 90) throw new BadRequestException('Grace for preventive work: 0 to 90 days');
+      next.pmGraceDays = n;
+    }
+    await this.save('maintenance', next, by);
+    return next;
+  }
+
+  get accounting(): AccountingSettings {
+    return { ...this.cache.accounting, revenueByStream: { ...this.cache.accounting.revenueByStream } };
+  }
+
+  async updateAccounting(patch: Partial<AccountingSettings>, streams: string[], by: string): Promise<AccountingSettings> {
+    const code = (v: unknown, label: string) => {
+      const s = String(v ?? '').trim();
+      if (!/^[A-Za-z0-9][A-Za-z0-9 ./-]{0,23}$/.test(s)) throw new BadRequestException(`${label}: 1–24 letters, digits, spaces or . / -`);
+      return s;
+    };
+    const next = this.accounting;
+    const labels: [keyof AccountingSettings, string][] = [['receivables', 'Receivables account'], ['bank', 'Bank account'], ['outputTax', 'Output tax account'], ['taxCode', 'Tax code'], ['purchases', 'Purchases account'], ['stock', 'Stock account'], ['revenueDefault', 'Revenue account']];
+    for (const [k, label] of labels) if (patch[k] !== undefined) (next as unknown as Record<string, string>)[k] = code(patch[k], label);
+    if (patch.revenueByStream !== undefined) {
+      if (typeof patch.revenueByStream !== 'object' || patch.revenueByStream === null) throw new BadRequestException('revenueByStream: { STREAM: account }');
+      const out: Record<string, string> = {};
+      for (const [stream, v] of Object.entries(patch.revenueByStream)) {
+        if (!streams.includes(stream)) throw new BadRequestException(`Unknown invoicing stream ${stream}`);
+        if (v !== null && v !== '') out[stream] = code(v, `Revenue account for ${stream}`);
+      }
+      next.revenueByStream = out;
+    }
+    await this.save('accounting', next, by);
+    return next;
   }
 
   get portal(): PortalSettings {

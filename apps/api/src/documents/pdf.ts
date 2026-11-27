@@ -1,3 +1,4 @@
+import { Currency, DEFAULT_CURRENCY, formatMoney } from '../settings/currency';
 import PDFDocument = require('pdfkit');
 import type { CompanyProfile } from '../settings/settings.service';
 
@@ -20,8 +21,8 @@ export function pdfText(s: unknown): string {
     .replace(/[^\x09\x0a\x0d\x20-\x7e -ÿ–—‘’“”•…€]/g, '?');
 }
 
-export const myr = (n: number) =>
-  `RM ${n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/** An amount in the organisation's currency, e.g. "RM 1,080.50" (Ringgit unless one is given). */
+export const myr = (n: number, cur: Currency = DEFAULT_CURRENCY) => formatMoney(n, cur);
 
 export interface Marks {
   /** Diagonal watermark, e.g. DRAFT. */
@@ -47,9 +48,24 @@ export function newDoc(title: string, page: { size?: string; margin?: number } =
   return { doc, done };
 }
 
-export function letterhead(doc: Doc, c: CompanyProfile): void {
+/** The organisation's logo, if it has one (PNG or JPEG bytes). */
+export interface LogoImage { buffer: Buffer; width: number; height: number }
+
+/** Fit a logo into a box, keeping its shape. */
+export function fitLogo(logo: LogoImage, maxW: number, maxH: number): { width: number; height: number } {
+  const scale = Math.min(maxW / logo.width, maxH / logo.height, 1);
+  return { width: logo.width * scale, height: logo.height * scale };
+}
+
+export function letterhead(doc: Doc, c: CompanyProfile, logo?: LogoImage | null): void {
   const top = doc.y;
-  doc.font('Helvetica-Bold').fontSize(14).text(pdfText(c.name), MARGIN, top);
+  if (logo) {
+    const box = fitLogo(logo, 150, 56);
+    try {
+      doc.image(logo.buffer, doc.page.width - MARGIN - box.width, top, box);
+    } catch { /* an unreadable image never stops the document */ }
+  }
+  doc.font('Helvetica-Bold').fontSize(14).text(pdfText(c.name), MARGIN, top, { width: doc.page.width - 2 * MARGIN - (logo ? 160 : 0) });
   doc.font('Helvetica').fontSize(8.5).fillColor(MUTED);
   const reg = [c.registrationNo && `Reg. No. ${c.registrationNo}`, c.taxRegistrationNo && `Tax Reg. No. ${c.taxRegistrationNo}`].filter(Boolean).join('   ');
   for (const line of [...c.address, [c.phone && `Tel ${c.phone}`, c.email].filter(Boolean).join('   '), reg]) {

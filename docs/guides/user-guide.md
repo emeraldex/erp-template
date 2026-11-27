@@ -84,6 +84,12 @@ then **Add to Home Screen**.
   **shelf or bin label** opens the part: what each store holds and where, what
   is on order, and *Issue to a work order*. Issuing needs a connection, because
   the stock is checked at that moment.
+- With labour on, a work order has a **Time** section. Tap **+15m**, **+30m**,
+  **+1h** or **+2h**, type your own minutes, or use **Start timer** and
+  **Stop and log** (the timer keeps running if you close the app). Time works
+  without a signal, like notes.
+- When reporting a problem on an asset, tick **It is out of action** if it
+  cannot be used at all.
 
 ## Parts and stock
 
@@ -171,6 +177,30 @@ desk once.
 On the phone app, a work order that came from a request shows who reported it
 with a button to call them.
 
+## Time, cost and breakdowns
+
+- **Logging time:** on a work order, the *Time* section lists who worked how
+  long. Add your own hours and minutes, the date and an optional note, then
+  *Log time*. Supervisors can log time for someone else. You can remove your
+  own entries while the work order is open. A day cannot exceed 24 hours per
+  person.
+- **Cost so far:** the work order adds parts issued, direct purchases, vendor
+  repairs and labour. Rates and labour cost show only to people who manage
+  labour. Everyone else sees hours.
+- **Out of action:** when an asset has stopped completely, tick *out of
+  action* when you register the work, accept the request, or report it from
+  the phone. The asset shows *Out of service* until the work is done, and the
+  time it was down counts in its reliability figures.
+- **Asset reliability:** an asset's page shows its last 12 months:
+  - failures, availability and time out of action;
+  - average time to repair and between failures;
+  - preventive work done on time;
+  - cost, for supervisors and managers;
+  - its downtime history.
+- **Appearance:** the button next to *Password* in the top bar switches
+  between dark, light and your device's setting (phone: *More →
+  Appearance*). It is remembered on that device.
+
 ## By role
 
 **Stores** — register incoming items (*+ Register job*), dispatch them to the
@@ -202,6 +232,14 @@ the correctness gate, submit and record payment. On an invoice, **Documents**
 downloads the tax invoice, covering letter, delivery note or the full pack (a
 *Certified True Copy* version once a CTC reference is recorded). Reports give
 the Sales Performance Report, the e-Payment file and outstanding payments.
+**Finance → Accounting export** makes a monthly batch of invoices, payments
+and purchases for your accounting system, as Excel or CSV. Each item goes
+into one batch only; see the [administrator guide](admin-guide.md) for the
+account codes.
+
+**Supervisors and managers** — set labour rates (*Settings → Labour rates*),
+see labour cost on work orders, and run *Reports → Labour hours and cost* and
+*Asset reliability*.
 
 **Help desk** — with the request portal on, you triage *Requests*: accept, add to existing work, decline, message requesters and print QR posters — see *Requests from the portal* above.
 
@@ -215,5 +253,7 @@ see the [administrator guide](admin-guide.md).
 - *Stage owned by …*: that step belongs to another role.
 - *Mandatory fields missing*: fill in every field the step asks for.
 - *Someone else changed this record first*: reload the page and try again.
+- *That would make … — more than 24 hours in a day*: check the date and
+  the minutes; someone may already have logged that day for you.
 - *Only 2 Each of … in Main store*: there is not enough stock in that store —
   choose another store, issue fewer, or receive more first.

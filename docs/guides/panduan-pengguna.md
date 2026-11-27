@@ -92,6 +92,12 @@ iPhone ketik **Kongsi**, kemudian **Tambah ke Skrin Utama**.
   ganti tersebut: stok setiap stor dan lokasinya, apa yang dalam pesanan, dan
   *Keluarkan kepada arahan kerja*. Pengeluaran memerlukan sambungan, kerana
   stok disemak pada saat itu.
+- Apabila modul buruh dihidupkan, arahan kerja mempunyai bahagian **Masa**.
+  Ketik **+15m**, **+30m**, **+1h** atau **+2h**, taip minit sendiri, atau
+  gunakan **Mula pemasa** dan **Henti dan rekod** (pemasa terus berjalan jika
+  aplikasi ditutup). Masa boleh direkod tanpa isyarat, sama seperti nota.
+- Semasa melaporkan masalah pada aset, tandakan **Ia tidak boleh digunakan
+  langsung** jika aset itu terhenti sepenuhnya.
 
 ## Alat ganti dan stok
 
@@ -187,6 +193,31 @@ melainkan diubah) akan mengingatkan meja bantuan sekali.
 Dalam aplikasi telefon, arahan kerja yang berasal daripada permohonan
 menunjukkan siapa yang melaporkannya dengan butang untuk menelefon mereka.
 
+## Masa, kos dan kerosakan
+
+- **Merekod masa:** pada arahan kerja, bahagian *Time* menyenaraikan siapa
+  bekerja berapa lama. Masukkan jam dan minit, tarikh dan nota (pilihan),
+  kemudian *Log time*. Penyelia boleh merekod masa bagi orang lain. Anda boleh
+  membuang rekod masa sendiri selagi arahan kerja masih terbuka. Sehari tidak
+  boleh melebihi 24 jam bagi seorang.
+- **Kos setakat ini:** arahan kerja menjumlahkan alat ganti yang dikeluarkan,
+  pembelian terus, pembaikan vendor dan buruh. Kadar dan kos buruh hanya
+  dipaparkan kepada mereka yang menguruskan buruh. Orang lain melihat jam
+  sahaja.
+- **Tidak boleh digunakan:** apabila aset terhenti sepenuhnya, tandakan
+  *out of action* semasa mendaftar kerja, menerima permohonan atau melapor
+  dari telefon. Aset dipaparkan *Out of service* sehingga kerja selesai, dan
+  tempoh ia terhenti dikira dalam angka kebolehpercayaannya.
+- **Kebolehpercayaan aset:** halaman aset menunjukkan 12 bulan terakhir:
+  - kerosakan, ketersediaan dan tempoh terhenti;
+  - purata masa membaiki dan antara kerosakan;
+  - kerja pencegahan yang siap tepat pada masanya;
+  - kos, untuk penyelia dan pengurus;
+  - sejarah tempoh terhenti.
+- **Paparan:** butang di sebelah *Password* pada bar atas menukar antara
+  gelap, cerah dan tetapan peranti anda (telefon: *Lagi → Paparan*). Pilihan
+  diingati pada peranti itu.
+
 ## Mengikut peranan
 
 **Stor** — daftar barang masuk (*+ Register job*), hantar ke bengkel, rekod
@@ -220,6 +251,14 @@ semakan ketepatan, hantar dan rekod bayaran. Pada invois, **Documents**
 memuat turun invois cukai, surat iringan, nota hantaran atau pek penuh (versi
 *Salinan Diakui Sah* setelah rujukan CTC direkodkan). Laporan menyediakan
 Laporan Prestasi Jualan, fail e-Payment dan bayaran tertunggak.
+**Finance → Accounting export** menyediakan kelompok bulanan invois, bayaran
+dan pembelian untuk sistem perakaunan anda, dalam Excel atau CSV. Setiap item
+masuk ke satu kelompok sahaja; lihat [panduan pentadbir](admin-guide.md)
+untuk kod akaun.
+
+**Penyelia dan pengurus** — tetapkan kadar buruh (*Settings → Labour rates*),
+lihat kos buruh pada arahan kerja, dan jalankan *Reports → Labour hours and
+cost* serta *Asset reliability*.
 
 **Pentadbir** — pengguna, tetapan, log masuk tunggal dan penyunting aliran
 kerja; lihat [panduan pentadbir](admin-guide.md) (dalam Bahasa Inggeris).
@@ -231,5 +270,7 @@ kerja; lihat [panduan pentadbir](admin-guide.md) (dalam Bahasa Inggeris).
 - *Stage owned by …*: langkah itu milik peranan lain.
 - *Mandatory fields missing*: isi setiap medan yang diminta.
 - *Someone else changed this record first*: muat semula halaman dan cuba lagi.
+- *That would make … — more than 24 hours in a day*: semak tarikh dan minit;
+  mungkin seseorang telah merekod masa hari itu bagi pihak anda.
 - *Only 2 Each of … in Main store*: stok di stor itu tidak mencukupi — pilih
   stor lain, keluarkan kurang, atau terima stok dahulu.

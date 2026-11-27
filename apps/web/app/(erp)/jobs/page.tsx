@@ -26,6 +26,7 @@ export default function JobsPage() {
     component: "", partNo: "", serialNo: "", category: "", originUnit: "", repairUnit: "", assetId: "", jobType: "",
   });
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [assetDown, setAssetDown] = useState(false);
 
   const me = useSession()?.user.id;
   const canRegister = can("jobs.register");
@@ -69,12 +70,14 @@ export default function JobsPage() {
   async function register() {
     setError(null);
     try {
-      const body = Object.fromEntries(Object.entries({
+      const body: Record<string, string | boolean> = Object.fromEntries(Object.entries({
         ...form,
         category: form.category || categories[0]?.key || "",
         repairUnit: form.repairUnit || asset?.site || sites[0]?.key || "",
       }).filter(([, v]) => v !== ""));
+      if (assetDown && form.assetId) body.assetDown = true;
       const job = await api.post<Job>("/jobs", body);
+      setAssetDown(false);
       setRows([job, ...rows]);
       setShowNew(false);
       router.push(`/jobs/${job.id}`);
@@ -124,6 +127,12 @@ export default function JobsPage() {
                   <option value="">— not in the register —</option>
                   {assets.filter((a) => a.status !== "RETIRED").map((a) => <option key={a.id} value={a.id}>{a.tag} · {a.name} · {label("site", a.site)}</option>)}
                 </select>
+              </label>
+            )}
+            {modules.assets && form.assetId && (
+              <label className="flex items-center gap-2 text-sm text-fg sm:col-span-3">
+                <input type="checkbox" checked={assetDown} onChange={(e) => setAssetDown(e.target.checked)} className="accent-[var(--c-red)]" />
+                The {terms.asset.toLowerCase()} is out of action — record downtime until this work is done
               </label>
             )}
             {(

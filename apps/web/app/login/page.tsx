@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, API_BASE, ApiError, DEMO_MODE, safeNext, setSession } from "@/lib/api";
 import { Button } from "@/components/ui";
+import { BrandLogo, useBrand } from "@/lib/brand";
 
 // Demo shortcuts are shown in development and demo builds only — a production
 // build must not advertise accounts or the reference password.
@@ -43,6 +44,8 @@ const SSO_ERRORS: Record<string, string> = {
 export default function LoginPage() {
   const router = useRouter();
   const [org, setOrg] = useState<string | null>(null);
+  const [aviationOrg, setAviationOrg] = useState(false);
+  const brand = useBrand();
   const [demoUsers, setDemoUsers] = useState(AVIATION_DEMO_USERS);
   const [sso, setSso] = useState<{ enabled: boolean; label: string; passwordLogin: boolean } | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -50,6 +53,7 @@ export default function LoginPage() {
   useEffect(() => {
     api.get<{ name: string; pack?: string }>("/tenant").then((t) => {
       setOrg(t.name);
+      setAviationOrg(!t.pack || t.pack === "aviation");
       if (t.pack && t.pack !== "aviation") {
         setDemoUsers(PACK_DEMO_USERS);
         setEmail((e) => (e === "aisyah@company.example" ? "admin@company.example" : e));
@@ -99,12 +103,14 @@ export default function LoginPage() {
     <div className="relative z-[1] flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="fade-up mb-8 text-center">
-          <svg viewBox="0 0 32 32" className="mx-auto mb-3 h-12 w-12" aria-hidden>
-            <rect x="4" y="4" width="24" height="24" rx="3" fill="none" stroke="var(--c-red)" strokeWidth="2.5" />
-            <path d="M10 11.5h12M10 16h12M10 20.5h7" fill="none" stroke="var(--c-text)" strokeWidth="2.5" strokeLinecap="round" />
-          </svg>
+          {brand?.logo ? <BrandLogo className="mx-auto mb-3 h-16 max-w-[240px]" /> : (
+            <svg viewBox="0 0 32 32" className="mx-auto mb-3 h-12 w-12" aria-hidden>
+              <rect x="4" y="4" width="24" height="24" rx="3" fill="none" stroke="var(--c-red)" strokeWidth="2.5" />
+              <path d="M10 11.5h12M10 16h12M10 20.5h7" fill="none" stroke="var(--c-text)" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          )}
           <h1 className="display text-3xl font-bold">{org ? org.toUpperCase() : "\u00a0"}</h1>
-          <p className="eyebrow mt-1">Integrated Maintenance, Procurement &amp; Job-Tracking · CO-RFP-IT-001</p>
+          <p className="eyebrow mt-1">{aviationOrg ? "Integrated Maintenance, Procurement & Job-Tracking · CO-RFP-IT-001" : "Maintenance management"}</p>
         </div>
 
         <div className="panel ticked fade-up d2 p-6">

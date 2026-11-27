@@ -118,7 +118,7 @@ export class RequestsInboxService {
   }
 
   /** Accept: register a work order for it. */
-  async accept(id: string, body: { assetId?: string; category?: string; site?: string; jobType?: string; component?: string }, actor: Actor) {
+  async accept(id: string, body: { assetId?: string; category?: string; site?: string; jobType?: string; component?: string; assetDown?: boolean }, actor: Actor) {
     const r = await this.claim(id, { status: 'ACCEPTED' }, actor);
     let jobId: string;
     try {
@@ -131,6 +131,7 @@ export class RequestsInboxService {
         originUnit: `${r.requesterName} (request ${r.id})`.slice(0, 120),
         repairUnit: body.site || r.site || undefined,
         ...(body.jobType ? { jobType: body.jobType } : {}),
+        ...(body.assetDown && asset ? { assetDown: true } : {}),
       } as Parameters<JobsService['register']>[0], actor);
       jobId = job.id;
     } catch (e) {
@@ -281,7 +282,7 @@ export class RequestsInboxService {
     const org = this.settings.company.name || currentTenant().name;
     if (format === 'stickers') return { filename: `request-stickers-${points.length}.pdf`, pdf: await stickerPdf(points, webBase) };
     if (format && format !== 'poster') throw new BadRequestException('format must be poster or stickers');
-    return { filename: points.length === 1 ? `request-poster-${points[0].code}.pdf` : `request-posters-${points.length}.pdf`, pdf: await posterPdf(points, org, webBase) };
+    return { filename: points.length === 1 ? `request-poster-${points[0].code}.pdf` : `request-posters-${points.length}.pdf`, pdf: await posterPdf(points, org, webBase, this.settings.logo) };
   }
 
   /** A message to the requester, shown on their tracking page and emailed. */

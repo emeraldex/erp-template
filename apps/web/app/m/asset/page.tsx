@@ -29,7 +29,7 @@ function AssetView() {
   const [fromCache, setFromCache] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState(false);
-  const [form, setForm] = useState({ problem: "", originUnit: "", category: "" });
+  const [form, setForm] = useState({ problem: "", originUnit: "", category: "", assetDown: false });
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -51,6 +51,7 @@ function AssetView() {
       const job = await api.post<Job>("/jobs", {
         assetId: id, originUnit: form.originUnit || "Reported from phone",
         category: form.category || dict("category")[0]?.key || "",
+        ...(form.assetDown ? { assetDown: true } : {}),
       });
       if (form.problem.trim()) await api.post(`/jobs/${encodeURIComponent(job.id)}/notes`, { text: form.problem.trim() });
       router.push(`/m/job?id=${encodeURIComponent(job.id)}`);
@@ -99,6 +100,10 @@ function AssetView() {
                   {dict("category").map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
                 </select>
               )}
+              <label className="flex min-h-[48px] items-center gap-3 rounded-lg border hairline bg-ink-deep px-3 text-base">
+                <input type="checkbox" checked={form.assetDown} onChange={(e) => setForm({ ...form, assetDown: e.target.checked })} className="h-5 w-5 accent-[var(--c-red)]" />
+                {m("outOfAction")}
+              </label>
               <BigButton disabled={busy || !f.online || !form.problem.trim()} onClick={submitReport}>{m("send")}</BigButton>
             </div>
           )}

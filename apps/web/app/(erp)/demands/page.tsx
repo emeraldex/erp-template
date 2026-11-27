@@ -8,7 +8,7 @@ import { Demand, DemandStatus, Part, Partner, Quotation } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
 import { useVocab } from "@/lib/vocab";
 import { useLang } from "@/lib/i18n";
-import { fmtMYR } from "@/lib/format";
+import { currencyCode, fmtMYR } from "@/lib/format";
 import { Button, MetaPill, OfflineNotice, PageHeader, Panel } from "@/components/ui";
 import { AuditTrail, RecordsList, TransitionActions } from "@/components/workflow";
 
@@ -169,7 +169,7 @@ export default function DemandsPage() {
                             </select>
                           </label>
                           <label className="block">
-                            <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Price (MYR)</span>
+                            <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Price ({currencyCode()})</span>
                             <input value={quote.priceMYR} onChange={(e) => setQuote({ ...quote, priceMYR: e.target.value })} className="mono w-28 rounded-md border hairline bg-panel px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
                           </label>
                           <label className="block">

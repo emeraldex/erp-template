@@ -7,6 +7,8 @@ import { useLang } from "@/lib/i18n";
 import { CompanyProfile, Modules, PortalSettings, Settings, Terms } from "@/lib/types";
 import { DEFAULT_TERMS, useVocab } from "@/lib/vocab";
 import { Button, PageHeader, Panel } from "@/components/ui";
+import { BrandPanel, MoneyPanel } from "@/components/settings/look-and-money";
+import { LabourRatesPanel } from "@/components/settings/labour-rates";
 
 const inputClass = "mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace disabled:opacity-60";
 
@@ -105,6 +107,9 @@ export default function SettingsPage() {
         </Panel>
             </div>
       {isAdmin && <SectorSettings settings={settings} onSaved={(next) => setSettings({ ...settings, ...next })} />}
+      {isAdmin && settings.brand && <BrandPanel initial={settings.brand} />}
+      {isAdmin && <MoneyPanel graceDays={settings.maintenance?.pmGraceDays ?? 7} />}
+      {settings.modules?.labour && can("labour.manage") && <LabourRatesPanel />}
       {isAdmin && settings.modules?.requests && settings.portal && <PortalSettingsPanel initial={settings.portal} />}
       {isAdmin && <SsoSettings />}
     </div>
@@ -185,7 +190,7 @@ const TERM_LABELS: [keyof Terms, string][] = [
 
 const MODULE_LABELS: [keyof Modules, string][] = [
   ["assets", "Asset register & meters"], ["pm", "Preventive maintenance (needs assets)"], ["procurement", "Parts requests & purchasing"],
-  ["stock", "Parts catalogue & stock control"], ["requests", "Request portal (anyone can report a problem)"],
+  ["stock", "Parts catalogue & stock control"], ["requests", "Request portal (anyone can report a problem)"], ["labour", "Labour time, hourly rates and job cost"],
   ["vendorRepair", "Repairs at vendors / OEMs"], ["priority", "Priority escalation"], ["invoicing", "Invoicing"],
   ["registers", "Supplier & contractor register"], ["incidents", "Safety incidents"], ["tools", "Tool control"], ["training", "Training records"],
 ];

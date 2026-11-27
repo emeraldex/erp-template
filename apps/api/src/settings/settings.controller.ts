@@ -1,10 +1,13 @@
-import { BadRequestException, Body, Controller, Get, Patch, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Patch, Put, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { LOGO_MAX_BYTES } from './brand';
 import { StoreService } from '../common/store.service';
 import { AuthGuard } from '../auth/auth.guard';
 import { AuthUser } from '../auth/auth.service';
 import { Requires } from '../auth/roles.decorator';
 import type { Modules, Terms } from '../packs/types';
-import { CompanyProfile, PortalSettings, SettingsService, TaxSettings, WorkflowDefaults } from './settings.service';
+import { BrandSettings, CompanyProfile, PortalSettings, SettingsService, TaxSettings, WorkflowDefaults } from './settings.service';
+import { CURRENCIES } from './currency';
 
 @Controller('settings')
 @UseGuards(AuthGuard)
@@ -17,6 +20,47 @@ export class SettingsController {
     // The portal's access code is for administrators to set and hand out.
     if (!this.store.capabilitiesOf(req.user.role).includes('org.admin')) s.portal = { ...s.portal, accessCode: s.portal.accessCode ? '********' : '' };
     return s;
+  }
+
+  /** Brand colour (white text on it must stay readable) and the theme people start with. */
+  @Patch('brand')
+  @Requires('org.admin')
+  brand(@Body() body: Partial<BrandSettings>, @Req() req: { user: AuthUser }) {
+    return this.settings.updateBrand(body ?? {}, req.user.name);
+  }
+
+  /** The organisation's logo: PNG or JPEG in "file", up to 512 KB. Shown on screens, the request portal and PDFs. */
+  @Put('logo')
+  @Requires('org.admin')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: LOGO_MAX_BYTES + 1, files: 1, fields: 2 } }))
+  logo(@UploadedFile() file: Express.Multer.File | undefined, @Req() req: { user: AuthUser }) {
+    return this.settings.setLogo(file, req.user.name);
+  }
+
+  @Delete('logo')
+  @HttpCode(204)
+  @Requires('org.admin')
+  async removeLogo() {
+    await this.settings.removeLogo();
+  }
+
+  /** How many days late preventive work may be and still count as on time. */
+  @Patch('maintenance')
+  @Requires('org.admin')
+  maintenance(@Body() body: { pmGraceDays?: number }, @Req() req: { user: AuthUser }) {
+    return this.settings.updateMaintenance(body ?? {}, req.user.name);
+  }
+
+  /** The currency the organisation keeps its books in. Locked once amounts are recorded. */
+  @Get('currencies')
+  async currencies() {
+    return { current: this.settings.currency.code, locked: await this.settings.moneyRecorded(), list: CURRENCIES };
+  }
+
+  @Patch('currency')
+  @Requires('org.admin')
+  currency(@Body() body: { code?: string }, @Req() req: { user: AuthUser }) {
+    return this.settings.updateCurrency(body?.code, req.user.name);
   }
 
   /** The public request portal: open or closed, access code, intro text, triage reminder. */

@@ -16,6 +16,7 @@ const DICT = {
   registers: { en: "Suppliers & Vendors", ms: "Pembekal & Vendor" },
   fod: { en: "FOD & Quality", ms: "FOD & Kualiti" },
   invoicing: { en: "Invoicing & Revenue", ms: "Invois & Hasil" },
+  accounting: { en: "Accounting export", ms: "Eksport perakaunan" },
   aogRoa: { en: "AOG / ROA Priority", ms: "Keutamaan AOG / ROA" },
   operations: { en: "Operations", ms: "Operasi" },
   supplyChain: { en: "Supply Chain", ms: "Rantaian Bekalan" },

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Optional, BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 import { StoreService } from '../common/store.service';
 import { SettingsService } from '../settings/settings.service';
@@ -6,6 +6,7 @@ import { nextId, text } from './ids';
 import { offlineTime } from '../common/client-ops';
 import { MAX_LABELS } from './labels';
 import { PmService } from './pm.service';
+import { DowntimeService } from './downtime.service';
 
 type Actor = { name: string; role: string };
 
@@ -31,6 +32,7 @@ export class AssetsService {
     private readonly store: StoreService,
     private readonly pm: PmService,
     private readonly settings: SettingsService,
+    @Optional() private readonly downtime?: DowntimeService,
   ) {}
 
   /** Assets to print labels for, in the order asked, with site names. */
@@ -207,6 +209,11 @@ export class AssetsService {
     if (input.commissionedOn !== undefined) data.commissionedOn = input.commissionedOn || null;
     if (input.attributes !== undefined) data.attributes = input.attributes;
     await this.prisma.asset.update({ where: { id }, data: { ...data, version: { increment: 1 } } });
+    // Out of service by hand starts a downtime spell; back in service ends it.
+    if (this.downtime && input.status && input.status !== existing.status) {
+      if (input.status === 'OUT_OF_SERVICE') await this.downtime.open(id, { reason: 'Put out of service', by: _actor.name });
+      else if (existing.status === 'OUT_OF_SERVICE') await this.downtime.closeForAsset(id, _actor.name);
+    }
     return this.get(id);
   }
 

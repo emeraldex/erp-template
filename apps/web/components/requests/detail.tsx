@@ -19,7 +19,7 @@ export function RequestDetail({ id, onChanged }: { id: string; onChanged: () => 
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"accept" | "merge" | "decline" | null>(null);
-  const [accept, setAccept] = useState({ assetId: "", category: "", site: "", jobType: "", component: "" });
+  const [accept, setAccept] = useState({ assetId: "", category: "", site: "", jobType: "", component: "", assetDown: false });
   const [assets, setAssets] = useState<Asset[] | null>(null);
   const [mergeJob, setMergeJob] = useState("");
   const [decline, setDecline] = useState({ reason: "", spam: false });
@@ -30,7 +30,7 @@ export function RequestDetail({ id, onChanged }: { id: string; onChanged: () => 
   const load = useCallback(() => {
     api.get<ServiceRequest>(`/requests/${encodeURIComponent(id)}`).then((x) => {
       setR(x);
-      setAccept({ assetId: x.asset?.id ?? "", category: x.category, site: x.site, jobType: "", component: "" });
+      setAccept({ assetId: x.asset?.id ?? "", category: x.category, site: x.site, jobType: "", component: "", assetDown: false });
     }).catch((e) => setMsg({ ok: false, text: (e as Error).message }));
   }, [id]);
   useEffect(() => { setR(null); setMsg(null); setMode(null); setMessage(""); load(); }, [load]);
@@ -132,6 +132,12 @@ export function RequestDetail({ id, onChanged }: { id: string; onChanged: () => 
                     <option value="">— none: use the place —</option>
                     {(assets ?? []).filter((a) => a.status !== "RETIRED").map((a) => <option key={a.id} value={a.id}>{a.tag} · {a.name} · {label("site", a.site)}</option>)}
                   </select>
+                </label>
+              )}
+              {modules.assets && accept.assetId && (
+                <label className="flex items-center gap-2 text-sm text-fg sm:col-span-2">
+                  <input type="checkbox" checked={accept.assetDown} onChange={(e) => setAccept({ ...accept, assetDown: e.target.checked })} className="accent-[var(--c-red)]" />
+                  Out of action — record downtime until the work is done
                 </label>
               )}
               {!accept.assetId && (

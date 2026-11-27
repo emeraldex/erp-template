@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { Prisma } from '../generated/prisma/client';
 import { SettingsService } from '../settings/settings.service';
+import { DEFAULT_CURRENCY, formatMoney } from '../settings/currency';
 import { quantity, StockService } from '../stock/stock.service';
 import { StoreService } from '../common/store.service';
 import { applyTransition } from '../common/transition.engine';
@@ -8,6 +9,10 @@ import { Demand, DemandStatus, Quotation, Role } from '../common/types';
 
 @Injectable()
 export class DemandsService {
+  private get currency() {
+    return this.settings?.currency ?? DEFAULT_CURRENCY;
+  }
+
   constructor(
     private readonly store: StoreService,
     @Optional() private readonly stock?: StockService,
@@ -34,7 +39,7 @@ export class DemandsService {
     const dm = await this.get(id);
     if (!this.store.status('DEMAND', dm.status)?.acceptsQuotations) throw new BadRequestException('Quotations are recorded while the RFQ is open');
     dm.quotations.push(q);
-    dm.audit.push(this.store.audit(actor.name, actor.role, `Quotation received — ${q.supplier} (RM ${q.priceMYR.toLocaleString()})`));
+    dm.audit.push(this.store.audit(actor.name, actor.role, `Quotation received — ${q.supplier} (${formatMoney(q.priceMYR, this.currency)})`));
     await this.store.save(dm);
     return dm;
   }
@@ -157,7 +162,7 @@ export class DemandsService {
     dm.forStore = into;
     if (Number.isFinite(cost)) dm.unitCost = Math.round(cost * 10_000) / 10_000;
     dm.audit.push(this.store.audit(actor.name, actor.role,
-      `Received into stock: ${qty} into ${stock.storeName(into)}${Number.isFinite(cost) ? ` at RM ${cost.toFixed(2)} each` : ''}`));
+      `Received into stock: ${qty} into ${stock.storeName(into)}${Number.isFinite(cost) ? ` at ${formatMoney(cost, this.currency)} each` : ''}`));
     if (!dm.jobId) {
       const done = this.store.finalStatuses('DEMAND').find((k) => !this.store.status('DEMAND', k)?.branch);
       if (done) {

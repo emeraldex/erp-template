@@ -90,6 +90,8 @@ model User {
   passwordChangedAt  DateTime?
   /// Set when an administrator deactivates the account; history stays attributed.
   deactivatedAt      DateTime?
+  /// Labour: this person's cost per hour (else their role's, else the organisation's).
+  hourlyRate         Decimal?       @db.Decimal(14, 4)
   sessions           Session[]
   notifications      Notification[]
 
@@ -139,6 +141,12 @@ model Job {
   asset        Asset?    @relation(fields: [assetId], references: [id], onDelete: SetNull)
   /// Set when a preventive-maintenance schedule raised the job.
   pmScheduleId String?
+  /// When the preventive cycle that raised it was due.
+  pmDueAt      DateTime?
+  /// When it last entered a done phase.
+  doneAt       DateTime?
+  /// The asset was out of action when the work was raised.
+  assetDown    Boolean   @default(false)
   /// Checklist items: [{ key, label, required, done, by, at, note }].
   checklist    Json      @default("[]")
   /// The person the work is assigned to (users are never deleted, so no foreign key).
@@ -940,4 +948,74 @@ model RequestPoint {
 
   @@index([assetId])
   @@map("request_points")
+}
+
+/// Time someone spent on a work order. The rate in force when it was logged
+/// stays with it, so later rate changes never rewrite labour cost.
+model TimeEntry {
+  id        String   @id
+  jobId     String
+  userId    String
+  userName  String
+  workDate  DateTime @db.Date
+  minutes   Int
+  note      String   @default("")
+  /// Cost per hour when logged; null when no rate was set.
+  rate      Decimal? @db.Decimal(14, 4)
+  cost      Decimal  @default(0) @db.Decimal(14, 2)
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobId])
+  @@index([userId, workDate])
+  @@index([workDate])
+  @@map("time_entries")
+}
+
+/// A spell when an asset was out of action: opened when work says so or the
+/// asset is put out of service, closed when the work is done or it is back.
+model AssetDowntime {
+  id       Int       @id @default(autoincrement())
+  assetId  String
+  fromAt   DateTime
+  toAt     DateTime?
+  jobId    String?
+  reason   String    @default("")
+  openedBy String
+  closedBy String?
+
+  @@index([assetId, fromAt])
+  @@index([jobId])
+  @@map("asset_downtime")
+}
+
+/// A batch of figures handed to the accounting system. Each item remembers
+/// what was exported, so nothing goes out twice and a batch can be re-downloaded.
+model AccountingExport {
+  id              String                 @id
+  fromDate        DateTime               @db.Date
+  toDate          DateTime               @db.Date
+  includeExported Boolean                @default(false)
+  createdBy       String
+  createdAt       DateTime               @default(now())
+  items           AccountingExportItem[]
+
+  @@map("accounting_exports")
+}
+
+model AccountingExportItem {
+  id       Int              @id @default(autoincrement())
+  exportId String
+  export   AccountingExport @relation(fields: [exportId], references: [id], onDelete: Cascade)
+  /// SALE, RECEIPT or PURCHASE.
+  kind     String
+  /// The invoice, request or vendor repair it came from.
+  ref      String
+  /// The row as exported.
+  data     Json
+
+  @@index([kind, ref])
+  @@index([exportId])
+  @@map("accounting_export_items")
 }

@@ -1,3 +1,5 @@
+import { Currency, DEFAULT_CURRENCY } from '../settings/currency';
+
 const ONES = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
   'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
 const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
@@ -22,11 +24,19 @@ export function integerInWords(n: number): string {
   return groups.join(' ');
 }
 
-/** "Ringgit Malaysia One Thousand and Eighty and Sen Fifty Only" style, as printed on Malaysian invoices. */
-export function ringgitInWords(amount: number): string {
-  const sen = Math.round(amount * 100);
-  const rm = Math.floor(sen / 100);
-  const cents = sen % 100;
-  const title = (s: string) => s.replace(/\b[a-z]+/g, (w) => (w === 'and' ? w : w[0].toUpperCase() + w.slice(1)));
-  return `Ringgit Malaysia ${title(integerInWords(rm))}${cents ? ` and Sen ${title(integerInWords(cents))}` : ''} Only`;
+const title = (s: string) => s.replace(/\b[a-z]+/g, (w) => (w === 'and' ? w : w[0].toUpperCase() + w.slice(1)));
+
+/**
+ * An amount spelled out the way invoices print it, in the organisation's
+ * currency: "Ringgit Malaysia One Thousand and Eighty and Sen Fifty Only",
+ * "Singapore Dollars Ten and Cents Five Only", "Rupiah One Million Only".
+ */
+export function amountInWords(amount: number, cur: Currency = DEFAULT_CURRENCY): string {
+  const minorUnits = Math.round(amount * 10 ** cur.decimals);
+  const major = cur.decimals ? Math.floor(minorUnits / 100) : minorUnits;
+  const minor = cur.decimals ? minorUnits % 100 : 0;
+  return `${cur.major} ${title(integerInWords(major))}${minor ? ` and ${cur.minor} ${title(integerInWords(minor))}` : ''} Only`;
 }
+
+/** Ringgit, as printed on Malaysian invoices. */
+export const ringgitInWords = (amount: number) => amountInWords(amount, DEFAULT_CURRENCY);

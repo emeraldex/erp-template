@@ -330,6 +330,8 @@ export interface WorkflowConfig {
   pack?: { id: string; name: string };
   terms?: Terms;
   modules?: Modules;
+  /** The organisation's currency. */
+  currency?: { code: string; symbol: string; decimals: number; name: string; major: string; minor: string };
   phases?: Phase[];
   capabilities?: Record<string, string>;
   /** Every list the organisation keeps: status:JOB, role, site, location, category, assetType… */
@@ -356,7 +358,7 @@ export interface Terms {
 export interface Modules {
   procurement: boolean; vendorRepair: boolean; priority: boolean; incidents: boolean;
   tools: boolean; training: boolean; invoicing: boolean; registers: boolean;
-  assets: boolean; pm: boolean; stock: boolean; requests: boolean;
+  assets: boolean; pm: boolean; stock: boolean; requests: boolean; labour: boolean;
 }
 
 export interface Meter { key: string; label: string; unit: string; value: number; readAt: string | null }
@@ -454,6 +456,10 @@ export interface Kpis {
   newRequests?: number | null;
   /** Requesters' average rating over 90 days. */
   satisfaction?: { average: number; ratings: number } | null;
+  /** Assets out of action now; null when the asset register is off. */
+  assetsDown?: number | null;
+  /** Preventive work due in the last 90 days and how much was done on time. */
+  pmCompliance90?: { due: number; onTime: number; pct: number | null } | null;
 }
 
 export interface Attachment {
@@ -502,6 +508,8 @@ export interface Settings {
   modules?: Modules;
   defaults?: { jobPrefix: string; initialLocation: string };
   portal?: PortalSettings;
+  brand?: { accent: string | null; defaultTheme: "dark" | "light" | "system" };
+  maintenance?: { pmGraceDays: number };
 }
 
 // ─── stock ──────────────────────────────────────────────────────────────────

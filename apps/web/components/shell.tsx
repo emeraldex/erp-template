@@ -11,6 +11,7 @@ import { DEFAULT_TERMS, useVocab } from "@/lib/vocab";
 import { setFullSite } from "@/lib/phone";
 import { clearFieldCache, unsentCount } from "@/lib/offline/db";
 import { NotificationBell } from "./notifications";
+import { BrandLogo, ThemeSwitch, useBrand } from "@/lib/brand";
 
 type TermKey = keyof typeof DEFAULT_TERMS;
 interface NavItem {
@@ -50,7 +51,10 @@ const NAV: { group: DictKey; items: NavItem[] }[] = [
   },
   {
     group: "finance",
-    items: [{ href: "/invoicing", label: "invoicing", code: "QP.51", tag: "INV", module: "invoicing" }],
+    items: [
+      { href: "/invoicing", label: "invoicing", code: "QP.51", tag: "INV", module: "invoicing" },
+      { href: "/accounting", label: "accounting", code: "GL", tag: "GL", module: "invoicing", capability: "accounting.export" },
+    ],
   },
   {
     group: "quality",
@@ -69,6 +73,15 @@ const NAV: { group: DictKey; items: NavItem[] }[] = [
 
 function CompanyMark() {
   const { aviation, cfg } = useVocab();
+  const brand = useBrand();
+  if (brand?.logo) {
+    return (
+      <Link href="/dashboard" className="flex flex-col gap-1.5 px-5 py-5">
+        <BrandLogo className="h-10 max-w-[180px]" />
+        <p className="eyebrow leading-none">{(cfg?.pack?.name ?? "MAINTENANCE").toUpperCase()}</p>
+      </Link>
+    );
+  }
   return (
     <Link href="/dashboard" className="flex items-center gap-3 px-5 py-5">
       <svg viewBox="0 0 32 32" className="h-8 w-8" aria-hidden>
@@ -261,6 +274,7 @@ export function Topbar() {
               </p>
             </div>
             <NotificationBell />
+            <ThemeSwitch className="mono hidden rounded border hairline px-2.5 py-1.5 text-[10.5px] tracking-widest text-steel transition-colors hover:border-steel/50 hover:text-fg sm:inline" />
             <button
               onClick={() => router.push("/change-password")}
               className="mono hidden rounded border hairline px-2.5 py-1.5 text-[10.5px] tracking-widest text-steel transition-colors hover:border-steel/50 hover:text-fg sm:inline"
