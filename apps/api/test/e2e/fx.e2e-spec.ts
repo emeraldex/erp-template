@@ -1,6 +1,8 @@
 import { INestApplication } from '@nestjs/common';
 import request = require('supertest');
+import { execFileSync } from 'child_process';
 import { createApp, login } from './app';
+import { pdfLines } from './pdf-text';
 
 const API = '/api/v1';
 const HOST = 'fm.test'; // facilities demo, Ringgit
@@ -17,6 +19,11 @@ describe('Exchange rates and foreign-currency transactions (integration)', () =>
   const st = (code: number) => (r: request.Response) => {
     if (r.status !== code) throw new Error(`Expected ${code}, got ${r.status}: ${JSON.stringify(r.body)}`);
     return r;
+  };
+  const binary = (res: request.Response, cb: (err: Error | null, body: Buffer) => void) => {
+    const chunks: Buffer[] = [];
+    res.on('data', (c: Buffer) => chunks.push(c));
+    res.on('end', () => cb(null, Buffer.concat(chunks)));
   };
   const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
   const today = day(0);
@@ -169,6 +176,95 @@ describe('Exchange rates and foreign-currency transactions (integration)', () =>
       expect((await send('post', '/stock/receive', { partId: part.id, store, qty: 1, unitCost: 10, currency: 'USD', rate: 0.22, reason: 'x' }, 'manager')).body.code).toBe('RATE_JUMP');
       const typed = (await send('post', '/stock/receive', { partId: part.id, store, qty: 1, unitCost: 10, currency: 'USD', rate: 4.6, reason: 'x' }, 'manager').then(st(201))).body;
       expect(typed.movement).toEqual(expect.objectContaining({ unitCost: 46, fxRate: 4.6 }));
+    });
+  });
+
+  describe('invoices', () => {
+    const step = (id: string, to: string, fields: Record<string, string>) => send('patch', `/invoicing/${id}/transition`, { to, fields });
+    let stream = '';
+    let usd: { id: string } = { id: '' };
+
+    beforeAll(async () => {
+      const streams = (await get('/invoicing/streams')).body as { id: string; perJob?: boolean }[];
+      stream = (streams.find((x) => !x.perJob) ?? streams[0]).id;
+    });
+
+    it('drafts an invoice in US dollars at today\'s rate, provisionally', async () => {
+      const inv = (await send('post', '/invoicing', { stream, period: today.slice(0, 7), amount: 1000, currency: 'USD' }).then(st(201))).body;
+      expect(inv).toEqual(expect.objectContaining({ currency: 'USD', fxRate: 4.5, amount: 1000, tax: 80, total: 1080, amountMYR: 4500, gstMYR: 360, totalMYR: 4860 }));
+      expect(inv.audit.at(-1).action).toBe('In USD: US$ 1,080.00 (RM 4,860.00 at 4.5) — the rate is fixed when the tax invoice is raised');
+      usd = inv;
+      // The old form is still the organisation's currency.
+      const plain = (await send('post', '/invoicing', { stream, period: today.slice(0, 7), amountMYR: 500 }).then(st(201))).body;
+      expect(plain).toEqual(expect.objectContaining({ amountMYR: 500, gstMYR: 40, totalMYR: 540 }));
+      expect(plain.currency).toBeUndefined();
+      expect((await send('post', '/invoicing', { stream, amount: 10, currency: 'JPY' })).body.code).toBe('NO_RATE');
+    });
+
+    it('fixes the rate when the tax invoice is raised, and prints both currencies', async () => {
+      await send('put', '/fx/rates', { currency: 'USD', rate: 4.45, effectiveFrom: today }).then(st(200)); // the rate moves the same day
+      const pdfText = async () => pdfLines((await http.get(`${API}/invoicing/${usd.id}/documents/tax-invoice`).set('Host', HOST).set('Cookie', await as('finance'))
+        .buffer(true).parse(binary).then(st(200))).body as Buffer).join(' ');
+      const draftPdf = await pdfText();
+      expect(draftPdf).toContain('provisional');
+      expect((await step(usd.id, 'ISSUED', { invoiceNo: 'INV-USD-1', amount: '1000', amountCurrency: 'SGD' })).body.message).toBe("The amount must be in the invoice's currency (USD)");
+      const raised = (await step(usd.id, 'ISSUED', { invoiceNo: 'INV-USD-1', amount: '1000' }).then(st(200))).body;
+      expect(raised).toEqual(expect.objectContaining({ fxRate: 4.45, amount: 1000, tax: 80, total: 1080, amountMYR: 4450, gstMYR: 356, totalMYR: 4806 }));
+      expect(raised.audit.at(-1).action).toBe('Exchange rate fixed: USD 1 = MYR 4.45 — US$ 1,080.00 (RM 4,806.00 at 4.45)');
+      const pdf = await pdfText();
+      expect(pdf).toContain('Amount (USD)');
+      expect(pdf).toContain('US Dollars One Thousand Eighty Only');
+      expect(pdf).toContain('USD 1 = MYR 4.45');
+      expect(pdf).toContain('total RM 4,806.00');
+      expect(pdf).not.toContain('provisional');
+      // A later rate change does not touch a raised invoice.
+      await send('put', '/fx/rates', { currency: 'USD', rate: 4.47, effectiveFrom: today }).then(st(200));
+      expect((await get(`/invoicing/${usd.id}`)).body.totalMYR).toBe(4806);
+    });
+
+    it('records the exchange loss when it is paid at a different rate', async () => {
+      await step(usd.id, 'SENT', { sentTo: 'ap@client.example' }).then(st(200));
+      const far = await step(usd.id, 'PAID', { paymentRef: 'TT-1', amountReceived: '480' });
+      expect(far.body.code).toBe('RATE_JUMP');
+      expect((await get(`/invoicing/${usd.id}`)).body.status).toBe('SENT'); // nothing changed
+      const paid = (await step(usd.id, 'PAID', { paymentRef: 'TT-1', amountReceived: '4,773.60' }).then(st(200))).body;
+      expect(paid).toEqual(expect.objectContaining({ paidRate: 4.42, paidBase: 4773.6, fxGain: -32.4, totalMYR: 4806, outstanding: false }));
+      expect(paid.audit.at(-1).action).toBe('Paid US$ 1,080.00 at 4.42 = RM 4,773.60; exchange loss RM 32.40');
+    });
+
+    it('uses today\'s rate for a payment when the amount received is not given', async () => {
+      const inv = (await send('post', '/invoicing', { stream, period: today.slice(0, 7), amount: 100, currency: 'USD' }).then(st(201))).body;
+      await step(inv.id, 'ISSUED', { invoiceNo: 'INV-USD-2' }).then(st(200)); // 4.47
+      await step(inv.id, 'SENT', { sentTo: 'ap@client.example' }).then(st(200));
+      await send('put', '/fx/rates', { currency: 'USD', rate: 4.5, effectiveFrom: today }).then(st(200));
+      const paid = (await step(inv.id, 'PAID', { paymentRef: 'TT-2' }).then(st(200))).body;
+      expect(paid).toEqual(expect.objectContaining({ fxRate: 4.47, totalMYR: 482.76, paidRate: 4.5, paidBase: 486, fxGain: 3.24 }));
+    });
+
+    it('exports both currencies, the rates and the gain or loss to accounting', async () => {
+      const codes = (await send('put', '/accounting/settings', { fxGainLoss: '7950' }).then(st(200))).body;
+      expect(codes.fxGainLoss).toBe('7950');
+      const batch = (await send('post', '/accounting/exports', { from: today, to: today }).then(st(201))).body;
+      const sales = (await get(`/accounting/exports/${batch.id}/file?format=csv&sheet=sales`)).text;
+      expect(sales.split('\r\n')[0]).toContain('Invoice currency,Exchange rate,Net (invoice currency),Tax (invoice currency),Total (invoice currency)');
+      expect(sales).toMatch(/INV-USD-1,.*,MYR,4450\.00,SR,8,356\.00,4806\.00,.*,USD,4\.45,1000\.00,80\.00,1080\.00/);
+      const receipts = (await get(`/accounting/exports/${batch.id}/file?format=csv&sheet=receipts`)).text;
+      expect(receipts.split('\r\n')[0]).toContain('Invoice currency,Amount (invoice currency),Payment rate,Amount received,Exchange gain/loss,Gain/loss account');
+      expect(receipts).toMatch(/INV-USD-1,.*,4806\.00,TT-1,.*,USD,1080\.00,4\.42,4773\.60,-32\.40,7950/);
+      const purchases = (await get(`/accounting/exports/${batch.id}/file?format=csv&sheet=purchases`)).text;
+      expect(purchases).toMatch(/PO-FX-2,.*,900\.00,.*,USD,4\.5,200\.00/);
+      const report = (await get(`/reports/sales-performance?from=${today}&to=${today}&format=csv`)).text;
+      expect(report).toMatch(/INV-USD-1,.*,USD,4\.45,1080\.00,-32\.40/);
+    });
+
+    it('will not relabel the organisation\'s currency once foreign records exist', () => {
+      let out = '';
+      try {
+        execFileSync('npx', ['ts-node', '--transpile-only', 'src/tenants-cli.ts', 'set-currency', 'fm', 'SGD', '--force'], { cwd: `${__dirname}/../..`, env: process.env, stdio: 'pipe' });
+      } catch (e) {
+        out = String((e as { stderr?: Buffer }).stderr ?? e);
+      }
+      expect(out).toMatch(/record\(s\) in a foreign currency .* cannot be changed/);
     });
   });
 });

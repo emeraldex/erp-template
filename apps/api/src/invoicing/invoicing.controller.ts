@@ -1,8 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { InModule, Requires } from '../auth/roles.decorator';
-import { InvoicingService } from './invoicing.service';
-import { Branch, InvoiceStatus, InvoiceStream } from '../common/types';
+import { InvoiceInput, InvoicingService } from './invoicing.service';
+import { InvoiceStatus } from '../common/types';
 
 @Controller('invoicing')
 @InModule('invoicing')
@@ -28,7 +28,7 @@ export class InvoicingController {
   @Post()
   @Requires('invoices.create')
   create(
-    @Body() dto: { stream: InvoiceStream; jobId?: string; customer?: string; period?: string; branch?: Branch; amountMYR?: number },
+    @Body() dto: InvoiceInput,
     @Req() req: any,
   ) {
     return this.svc.create(dto, { name: req.user.name, role: req.user.role });

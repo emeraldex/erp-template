@@ -52,6 +52,8 @@ export class AccountingService {
             stream: inv.stream, jobId: inv.jobId ?? '', currency: cur.code, net: roundMoney(inv.amountMYR, cur), taxCode: acc.taxCode, taxRate: inv.gstRate,
             tax: roundMoney(inv.gstMYR, cur), total: roundMoney(inv.totalMYR, cur), revenueAccount: acc.revenueByStream[inv.stream] ?? acc.revenueDefault,
             receivableAccount: acc.receivables, taxAccount: acc.outputTax,
+            invoiceCurrency: inv.currency ?? cur.code, fxRate: inv.fxRate ?? 1,
+            netFx: inv.amount ?? roundMoney(inv.amountMYR, cur), taxFx: inv.tax ?? roundMoney(inv.gstMYR, cur), totalFx: inv.total ?? roundMoney(inv.totalMYR, cur),
           },
         });
       }
@@ -60,6 +62,8 @@ export class AccountingService {
           kind: 'RECEIPT', ref: inv.id, date: inv.paidAt.slice(0, 10), data: {
             date: inv.paidAt.slice(0, 10), invoiceNo: inv.f311Ref ?? inv.id, customer: inv.customer, currency: cur.code, amount: roundMoney(inv.totalMYR, cur),
             reference: inv.paymentRef ?? '', bankAccount: acc.bank, receivableAccount: acc.receivables,
+            invoiceCurrency: inv.currency ?? cur.code, amountFx: inv.total ?? roundMoney(inv.totalMYR, cur), paymentRate: inv.paidRate ?? 1,
+            received: inv.paidBase ?? roundMoney(inv.totalMYR, cur), fxGain: inv.fxGain ?? 0, fxAccount: acc.fxGainLoss,
           },
         });
       }
@@ -81,13 +85,15 @@ export class AccountingService {
           kind: 'PURCHASE', ref: d.id, date: date!, data: {
             reference: d.poRef ?? d.id, date, supplier: q?.supplier ?? '', description: d.partDescription, quantity: Number(d.qty), currency: cur.code,
             amount: roundMoney(amount, cur), account: d.partId ? acc.stock : acc.purchases, jobId: d.jobId ?? '', source: `Request ${d.id}`,
+            purchaseCurrency: d.purchaseCurrency ?? q?.currency ?? cur.code, fxRate: d.purchaseRate !== null ? Number(d.purchaseRate) : q?.fxRate != null ? Number(q.fxRate) : 1,
+            amountFx: d.purchaseAmount !== null ? Number(d.purchaseAmount) : q?.price != null ? Number(q.price) : roundMoney(amount, cur),
           },
         });
       }
     }
     // Vendor repairs closed with a cost.
     const finalOv = this.store.statusKeys('OV').filter((s) => this.store.isFinal('OV', s));
-    const ovs = await this.prisma.ovRepair.findMany({ where: { costMYR: { not: null }, status: { in: finalOv } }, select: { id: true, jobId: true, vendorName: true, poRef: true, costMYR: true, statusSince: true } });
+    const ovs = await this.prisma.ovRepair.findMany({ where: { costMYR: { not: null }, status: { in: finalOv } }, select: { id: true, jobId: true, vendorName: true, poRef: true, costMYR: true, statusSince: true, currency: true, cost: true, fxRate: true } });
     for (const o of ovs) {
       const date = o.statusSince.toISOString().slice(0, 10);
       if (!inRange(date, from, to)) continue;
@@ -95,6 +101,7 @@ export class AccountingService {
         kind: 'PURCHASE', ref: o.id, date, data: {
           reference: o.poRef ?? o.id, date, supplier: o.vendorName ?? '', description: `Vendor repair for ${o.jobId}`, quantity: 1, currency: cur.code,
           amount: roundMoney(Number(o.costMYR), cur), account: acc.purchases, jobId: o.jobId, source: `Vendor repair ${o.id}`,
+          purchaseCurrency: o.currency ?? cur.code, fxRate: o.fxRate !== null ? Number(o.fxRate) : 1, amountFx: o.cost !== null ? Number(o.cost) : roundMoney(Number(o.costMYR), cur),
         },
       });
     }
@@ -177,6 +184,8 @@ export class AccountingService {
             { key: 'currency', header: 'Currency', width: 9 }, { key: 'net', header: 'Net', type: 'money' }, { key: 'taxCode', header: 'Tax code', width: 9 },
             { key: 'taxRate', header: 'Tax rate', type: 'pct' }, { key: 'tax', header: 'Tax', type: 'money' }, { key: 'total', header: 'Total', type: 'money' },
             { key: 'revenueAccount', header: 'Revenue account', width: 15 }, { key: 'receivableAccount', header: 'Receivable account', width: 17 }, { key: 'taxAccount', header: 'Tax account', width: 12 },
+            { key: 'invoiceCurrency', header: 'Invoice currency', width: 9 }, { key: 'fxRate', header: 'Exchange rate', type: 'rate', width: 13 },
+            { key: 'netFx', header: 'Net (invoice currency)', type: 'money' }, { key: 'taxFx', header: 'Tax (invoice currency)', type: 'money' }, { key: 'totalFx', header: 'Total (invoice currency)', type: 'money' },
           ],
           rows: sales, totals: { invoiceNo: `TOTAL (${sales.length})`, net: sum(sales, 'net'), tax: sum(sales, 'tax'), total: sum(sales, 'total') },
         },
@@ -186,8 +195,11 @@ export class AccountingService {
             { key: 'date', header: 'Date', type: 'date', width: 12 }, { key: 'invoiceNo', header: 'Invoice no.', width: 18 }, { key: 'customer', header: 'Customer', width: 28 },
             { key: 'currency', header: 'Currency', width: 9 }, { key: 'amount', header: 'Amount', type: 'money' }, { key: 'reference', header: 'Payment reference', width: 20 },
             { key: 'bankAccount', header: 'Bank account', width: 13 }, { key: 'receivableAccount', header: 'Receivable account', width: 17 },
+            { key: 'invoiceCurrency', header: 'Invoice currency', width: 9 }, { key: 'amountFx', header: 'Amount (invoice currency)', type: 'money' },
+            { key: 'paymentRate', header: 'Payment rate', type: 'rate', width: 13 }, { key: 'received', header: 'Amount received', type: 'money' },
+            { key: 'fxGain', header: 'Exchange gain/loss', type: 'money' }, { key: 'fxAccount', header: 'Gain/loss account', width: 13 },
           ],
-          rows: receipts, totals: { date: `TOTAL (${receipts.length})`, amount: sum(receipts, 'amount') },
+          rows: receipts, totals: { date: `TOTAL (${receipts.length})`, amount: sum(receipts, 'amount'), received: sum(receipts, 'received'), fxGain: sum(receipts, 'fxGain') },
         },
         {
           name: 'Purchases',
@@ -195,6 +207,8 @@ export class AccountingService {
             { key: 'reference', header: 'Reference', width: 16 }, { key: 'date', header: 'Date', type: 'date', width: 12 }, { key: 'supplier', header: 'Supplier', width: 26 },
             { key: 'description', header: 'Description', width: 30 }, { key: 'quantity', header: 'Quantity', type: 'qty' }, { key: 'currency', header: 'Currency', width: 9 },
             { key: 'amount', header: 'Amount', type: 'money' }, { key: 'account', header: 'Account', width: 10 }, { key: 'jobId', header: 'Work order', width: 16 }, { key: 'source', header: 'Source', width: 22 },
+            { key: 'purchaseCurrency', header: 'Purchase currency', width: 9 }, { key: 'fxRate', header: 'Exchange rate', type: 'rate', width: 13 },
+            { key: 'amountFx', header: 'Amount (purchase currency)', type: 'money' },
           ],
           rows: purchases, totals: { reference: `TOTAL (${purchases.length})`, amount: sum(purchases, 'amount') },
         },

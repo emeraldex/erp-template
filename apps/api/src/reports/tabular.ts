@@ -1,6 +1,6 @@
 import ExcelJS = require('exceljs');
 
-export type CellType = 'text' | 'money' | 'pct' | 'int' | 'qty' | 'date';
+export type CellType = 'text' | 'money' | 'pct' | 'int' | 'qty' | 'date' | 'rate';
 export interface Column { key: string; header: string; type?: CellType; width?: number }
 export type Row = Record<string, string | number | null | undefined>;
 export interface Sheet { name: string; columns: Column[]; rows: Row[]; totals?: Row }
@@ -29,7 +29,7 @@ export function toCsv(sheet: Sheet): Buffer {
 }
 
 const FORMATS: Record<CellType, string | undefined> = {
-  text: undefined, money: '#,##0.00', pct: '0.00"%"', int: '0', qty: '#,##0.###', date: 'yyyy-mm-dd',
+  text: undefined, money: '#,##0.00', pct: '0.00"%"', int: '0', qty: '#,##0.###', date: 'yyyy-mm-dd', rate: '0.00######',
 };
 
 export async function toXlsx(report: Report): Promise<Buffer> {

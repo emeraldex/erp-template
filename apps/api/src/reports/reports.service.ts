@@ -80,6 +80,7 @@ export class ReportsService {
       amount: i.amountMYR, taxLabel: i.taxLabel ?? 'GST', taxRate: i.gstRate, tax: i.gstMYR, total: i.totalMYR,
       status: i.status, sprRef: i.salesPerfRef ?? '', paymentRef: i.paymentRef ?? '', paidAt: i.paidAt ?? '',
       outstanding: i.outstanding ? 'Yes' : 'No', days: daysOutstanding(i, now),
+      invoiceCurrency: i.currency ?? this.cur, fxRate: i.fxRate ?? 1, totalFx: i.total ?? i.totalMYR, fxGain: i.fxGain ?? '',
     }));
     const sum = (k: 'amountMYR' | 'gstMYR' | 'totalMYR', list = invoices) => round2(list.reduce((s, i) => s + i[k], 0));
 
@@ -96,6 +97,8 @@ export class ReportsService {
         { key: 'sprRef', header: 'SPR / e-Payment ref', width: 18 }, { key: 'paymentRef', header: 'Payment ref', width: 15 },
         { key: 'paidAt', header: 'Paid on', type: 'date', width: 12 }, { key: 'outstanding', header: 'Outstanding' },
         { key: 'days', header: 'Days outstanding', type: 'int' },
+        { key: 'invoiceCurrency', header: 'Invoice currency' }, { key: 'fxRate', header: 'Exchange rate', type: 'rate', width: 13 },
+        { key: 'totalFx', header: 'Total (invoice currency)', type: 'money', width: 15 }, { key: 'fxGain', header: `Exchange gain/loss (${this.cur})`, type: 'money', width: 15 },
       ],
       rows,
       totals: { invoiceNo: `TOTAL (${invoices.length})`, amount: sum('amountMYR'), tax: sum('gstMYR'), total: sum('totalMYR') },
@@ -160,6 +163,7 @@ export class ReportsService {
       .map(({ i, days }) => ({
         invoiceNo: i.f311Ref ?? i.id, stream: this.streamLabel(i.stream), customer: i.customer, status: i.status,
         since: taxInvoiceDate(i) ?? draftedOn(i), days, bucket: ageingBucket(days), total: i.totalMYR,
+        invoiceCurrency: i.currency ?? this.cur, fxRate: i.fxRate ?? 1, totalFx: i.total ?? i.totalMYR,
       }));
     return {
       title: 'Outstanding payments',
@@ -171,6 +175,8 @@ export class ReportsService {
           { key: 'customer', header: 'Customer', width: 30 }, { key: 'status', header: 'Status', width: 18 },
           { key: 'since', header: 'Since', type: 'date', width: 12 }, { key: 'days', header: 'Days', type: 'int' },
           { key: 'bucket', header: 'Ageing' }, { key: 'total', header: `Total (${this.cur})`, type: 'money', width: 15 },
+          { key: 'invoiceCurrency', header: 'Invoice currency' }, { key: 'fxRate', header: 'Exchange rate', type: 'rate', width: 13 },
+          { key: 'totalFx', header: 'Total (invoice currency)', type: 'money', width: 15 },
         ],
         rows,
         totals: { invoiceNo: `TOTAL (${rows.length})`, total: round2(open.reduce((s, i) => s + i.totalMYR, 0)) },

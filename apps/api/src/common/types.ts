@@ -290,6 +290,20 @@ export interface Invoice {
   salesPerfRef?: string;      // Company Sales Performance Report / e-Payment (ACD)
   paymentRef?: string;
   paidAt?: string;
+  /**
+   * Raised in another currency: that currency, the rate (provisional until the
+   * tax invoice is raised, then fixed), and net, tax and total in it. The
+   * …MYR fields above are always the organisation-currency amounts.
+   */
+  currency?: string;
+  fxRate?: number;
+  amount?: number;
+  tax?: number;
+  total?: number;
+  /** Paid: the rate, what was received in the organisation's currency, and the exchange gain (negative: loss). */
+  paidRate?: number;
+  paidBase?: number;
+  fxGain?: number;
   outstanding: boolean;
   raisedBy: string;
   branch: Branch;

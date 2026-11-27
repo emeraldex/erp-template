@@ -79,13 +79,13 @@ describe('Accounting export (integration)', () => {
     const xlsx = await get(`/accounting/exports/${batch.id}/file`).then(st(200));
     expect(xlsx.headers['content-type']).toContain('spreadsheetml');
     const sales = (await get(`/accounting/exports/${batch.id}/file?format=csv&sheet=sales`).then(st(200))).text.split('\r\n');
-    expect(sales[0]).toBe('﻿Invoice no.,Date,Customer,Description,Stream,Work order,Currency,Net,Tax code,Tax rate,Tax,Total,Revenue account,Receivable account,Tax account');
-    expect(sales[1]).toMatch(/^F311-\d{4}-\d+,\d{4}-\d{2}-\d{2},.*,MYR,[\d.]+,SR,\d+(\.\d+)?,[\d.]+,[\d.]+,\d+,1200,2200$/);
+    expect(sales[0]).toBe('﻿Invoice no.,Date,Customer,Description,Stream,Work order,Currency,Net,Tax code,Tax rate,Tax,Total,Revenue account,Receivable account,Tax account,Invoice currency,Exchange rate,Net (invoice currency),Tax (invoice currency),Total (invoice currency)');
+    expect(sales[1]).toMatch(/^F311-\d{4}-\d+,\d{4}-\d{2}-\d{2},.*,MYR,[\d.]+,SR,\d+(\.\d+)?,[\d.]+,[\d.]+,\d+,1200,2200,MYR,1,[\d.]+,[\d.]+,[\d.]+$/);
     const receipts = (await get(`/accounting/exports/${batch.id}/file?format=csv&sheet=receipts`).then(st(200))).text;
     expect(receipts).toContain('CPU-PAY-2026-3391');
     expect(receipts).toContain('1010-MBB');
     const purchases = (await get(`/accounting/exports/${batch.id}/file?format=csv&sheet=purchases`).then(st(200))).text.split('\r\n');
-    expect(purchases[0]).toBe('﻿Reference,Date,Supplier,Description,Quantity,Currency,Amount,Account,Work order,Source');
+    expect(purchases[0]).toBe('﻿Reference,Date,Supplier,Description,Quantity,Currency,Amount,Account,Work order,Source,Purchase currency,Exchange rate,Amount (purchase currency)');
     expect((await get(`/accounting/exports/${batch.id}/file?format=csv&sheet=nope`)).status).toBe(400);
     expect((await get('/accounting/exports/EXP-1999-0001/file')).status).toBe(404);
   });
