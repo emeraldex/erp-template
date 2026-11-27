@@ -1,3 +1,4 @@
+import { currencyOf } from '../settings/currency';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { StoreService } from '../common/store.service';
 import type { Invoice, Job } from '../common/types';
@@ -75,6 +76,13 @@ export class DocumentsService {
     return rec?.date ?? today();
   }
 
+  /** The amounts as billed: in the invoice's own currency when it has one. */
+  private invoiceMoney(inv: Ctx['inv']) {
+    return inv.currency
+      ? { cur: currencyOf(inv.currency), net: inv.amount ?? 0, tax: inv.tax ?? 0, total: inv.total ?? 0 }
+      : { cur: this.settings.currency, net: inv.amountMYR, tax: inv.gstMYR, total: inv.totalMYR };
+  }
+
   private invoiceTitle(inv: Ctx['inv']): string {
     if (this.aviation) return 'TAX INVOICE';
     return inv.gstRate > 0 ? 'TAX INVOICE' : 'INVOICE';
@@ -100,16 +108,17 @@ export class DocumentsService {
       ? `Repair / service of ${job.component}\nPart no. ${job.partNo} · Serial no. ${job.serialNo}\nOrigin unit ${job.originUnit}${job.indentRef ? ` · Indent ${job.indentRef}` : ''}`
       : `${stream?.label ?? inv.stream}${inv.period ? ` — billing period ${inv.period}` : ''}`;
     const label = inv.taxLabel ?? 'GST';
+    const { cur, net, tax, total } = this.invoiceMoney(inv);
     table(doc, [
       { header: 'Description', width: 300 },
       { header: 'Qty', width: 45, align: 'right' },
-      { header: `Amount (${this.settings.currency.code})`, width: 150, align: 'right' },
-    ], [[description, '1', myr(inv.amountMYR, this.settings.currency)]]);
+      { header: `Amount (${cur.code})`, width: 150, align: 'right' },
+    ], [[description, '1', myr(net, cur)]]);
 
     const totals: [string, string][] = [
-      ['Subtotal', myr(inv.amountMYR, this.settings.currency)],
-      [`${label} @ ${inv.gstRate}%`, myr(inv.gstMYR, this.settings.currency)],
-      ['Total payable', myr(inv.totalMYR, this.settings.currency)],
+      ['Subtotal', myr(net, cur)],
+      [`${label} @ ${inv.gstRate}%`, myr(tax, cur)],
+      ['Total payable', myr(total, cur)],
     ];
     totals.forEach(([k, v], i) => {
       const y = doc.y;
@@ -119,8 +128,16 @@ export class DocumentsService {
       doc.moveDown(0.3);
     });
     doc.x = MARGIN;
-    doc.moveDown(0.6).font('Helvetica-Oblique').fontSize(9.5).text(pdfText(amountInWords(inv.totalMYR, this.settings.currency)), MARGIN);
+    doc.moveDown(0.6).font('Helvetica-Oblique').fontSize(9.5).text(pdfText(amountInWords(total, cur)), MARGIN);
     doc.font('Helvetica').moveDown(1.2);
+    if (inv.currency) {
+      // A tax invoice in a foreign currency also states the rate and the amounts in the organisation's currency.
+      const base = this.settings.currency;
+      doc.fontSize(9.5).text(pdfText(
+        `Exchange rate${inv.f311Ref ? '' : ' (provisional until the tax invoice is raised)'}: ${inv.currency} 1 = ${base.code} ${inv.fxRate}. ` +
+        `In ${base.code}: subtotal ${myr(inv.amountMYR, base)}, ${label} ${myr(inv.gstMYR, base)}, total ${myr(inv.totalMYR, base)}.`,
+      ), MARGIN).moveDown(1);
+    }
     if (inv.ctcRef || inv.customerSignRef) {
       fields(doc, [['Customer signature', inv.customerSignRef], ['CTC reference', inv.ctcRef]]);
     }
@@ -139,7 +156,7 @@ export class DocumentsService {
     doc.text('Dear Sir/Madam,').moveDown(0.6);
     const subject = job ? `the repair of ${job.component} (part no. ${job.partNo}, serial no. ${job.serialNo}, ${this.aviation ? 'PS no.' : this.settings.terms.jobNo} ${job.id})` : `the ${stream?.label ?? inv.stream}${inv.period ? ` for ${inv.period}` : ''}`;
     doc.text(pdfText(
-      `We enclose our tax invoice for ${subject}, amounting to ${myr(inv.totalMYR, this.settings.currency)} inclusive of ` +
+      `We enclose our tax invoice for ${subject}, amounting to ${myr(this.invoiceMoney(inv).total, this.invoiceMoney(inv).cur)} inclusive of ` +
       `${inv.taxLabel ?? 'GST'} at ${inv.gstRate}%, together with the supporting documents listed below for your verification and further action.`,
     ), { align: 'justify' }).moveDown(0.8);
     doc.font('Helvetica-Bold').text('Enclosures').font('Helvetica').moveDown(0.3);

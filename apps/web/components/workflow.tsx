@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AuditEntry, FormRecord, Role, StatusMeta, TransitionRule } from "@/lib/types";
+import { AuditEntry, FormRecord, Role, StatusMeta, StepField, TransitionRule } from "@/lib/types";
 import { useLang } from "@/lib/i18n";
 import { Button, FormChip, MetaPill } from "./ui";
 import { StepForm, stepComplete } from "./step-form";
@@ -21,6 +21,8 @@ export function TransitionActions<S extends string>({
   onTransition,
   entity = "",
   entityId = "",
+  moneyCurrency,
+  extraFields,
 }: {
   status: S;
   rules: TransitionRule<S>[];
@@ -31,6 +33,10 @@ export function TransitionActions<S extends string>({
   /** The record, for photo and signature fields (e.g. "job", "WO-2026-0001"). */
   entity?: string;
   entityId?: string;
+  /** Money fields must be in this currency (an invoice's own). */
+  moneyCurrency?: string;
+  /** Optional fields the screen adds to a step (e.g. the amount received on a foreign invoice's payment). */
+  extraFields?: (rule: TransitionRule<S>) => StepField[];
 }) {
   const { lang, t } = useLang();
   const [openTo, setOpenTo] = useState<S | null>(null);
@@ -42,6 +48,7 @@ export function TransitionActions<S extends string>({
   if (available.length === 0) return null;
 
   const active = mine.find((r) => r.to === openTo);
+  const activeFields = active ? [...active.requires, ...(extraFields?.(active) ?? [])] : [];
 
   return (
     <div className="border-t hairline pt-4">
@@ -66,7 +73,7 @@ export function TransitionActions<S extends string>({
                 onClick={() => {
                   setFields({});
                   setOpenTo(openTo === r.to ? null : r.to);
-                  if (r.requires.length === 0 && openTo !== r.to) {
+                  if (r.requires.length === 0 && !(extraFields?.(r).length) && openTo !== r.to) {
                     onTransition(r.to, {});
                     setOpenTo(null);
                   }
@@ -80,12 +87,12 @@ export function TransitionActions<S extends string>({
       )}
 
       {/* mandatory-field form (FR-05) rendered from the rule definition */}
-      {active && active.requires.length > 0 && (
+      {active && activeFields.length > 0 && (
         <div className="fade-up mt-4 rounded-md border hairline bg-ink-deep/50 p-4">
           <p className="eyebrow mb-3">
             {status} → <MetaPill status={active.to} meta={meta[active.to]} lang={lang} />
           </p>
-          <StepForm fields={active.requires} values={fields} onChange={setFields} entity={entity} entityId={entityId} disabled={busy} />
+          <StepForm fields={activeFields} values={fields} onChange={setFields} entity={entity} entityId={entityId} disabled={busy} moneyCurrency={moneyCurrency} />
           <div className="mt-4 flex gap-2">
             <Button
               disabled={busy || !stepComplete(active.requires, fields)}

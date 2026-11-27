@@ -10,6 +10,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { RequestsModule } from './requests/requests.module';
 import { LabourModule } from './labour/labour.module';
 import { AccountingModule } from './accounting/accounting.module';
+import { FxModule } from './fx/fx.module';
 import { RequestsInboxModule } from './requests/inbox.module';
 import { AssetsModule } from './assets/assets.module';
 import { StockModule } from './stock/stock.module';
@@ -40,7 +41,7 @@ import { TenantMiddleware } from './tenancy/tenant.middleware';
       // Only the request portal tightens this; for everything else it is effectively off.
       { name: 'hourly', ttl: 3_600_000, limit: 1_000_000 },
     ]),
-    TenancyModule, SettingsModule, AuthModule, AssetsModule, StockModule, JobsModule, DemandsModule, OvModule, RegistersModule, FodModule, InvoicingModule, DashboardModule, DocumentsModule, ReportsModule, AttachmentsModule,
+    TenancyModule, SettingsModule, FxModule, AuthModule, AssetsModule, StockModule, JobsModule, DemandsModule, OvModule, RegistersModule, FodModule, InvoicingModule, DashboardModule, DocumentsModule, ReportsModule, AttachmentsModule,
     NotificationsModule, RequestsModule, RequestsInboxModule, LabourModule, AccountingModule, RetentionModule, SchedulerModule, WorkflowModule, UsersModule,
   ],
   controllers: [HealthController],

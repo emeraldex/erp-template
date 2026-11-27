@@ -218,6 +218,26 @@ menunjukkan siapa yang melaporkannya dengan butang untuk menelefon mereka.
   gelap, cerah dan tetapan peranti anda (telefon: *Lagi → Paparan*). Pilihan
   diingati pada peranti itu.
 
+## Amaun dalam mata wang lain
+
+Apabila kewangan telah memasukkan kadar pertukaran, amaun boleh dalam mata
+wang lain.
+
+- **Memasukkan amaun:** pilihan mata wang muncul di sebelah amaun pada sebut
+  harga, penerimaan barang, kos pembaikan vendor dan invois. Di bawahnya,
+  borang menunjukkan nilainya dalam mata wang organisasi anda, pada kadar dan
+  tarikh mana. Jika dikatakan kadar itu lama, minta kewangan
+  mengemaskinikannya.
+- **Mata wang pembekal:** memilih pembekal yang biasanya memberi sebut harga
+  dalam mata wang lain akan memilih mata wang itu untuk anda.
+- **Membandingkan sebut harga:** sebut harga dibandingkan dalam mata wang
+  organisasi anda.
+- **Bila amaun ditetapkan:** pembelian ditetapkan pada kadar hari barang
+  diterima, dan invois apabila invois cukai dikeluarkan.
+- **Merekod bayaran:** pada invois dalam mata wang asing, masukkan jumlah
+  yang dikreditkan oleh bank. Invois kemudian menunjukkan untung atau rugi
+  pertukaran.
+
 ## Mengikut peranan
 
 **Stor** — daftar barang masuk (*+ Register job*), hantar ke bengkel, rekod

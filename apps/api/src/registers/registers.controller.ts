@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { InModule, Requires } from '../auth/roles.decorator';
 import { RegistersService } from './registers.service';
@@ -17,8 +17,15 @@ export class RegistersController {
 
   @Post()
   @Requires('registers.propose')
-  apply(@Body() dto: { name: string; type: 'SUPPLIER' | 'SUBCONTRACTOR'; country: string; certifications: string[] }, @Req() req: any) {
+  apply(@Body() dto: { name: string; type: 'SUPPLIER' | 'SUBCONTRACTOR'; country: string; certifications: string[]; currency?: string }, @Req() req: any) {
     return this.svc.apply(dto, { name: req.user.name, role: req.user.role });
+  }
+
+  /** `{ currency }` — the currency they usually quote in (empty to clear). */
+  @Patch(':id/currency')
+  @Requires('registers.propose', 'procurement.quote')
+  setCurrency(@Param('id') id: string, @Body() body: { currency?: string }, @Req() req: any) {
+    return this.svc.setCurrency(id, body?.currency, { name: req.user.name, role: req.user.role });
   }
 
   @Post(':id/evaluate')

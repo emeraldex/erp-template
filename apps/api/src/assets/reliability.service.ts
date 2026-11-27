@@ -66,7 +66,8 @@ export class ReliabilityService {
     const demands = await this.prisma.demand.findMany({ where: { jobId: { in: jobIds }, partId: null, poRef: { not: null } }, include: { quotations: true } });
     for (const d of demands) {
       const q = d.quotations.find((x) => x.supplierId === d.evalSupplierId) ?? (d.quotations.length === 1 ? d.quotations[0] : undefined);
-      if (q) add(d.jobId!, Number(q.priceMYR));
+      if (d.purchaseAmountBase !== null) add(d.jobId!, Number(d.purchaseAmountBase));
+      else if (q) add(d.jobId!, Number(q.priceMYR));
     }
     for (const o of await this.prisma.ovRepair.findMany({ where: { jobId: { in: jobIds }, costMYR: { not: null } }, select: { jobId: true, costMYR: true } })) add(o.jobId, Number(o.costMYR));
     for (const t of await this.prisma.timeEntry.groupBy({ by: ['jobId'], where: { jobId: { in: jobIds } }, _sum: { cost: true } })) add(t.jobId, Number(t._sum.cost ?? 0));

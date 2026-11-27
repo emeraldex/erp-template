@@ -1,6 +1,15 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { StoreService } from '../common/store.service';
 import { Partner, Rating, Role } from '../common/types';
+import { CURRENCIES } from '../settings/currency';
+
+/** A currency code from the built-in list, or undefined for none. */
+function currencyCode(v: unknown): string | undefined {
+  const c = String(v ?? '').trim().toUpperCase();
+  if (!c) return undefined;
+  if (!CURRENCIES.some((x) => x.code === c)) throw new BadRequestException(`Unknown currency ${c}`);
+  return c;
+}
 
 /**
  * QP.13 (suppliers) & QP.34 (sub-contractors) — selection, JTP approval,
@@ -28,13 +37,26 @@ export class RegistersService {
     return p;
   }
 
-  async apply(dto: { name: string; type: 'SUPPLIER' | 'SUBCONTRACTOR'; country: string; certifications: string[] }, actor: { name: string; role: Role }): Promise<Partner> {
+  async apply(dto: { name: string; type: 'SUPPLIER' | 'SUBCONTRACTOR'; country: string; certifications: string[]; currency?: string }, actor: { name: string; role: Role }): Promise<Partner> {
+    const currency = currencyCode(dto.currency);
     const p: Partner = {
       id: await this.store.nextPartnerId(dto.type),
-      ...dto, status: 'APPLIED', lists: [], nonConformances: 0, factorsEvaluated: 0, cars: [],
+      name: dto.name, type: dto.type, country: dto.country, certifications: dto.certifications ?? [], ...(currency ? { currency } : {}),
+      status: 'APPLIED', lists: [], nonConformances: 0, factorsEvaluated: 0, cars: [],
       audit: [this.store.audit(actor.name, actor.role, 'Application / recommendation received')],
     };
     this.store.newPartner(p);
+    await this.store.save(p);
+    return p;
+  }
+
+  /** The currency a supplier usually quotes in; prefills their quotations. */
+  async setCurrency(id: string, value: unknown, actor: { name: string; role: Role }): Promise<Partner> {
+    const p = await this.find(id);
+    const currency = currencyCode(value);
+    if ((p.currency ?? undefined) === currency) return p;
+    p.currency = currency;
+    p.audit.push(this.store.audit(actor.name, actor.role, currency ? `Usual currency: ${currency}` : 'Usual currency cleared'));
     await this.store.save(p);
     return p;
   }

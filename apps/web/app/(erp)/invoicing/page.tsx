@@ -9,7 +9,9 @@ import { Invoice, InvoiceStatus, InvoiceStream, Job } from "@/lib/types";
 import { useConfig } from "@/lib/use-config";
 import { railOf, useVocab } from "@/lib/vocab";
 import { useLang } from "@/lib/i18n";
-import { currencyCode, fmtMYR } from "@/lib/format";
+import { currencyCode, currencySymbol, fmtMYR, fmtMoney } from "@/lib/format";
+import { ApiError } from "@/lib/api";
+import { Dual, MoneyInput, MoneyValue } from "@/lib/fx";
 import { Button, MetaPill, OfflineNotice, PageHeader, Panel, StatusPill } from "@/components/ui";
 import { AuditTrail, RecordsList, StageRail, TransitionActions } from "@/components/workflow";
 
@@ -25,7 +27,11 @@ export default function InvoicingPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ stream: "BRANCH_REPAIR" as InvoiceStream, jobId: "", period: "", amountMYR: "" });
+  const [form, setForm] = useState({ stream: "BRANCH_REPAIR" as InvoiceStream, jobId: "", period: "" });
+  const blankMoney: MoneyValue = { amount: "", currency: "", rate: "", confirm: false };
+  const [money, setMoney] = useState<MoneyValue>(blankMoney);
+  // A payment rate far from the invoice's: the step to resend once confirmed.
+  const [confirmPay, setConfirmPay] = useState<{ id: string; to: InvoiceStatus; fields: Record<string, string>; message: string } | null>(null);
 
   const user = useSession()?.user;
   const { aviation, can, phaseOf } = useVocab();
@@ -51,7 +57,9 @@ export default function InvoicingPage() {
     try {
       const updated = await api.patch<Invoice>(`/invoicing/${id}/transition`, { to, fields });
       setRows((p) => p.map((x) => (x.id === updated.id ? updated : x)));
+      setConfirmPay(null);
     } catch (e) {
+      if (e instanceof ApiError && e.code === "RATE_JUMP" && !fields.paymentRateConfirm) setConfirmPay({ id, to, fields, message: e.message });
       setError(offline ? "Actions need the live API — start apps/api." : (e as Error).message);
     } finally { setBusy(false); }
   }
@@ -63,12 +71,15 @@ export default function InvoicingPage() {
         stream: form.stream,
         jobId: form.jobId || undefined,
         period: form.period || undefined,
-        amountMYR: form.amountMYR ? Number(form.amountMYR) : undefined,
+        ...(money.amount ? { amount: Number(money.amount.replace(/,/g, "")) } : {}),
+        ...(money.currency ? { currency: money.currency } : {}),
+        ...(money.rate.trim() ? { rate: Number(money.rate), confirm: money.confirm } : {}),
       });
       setRows((p) => [created, ...p]);
       setOpenId(created.id);
       setShowNew(false);
-      setForm({ stream: "BRANCH_REPAIR", jobId: "", period: "", amountMYR: "" });
+      setForm({ stream: "BRANCH_REPAIR", jobId: "", period: "" });
+      setMoney(blankMoney);
     } catch (e) {
       setError(offline ? "Creating needs the live API — start apps/api." : (e as Error).message);
     } finally { setBusy(false); }
@@ -123,11 +134,12 @@ export default function InvoicingPage() {
                   className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
               </label>
             )}
-            <label className="block">
-              <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Amount before tax ({currencyCode()})</span>
-              <input value={form.amountMYR} onChange={(e) => setForm({ ...form, amountMYR: e.target.value })}
+            <div className="block">
+              <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Amount before tax</span>
+              <MoneyInput value={money} onChange={setMoney} label="Amount before tax"
                 className="mono w-full rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace" />
-            </label>
+              {money.currency && <p className="mt-1 text-[11px] text-dim">The rate is fixed when the tax invoice is raised.</p>}
+            </div>
             <div className="flex items-end">
               <Button disabled={busy || (streamDef?.perJob ? !form.jobId : !form.period)} onClick={create}>
                 Draft invoice
@@ -181,7 +193,9 @@ export default function InvoicingPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="mono text-[10.5px] tracking-widest text-steel">
-                    {fmtMYR(inv.amountMYR)} <span className="text-dim">+ {inv.taxLabel ?? "GST"} {fmtMYR(inv.gstMYR)}</span> = <span className="text-fg">{fmtMYR(inv.totalMYR)}</span>
+                    {inv.currency
+                      ? <span className="text-fg">{inv.currency} {inv.total?.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-dim">= {fmtMYR(inv.totalMYR)}</span></span>
+                      : <>{fmtMYR(inv.amountMYR)} <span className="text-dim">+ {inv.taxLabel ?? "GST"} {fmtMYR(inv.gstMYR)}</span> = <span className="text-fg">{fmtMYR(inv.totalMYR)}</span></>}
                     {inv.outstanding && inv.status !== "PAID" && <span className="ml-2 text-amber">· OUTSTANDING</span>}
                   </span>
                   <MetaPill status={inv.status} meta={cfg?.invoiceStatusMeta?.[inv.status]} lang={lang} />
@@ -201,15 +215,15 @@ export default function InvoicingPage() {
                   <div className="mb-4 grid gap-2 sm:grid-cols-4">
                     <div className="rounded-md border hairline bg-ink-deep/40 px-3 py-2">
                       <p className="eyebrow">Before {inv.taxLabel ?? "GST"}</p>
-                      <p className="mono text-sm text-fg">{fmtMYR(inv.amountMYR)}</p>
+                      <p className="text-sm text-fg"><Dual amount={inv.amount} currency={inv.currency} base={inv.amountMYR} /></p>
                     </div>
                     <div className="rounded-md border hairline bg-ink-deep/40 px-3 py-2">
                       <p className="eyebrow">{inv.taxLabel ?? "GST"} @ {inv.gstRate}%</p>
-                      <p className="mono text-sm text-trace">{fmtMYR(inv.gstMYR)}</p>
+                      <p className="text-sm text-trace"><Dual amount={inv.tax} currency={inv.currency} base={inv.gstMYR} /></p>
                     </div>
                     <div className="rounded-md border hairline bg-ink-deep/40 px-3 py-2">
                       <p className="eyebrow">{aviation ? "Total (F311)" : "Total"}</p>
-                      <p className="mono text-sm text-phosphor">{fmtMYR(inv.totalMYR)}</p>
+                      <p className="text-sm text-phosphor"><Dual amount={inv.total} currency={inv.currency} base={inv.totalMYR} /></p>
                     </div>
                     <div className={`rounded-md border px-3 py-2 ${inv.correctnessBy ? "border-phosphor/40" : "hairline"}`}>
                       <p className="eyebrow">Correctness gate</p>
@@ -236,10 +250,40 @@ export default function InvoicingPage() {
                     </p>
                   )}
 
+                  {inv.currency && (
+                    <div className="mb-4 rounded-md border hairline bg-ink-deep/40 px-3 py-2 text-sm">
+                      <p className="eyebrow mb-1">Exchange rate</p>
+                      <p className="mono text-xs text-fg">
+                        {inv.currency} 1 = {currencySymbol()} {inv.fxRate}{" "}
+                        <span className="text-dim">{inv.f311Ref ? "· fixed when the tax invoice was raised" : "· provisional: fixed when the tax invoice is raised"}</span>
+                      </p>
+                      {inv.paidRate !== undefined && (
+                        <p className="mono mt-1 text-xs text-fg">
+                          Paid at {inv.paidRate}: {fmtMoney(inv.paidBase ?? 0)} received ·{" "}
+                          <span className={(inv.fxGain ?? 0) < 0 ? "text-brand-bright" : "text-phosphor"}>
+                            exchange {(inv.fxGain ?? 0) < 0 ? "loss" : "gain"} {fmtMoney(Math.abs(inv.fxGain ?? 0))}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {confirmPay?.id === inv.id && (
+                    <div className="mb-4 rounded border border-amber/40 bg-amber/10 px-3 py-2 text-sm text-amber">
+                      <p>{confirmPay.message}</p>
+                      <Button disabled={busy} onClick={() => transition(confirmPay.id, confirmPay.to, { ...confirmPay.fields, paymentRateConfirm: "true" })}>It is right — record the payment</Button>
+                    </div>
+                  )}
+
                   {cfg && user && (
                     <TransitionActions
                       entity="invoice"
                       entityId={inv.id}
+                      moneyCurrency={inv.currency ?? currencyCode()}
+                      extraFields={(r) => inv.currency && (r.effects ?? []).some((e) => e.type === "markPaid") ? [
+                        { key: "amountReceived", label: `Amount received (${currencyCode()}) — what the bank credited`, type: "number", optional: true },
+                        ...(can("fx.manage") ? [{ key: "paymentRate", label: `Or the rate (${inv.currency} 1 = ${currencySymbol()} …)`, type: "number" as const, optional: true }] : []),
+                      ] : []}
                       status={inv.status}
                       rules={cfg.invoiceTransitions}
                       meta={cfg.invoiceStatusMeta}

@@ -165,6 +165,7 @@ export class StockService {
       id: String(m.id), partId: m.partId, store: m.store, type: m.type, qty: Number(m.qty), unitCost: Number(m.unitCost),
       balanceAfter: Number(m.balanceAfter), jobId: m.jobId, demandId: m.demandId, countId: m.countId, transferRef: m.transferRef,
       reason: m.reason, by: m.by, at: m.at.toISOString(),
+      ...(m.currency ? { currency: m.currency, fxRate: Number(m.fxRate), unitCostFx: Number(m.unitCostFx) } : {}),
     };
   }
 
@@ -263,6 +264,7 @@ export class StockService {
   private async move(tx: Tx, m: {
     part: { id: string; partNo: string; unit: string }; store: string; type: MovementType; qty: number; unitCost: number;
     by: string; jobId?: string; demandId?: string; countId?: string; transferRef?: string; reason?: string;
+    fx?: { currency: string; rate: number; unitCostFx: number };
   }) {
     await tx.stockLevel.createMany({ data: [{ partId: m.part.id, store: m.store }], skipDuplicates: true });
     if (m.qty < 0) {
@@ -281,26 +283,31 @@ export class StockService {
         partId: m.part.id, store: m.store, type: m.type, qty: m.qty, unitCost: round(m.unitCost, 4), balanceAfter: level.qty,
         jobId: m.jobId ?? null, demandId: m.demandId ?? null, countId: m.countId ?? null, transferRef: m.transferRef ?? null,
         reason: m.reason ?? '', by: m.by,
+        ...(m.fx ? { currency: m.fx.currency, fxRate: m.fx.rate, unitCostFx: round(m.fx.unitCostFx, 4) } : {}),
       },
     });
     return { balance: Number(level.qty), movement: row };
   }
 
   /** Put stock into a store at a cost, updating the part's moving-average cost. */
-  async receiveTx(tx: Tx, args: { partId: string; store: string; qty: number; unitCost: number; by: string; type?: 'RECEIPT' | 'OPENING'; demandId?: string; reason?: string }) {
+  async receiveTx(tx: Tx, args: {
+    partId: string; store: string; qty: number; unitCost: number; by: string; type?: 'RECEIPT' | 'OPENING'; demandId?: string; reason?: string;
+    /** Bought in another currency: the unit cost above is already converted; this is kept for tracing. */
+    fx?: { currency: string; rate: number; unitCostFx: number };
+  }) {
     const part = await this.lockPart(tx, args.partId);
     const levels = await tx.stockLevel.findMany({ where: { partId: args.partId }, select: { qty: true } });
     const onHand = levels.reduce((s, l) => s + Number(l.qty), 0);
     const avg = Number(part.avgCost);
     const cost = Number.isFinite(args.unitCost) && args.unitCost >= 0 ? args.unitCost : avg;
     await tx.part.update({ where: { id: args.partId }, data: { avgCost: nextAverage(onHand, avg, args.qty, cost), lastCost: round(cost, 4) } });
-    return this.move(tx, { part, store: args.store, type: args.type ?? 'RECEIPT', qty: args.qty, unitCost: cost, by: args.by, demandId: args.demandId, reason: args.reason });
+    return this.move(tx, { part, store: args.store, type: args.type ?? 'RECEIPT', qty: args.qty, unitCost: cost, by: args.by, demandId: args.demandId, reason: args.reason, fx: args.fx });
   }
 
   /** Stock received without a purchase request (opening stock, free issue). */
-  async receiveDirect(args: { partId: string; store: string; qty: number; unitCost: number; reason: string }, actor: Actor) {
+  async receiveDirect(args: { partId: string; store: string; qty: number; unitCost: number; reason: string; fx?: { currency: string; rate: number; unitCostFx: number } }, actor: Actor) {
     const s = this.assertStore(args.store);
-    const r = await this.prisma.$transaction((tx) => this.receiveTx(tx, { partId: args.partId, store: s, qty: args.qty, unitCost: args.unitCost, by: actor.name, reason: args.reason }));
+    const r = await this.prisma.$transaction((tx) => this.receiveTx(tx, { partId: args.partId, store: s, qty: args.qty, unitCost: args.unitCost, by: actor.name, reason: args.reason, fx: args.fx }));
     await this.checkLow([{ partId: args.partId, store: s }]);
     return { movement: this.movementView(r.movement), balance: r.balance };
   }

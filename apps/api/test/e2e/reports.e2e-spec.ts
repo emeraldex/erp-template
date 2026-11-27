@@ -64,7 +64,7 @@ describe('Reports and exports (FR-12 / FR-14)', () => {
   it('lists outstanding payments by age', async () => {
     const res = await get('/reports/outstanding?format=csv');
     const lines = res.body.toString('utf8').replace(/^﻿/, '').trim().split('\r\n');
-    expect(lines[0]).toBe('Invoice,Stream,Customer,Status,Since,Days,Ageing,Total (MYR)');
+    expect(lines[0]).toBe('Invoice,Stream,Customer,Status,Since,Days,Ageing,Total (MYR),Invoice currency,Exchange rate,Total (invoice currency)');
     expect(lines.some((l: string) => l.includes('INV-2026-0044') || l.includes('F311-2026-0322'))).toBe(false); // paid
   });
 

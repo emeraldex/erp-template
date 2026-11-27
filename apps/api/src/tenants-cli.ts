@@ -188,8 +188,15 @@ async function main(): Promise<void> {
           if (recorded && !args.flags.force) {
             throw new Error(`${id} already has amounts recorded; they would be relabelled as ${code}, not converted. Re-run with --force if that is what you want.`);
           }
+          // Foreign-currency records hold a rate against the old currency: relabelling would make them wrong.
+          const foreign = (await prisma.quotation.count({ where: { currency: { not: null } } })) + (await prisma.invoice.count({ where: { currency: { not: null } } }))
+            + (await prisma.ovRepair.count({ where: { currency: { not: null } } })) + (await prisma.demand.count({ where: { purchaseCurrency: { not: null } } }))
+            + (await prisma.stockMovement.count({ where: { currency: { not: null } } }));
+          if (foreign) throw new Error(`${id} has ${foreign} record(s) in a foreign currency with exchange rates against its current currency; its currency cannot be changed.`);
+          // Rates were quoted against the old currency.
+          const rates = await prisma.exchangeRate.deleteMany({});
           await prisma.setting.upsert({ where: { key: 'currency' }, create: { key: 'currency', value: { code } as never, updatedBy: 'tenants-cli' }, update: { value: { code } as never, updatedBy: 'tenants-cli' } });
-          console.log(`✓ ${id} now keeps its books in ${code}${recorded ? ' (existing amounts relabelled, not converted)' : ''} — running API servers pick it up within 30 s`);
+          console.log(`✓ ${id} now keeps its books in ${code}${recorded ? ' (existing amounts relabelled, not converted)' : ''}${rates.count ? `; ${rates.count} exchange rate(s) removed` : ''} — running API servers pick it up within 30 s`);
         } finally {
           await prisma.$disconnect();
         }

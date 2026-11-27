@@ -206,6 +206,42 @@ curl -s -X POST "https://acme.erp.example.com/api/v1/jobs/HD-2026-0007/time" \
 curl -s "https://acme.erp.example.com/api/v1/jobs/HD-2026-0007/cost" -H "Authorization: Bearer $TOKEN"
 ```
 
+### Other currencies
+
+Every money record keeps its base-currency amount in the existing `…MYR`
+fields. A record in another currency adds `currency`, the foreign amount
+(`price`, `cost`, `amount`/`tax`/`total`) and `fxRate`: base units per
+foreign unit. With no rates entered, nothing changes.
+
+- **Rates:**
+  - `GET /fx/rates` (anyone signed in).
+  - `PUT /fx/rates { currency, effectiveFrom?, rate, confirm? }` and
+    `DELETE /fx/rates/:id` (`fx.manage`).
+  - Errors carry a `code`: `RATE_JUMP` (more than 20% from the last rate;
+    resend with `confirm: true`) or `NO_RATE`.
+- **Quotations:** `POST /demands/:id/quotations { supplierId, price,
+  currency?, eddDays }`. The old `priceMYR` still means the base currency.
+  Use `PATCH /registers/partners/:id/currency { currency }` for a supplier's
+  usual currency.
+- **Step fields:** a step field marked type `money` in `/config` also
+  accepts `<key>Currency` and, with `fx.manage`, `<key>Rate` and
+  `<key>RateConfirm`. This applies to receipt unit cost, vendor repair cost
+  and invoice amount.
+- **Direct receipt:** `POST /stock/receive { …, unitCost, currency?, rate? }`.
+- **Invoices:**
+  - `POST /invoicing { stream, amount, currency? }` (the old `amountMYR`
+    still means the base currency).
+  - Raising the tax invoice fixes `fxRate`.
+  - The payment step accepts `amountReceived` (base currency) or
+    `paymentRate`, and sets `paidRate`, `paidBase` and `fxGain`.
+
+```bash
+# A quotation in US dollars at today's rate
+curl -s -X POST "https://acme.erp.example.com/api/v1/demands/DM-2026-0001/quotations" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"supplierId":"SUP-2026-0001","price":2400,"currency":"USD","eddDays":14}'
+```
+
 ## Errors
 
 Errors are JSON: `{"statusCode": 400, "message": "…"}`. The ones to handle:

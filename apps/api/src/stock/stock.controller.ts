@@ -14,6 +14,7 @@ import { ClientOpInterceptor } from '../common/client-ops';
 import { PartInput, quantity, StockService } from './stock.service';
 import { BadRequestException } from '@nestjs/common';
 import { text } from '../assets/ids';
+import { FxService } from '../fx/fx.service';
 
 type Req = Request & { user: AuthUser };
 const who = (r: Req) => ({ name: r.user.name, role: r.user.role });
@@ -28,6 +29,7 @@ export class StockController {
     private readonly counts: CountsService,
     private readonly importer: StockImportService,
     private readonly registry: TenantRegistry,
+    private readonly fx: FxService,
   ) {}
 
   @Get('parts')
@@ -77,13 +79,19 @@ export class StockController {
   /** Stock received without a purchase request (e.g. opening stock, free issue), at a unit cost. */
   @Post('receive')
   @Requires('stock.manage')
-  async receive(@Body() body: { partId?: string; store?: string; qty?: number; unitCost?: number; reason?: string }, @Req() req: Req) {
+  async receive(@Body() body: { partId?: string; store?: string; qty?: number; unitCost?: number; reason?: string; currency?: string; rate?: number; confirm?: boolean }, @Req() req: Req) {
     const qty = quantity(body?.qty);
     const unitCost = Number(body?.unitCost ?? NaN);
     if (!Number.isFinite(unitCost) || unitCost < 0) throw new BadRequestException('Give the unit cost (0 or more)');
     const reason = text(body?.reason, 200);
     if (!reason) throw new BadRequestException('Say where the stock came from');
-    return this.stock.receiveDirect({ partId: String(body?.partId ?? ''), store: String(body?.store ?? ''), qty, unitCost, reason }, who(req));
+    // A unit cost in another currency is converted at today's rate (or, with fx.manage, the rate given).
+    const fx = await this.fx.resolve({ currency: body?.currency, rate: body?.rate, confirm: body?.confirm, role: req.user.role });
+    return this.stock.receiveDirect({
+      partId: String(body?.partId ?? ''), store: String(body?.store ?? ''), qty, reason,
+      unitCost: fx ? Math.round(unitCost * fx.rate * 10_000) / 10_000 : unitCost,
+      fx: fx ? { currency: fx.currency, rate: fx.rate, unitCostFx: unitCost } : undefined,
+    }, who(req));
   }
 
   @Post('adjust')

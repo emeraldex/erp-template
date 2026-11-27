@@ -68,6 +68,8 @@ export interface Settings {
 export interface AccountingSettings {
   receivables: string; bank: string; outputTax: string; taxCode: string; purchases: string; stock: string;
   revenueDefault: string; revenueByStream: Record<string, string>;
+  /** Realised exchange gain or loss on payments of foreign-currency invoices. */
+  fxGainLoss: string;
 }
 
 export interface LabourSettings { defaultRate: number | null; roleRates: Record<string, number> }
@@ -100,7 +102,7 @@ export const DEFAULT_SETTINGS: Settings = {
   brand: { accent: null, defaultTheme: 'dark' },
   labour: { defaultRate: null, roleRates: {} },
   maintenance: { pmGraceDays: 7 },
-  accounting: { receivables: '1200', bank: '1000', outputTax: '2200', taxCode: 'SR', purchases: '5000', stock: '1300', revenueDefault: '4000', revenueByStream: {} },
+  accounting: { receivables: '1200', bank: '1000', outputTax: '2200', taxCode: 'SR', purchases: '5000', stock: '1300', revenueDefault: '4000', revenueByStream: {}, fxGainLoss: '7900' },
 };
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : undefined);
@@ -193,6 +195,8 @@ export class SettingsService {
       throw new BadRequestException('Amounts are already recorded in this currency — changing it would relabel them without converting. Ask your system administrator (tenants-cli set-currency --force).');
     }
     await this.save('currency', { code: next.code }, by);
+    // Exchange rates were quoted against the old currency.
+    await this.prisma.exchangeRate.deleteMany({});
     return next;
   }
 
@@ -305,7 +309,7 @@ export class SettingsService {
       return s;
     };
     const next = this.accounting;
-    const labels: [keyof AccountingSettings, string][] = [['receivables', 'Receivables account'], ['bank', 'Bank account'], ['outputTax', 'Output tax account'], ['taxCode', 'Tax code'], ['purchases', 'Purchases account'], ['stock', 'Stock account'], ['revenueDefault', 'Revenue account']];
+    const labels: [keyof AccountingSettings, string][] = [['receivables', 'Receivables account'], ['bank', 'Bank account'], ['outputTax', 'Output tax account'], ['taxCode', 'Tax code'], ['purchases', 'Purchases account'], ['stock', 'Stock account'], ['revenueDefault', 'Revenue account'], ['fxGainLoss', 'Exchange gain/loss account']];
     for (const [k, label] of labels) if (patch[k] !== undefined) (next as unknown as Record<string, string>)[k] = code(patch[k], label);
     if (patch.revenueByStream !== undefined) {
       if (typeof patch.revenueByStream !== 'object' || patch.revenueByStream === null) throw new BadRequestException('revenueByStream: { STREAM: account }');

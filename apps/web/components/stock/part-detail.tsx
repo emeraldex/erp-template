@@ -1,11 +1,11 @@
 "use client";
 
+import { MoneyInput, MoneyValue } from "@/lib/fx";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, download } from "@/lib/api";
 import type { Part, StockLevel } from "@/lib/types";
 import { useVocab } from "@/lib/vocab";
-import { currencySymbol } from "@/lib/format";
 import { Button, Panel, StatusPill } from "@/components/ui";
 import { errText, input, Labelled, money, MOVEMENT_LABEL, Msg, qty } from "./common";
 
@@ -27,6 +27,7 @@ export function PartDetail({ id, onChanged }: { id: string; onChanged: () => voi
   const [busy, setBusy] = useState(false);
   const [action, setAction] = useState<Action | null>(null);
   const [f, setF] = useState({ store: "", to: "", qty: "", unitCost: "", reason: "", jobId: "" });
+  const [cost, setCost] = useState<MoneyValue>({ amount: "", currency: "", rate: "", confirm: false });
   const [editing, setEditing] = useState<string | null>(null);
   const [lv, setLv] = useState({ bin: "", reorderPoint: "", reorderQty: "" });
   const [details, setDetails] = useState<{ name: string; description: string; manufacturer: string; mfrPartNo: string; group: string } | null>(null);
@@ -46,6 +47,7 @@ export function PartDetail({ id, onChanged }: { id: string; onChanged: () => voi
       await fn();
       setMsg({ ok: true, text: ok });
       setAction(null); setF({ store: "", to: "", qty: "", unitCost: "", reason: "", jobId: "" });
+      setCost({ amount: "", currency: "", rate: "", confirm: false });
       load(); onChanged();
     } catch (e) {
       setMsg({ ok: false, text: errText(e) });
@@ -59,7 +61,10 @@ export function PartDetail({ id, onChanged }: { id: string; onChanged: () => voi
     const unit = label("unit", p.unit);
     switch (action) {
       case "receive":
-        return run(() => api.post("/stock/receive", { partId: p.id, store, qty: n, unitCost: Number(f.unitCost), reason: f.reason }), `Received ${f.qty} ${unit} into ${storeName(store)}.`);
+        return run(() => api.post("/stock/receive", {
+          partId: p.id, store, qty: n, unitCost: Number(cost.amount.replace(/,/g, "")), reason: f.reason,
+          ...(cost.currency ? { currency: cost.currency } : {}), ...(cost.rate.trim() ? { rate: Number(cost.rate), confirm: cost.confirm } : {}),
+        }), `Received ${f.qty} ${unit} into ${storeName(store)}.`);
       case "issue":
         return run(() => api.post("/stock/issue", { partId: p.id, store, qty: n, jobId: f.jobId.trim() }), `Issued ${f.qty} ${unit} to ${f.jobId.trim()}.`);
       case "return":
@@ -89,7 +94,7 @@ export function PartDetail({ id, onChanged }: { id: string; onChanged: () => voi
   if (!p) return <Panel className="p-5"><p className="eyebrow">{msg?.text ?? "LOADING…"}</p></Panel>;
   const allowed = ACTIONS.filter((a) => can(a.cap) && (a.key !== "transfer" || stores.length > 1));
   const notHeld = stores.filter((s) => !p.levels.some((l) => l.store === s.key));
-  const ready = !!f.qty && (action !== "receive" || (f.unitCost !== "" && !!f.reason)) && (action !== "adjust" || !!f.reason)
+  const ready = !!f.qty && (action !== "receive" || (cost.amount !== "" && !!f.reason)) && (action !== "adjust" || !!f.reason)
     && (action !== "transfer" || !!f.to) && ((action !== "issue" && action !== "return") || !!f.jobId.trim());
 
   return (
@@ -189,7 +194,10 @@ export function PartDetail({ id, onChanged }: { id: string; onChanged: () => voi
                 <Labelled label={`${terms.job} no.`}><input value={f.jobId} onChange={(e) => setF({ ...f, jobId: e.target.value })} placeholder="WO-2026-0001" className={input} /></Labelled>
               )}
               {action === "receive" && (
-                <Labelled label={`Unit cost (${currencySymbol()})`}><input inputMode="decimal" value={f.unitCost} onChange={(e) => setF({ ...f, unitCost: e.target.value })} className={input} /></Labelled>
+                <div className="block">
+                  <span className="mono mb-1 block text-[10.5px] tracking-widest text-steel">Unit cost</span>
+                  <MoneyInput value={cost} onChange={setCost} label="Unit cost" className={input} />
+                </div>
               )}
               {(action === "receive" || action === "adjust") && (
                 <Labelled label={action === "receive" ? "Where it came from" : "Reason"} className="sm:col-span-2">

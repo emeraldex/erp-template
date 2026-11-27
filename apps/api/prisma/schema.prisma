@@ -308,25 +308,30 @@ model JobPriority {
 // ─── QP.14 spares demand / procurement (FR-08) ────────────────────────────────
 
 model Demand {
-  id              String   @id
+  id                 String   @id
   /// The work order the part is for; empty for a purchase request for stock.
-  job             Job?     @relation(fields: [jobId], references: [id], onDelete: Restrict)
-  jobId           String?
-  partDescription String
-  partNo          String
-  qty             Decimal  @db.Decimal(14, 3)
+  job                Job?     @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  jobId              String?
+  partDescription    String
+  partNo             String
+  qty                Decimal  @db.Decimal(14, 3)
   /// The catalogue part, when the request is for one (stock moves only then).
-  partId          String?
+  partId             String?
   /// For a purchase request for stock: the store it replenishes.
-  forStore        String?
+  forStore           String?
   /// Unit cost at receipt.
-  unitCost        Decimal? @db.Decimal(14, 4)
-  status          String
-  statusSince     DateTime
-  raisedBy        String
-  branch          String
-  version         Int      @default(0)
-  ordinal         Int      @default(0)
+  unitCost           Decimal? @db.Decimal(14, 4)
+  /// The purchase as fixed at receipt: its currency, the rate that day, and the amount in that currency and in the organisation's.
+  purchaseCurrency   String?
+  purchaseRate       Decimal? @db.Decimal(18, 8)
+  purchaseAmount     Decimal? @db.Decimal(14, 2)
+  purchaseAmountBase Decimal? @db.Decimal(14, 2)
+  status             String
+  statusSince        DateTime
+  raisedBy           String
+  branch             String
+  version            Int      @default(0)
+  ordinal            Int      @default(0)
 
   // stockCheck (F244)
   stockF244Ref      String?
@@ -357,12 +362,18 @@ model Demand {
 }
 
 model Quotation {
-  id         Int     @id @default(autoincrement())
-  demand     Demand  @relation(fields: [demandId], references: [id], onDelete: Cascade)
+  id         Int      @id @default(autoincrement())
+  demand     Demand   @relation(fields: [demandId], references: [id], onDelete: Cascade)
   demandId   String
   supplierId String
   supplier   String
-  priceMYR   Decimal @db.Decimal(14, 2)
+  /// Price in the organisation's currency.
+  priceMYR   Decimal  @db.Decimal(14, 2)
+  /// Foreign currency of this record (empty = the organisation's currency).
+  currency   String?
+  /// Price in that currency, and the rate (organisation units per foreign unit) on the day recorded.
+  price      Decimal? @db.Decimal(14, 2)
+  fxRate     Decimal? @db.Decimal(18, 8)
   eddDays    Int
   remarks    String?
   seq        Int
@@ -374,8 +385,8 @@ model Quotation {
 // ─── QP.33 outside-vendor repair (FR-09) ──────────────────────────────────────
 
 model OvRepair {
-  id              String   @id
-  job             Job      @relation(fields: [jobId], references: [id])
+  id              String    @id
+  job             Job       @relation(fields: [jobId], references: [id])
   jobId           String
   defectReportRef String
   am75Ref         String
@@ -383,14 +394,20 @@ model OvRepair {
   vendorName      String?
   f134Ref         String?
   poRef           String?
-  costMYR         Decimal? @db.Decimal(14, 2)
+  costMYR         Decimal?  @db.Decimal(14, 2)
+  /// Foreign currency of this record (empty = the organisation's currency).
+  currency        String?
+  cost            Decimal?  @db.Decimal(14, 2)
+  fxRate          Decimal?  @db.Decimal(18, 8)
+  /// When the cost in the organisation's currency was fixed (the repair reached a final status).
+  costFixedAt     DateTime?
   eddDays         Int?
   aboveIndent     Boolean?
   f119Ref         String?
   status          String
   statusSince     DateTime
-  version         Int      @default(0)
-  ordinal         Int      @default(0)
+  version         Int       @default(0)
+  ordinal         Int       @default(0)
 
   records FormRecord[]
   audit   AuditEntry[]
@@ -418,6 +435,8 @@ model Partner {
   nextReassessment String?
   nonConformances  Int           @default(0)
   factorsEvaluated Int           @default(0)
+  /// Currency they usually quote in; prefills their quotations.
+  currency         String?
   version          Int           @default(0)
   ordinal          Int           @default(0)
 
@@ -511,6 +530,16 @@ model Invoice {
   taxLabel        String   @default("GST")
   gstMYR          Decimal  @db.Decimal(14, 2)
   totalMYR        Decimal  @db.Decimal(14, 2)
+  /// Invoice currency (empty = the organisation's), the rate (fixed when the tax invoice is raised), and net, tax and total in that currency.
+  currency        String?
+  fxRate          Decimal? @db.Decimal(18, 8)
+  amount          Decimal? @db.Decimal(14, 2)
+  tax             Decimal? @db.Decimal(14, 2)
+  total           Decimal? @db.Decimal(14, 2)
+  /// On payment of a foreign-currency invoice: the rate, what was received in the organisation's currency, and the exchange gain (negative = loss).
+  paidRate        Decimal? @db.Decimal(18, 8)
+  paidBase        Decimal? @db.Decimal(14, 2)
+  fxGain          Decimal? @db.Decimal(14, 2)
   status          String
   statusSince     DateTime
   f311Ref         String?
@@ -830,6 +859,10 @@ model StockMovement {
   qty          Decimal  @db.Decimal(14, 3)
   unitCost     Decimal  @db.Decimal(14, 4)
   balanceAfter Decimal  @db.Decimal(14, 3)
+  /// For a receipt bought in another currency: that currency, the rate used and the unit cost in it (for tracing; the ledger is in the organisation's currency).
+  currency     String?
+  fxRate       Decimal? @db.Decimal(18, 8)
+  unitCostFx   Decimal? @db.Decimal(14, 4)
   jobId        String?
   demandId     String?
   countId      String?
@@ -988,6 +1021,19 @@ model AssetDowntime {
   @@index([assetId, fromAt])
   @@index([jobId])
   @@map("asset_downtime")
+}
+
+/// Exchange rates kept by finance: organisation-currency units for one unit of `currency`, from a date.
+model ExchangeRate {
+  id            Int      @id @default(autoincrement())
+  currency      String
+  effectiveFrom DateTime @db.Date
+  rate          Decimal  @db.Decimal(18, 8)
+  enteredBy     String
+  enteredAt     DateTime @default(now())
+
+  @@unique([currency, effectiveFrom])
+  @@map("exchange_rates")
 }
 
 /// A batch of figures handed to the accounting system. Each item remembers

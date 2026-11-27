@@ -11,7 +11,7 @@ type Preview = { from: string; to: string; currency: string; sales: Counts; rece
 type Batch = { id: string; from: string; to: string; includeExported: boolean; createdBy: string; createdAt: string; sales: number; receipts: number; purchases: number };
 type Codes = {
   receivables: string; bank: string; outputTax: string; taxCode: string; purchases: string; stock: string; revenueDefault: string;
-  revenueByStream: Record<string, string>; streams: { id: string; label: string }[];
+  revenueByStream: Record<string, string>; streams: { id: string; label: string }[]; fxGainLoss: string;
 };
 
 const field = "mono rounded-md border hairline bg-ink-deep px-3 py-2 text-xs text-fg outline-none focus:border-trace";
@@ -26,6 +26,7 @@ const SHEETS = [["sales", "Sales"], ["receipts", "Receipts"], ["purchases", "Pur
 const CODE_FIELDS = [
   ["receivables", "Trade receivables"], ["bank", "Bank"], ["outputTax", "Output tax"], ["taxCode", "Tax code"],
   ["revenueDefault", "Revenue (default)"], ["purchases", "Purchases / expense"], ["stock", "Stock (inventory)"],
+  ["fxGainLoss", "Exchange gain / loss"],
 ] as const;
 
 /** Hand invoices, payments and purchases to the accounting system in batches; nothing is exported twice unless asked. */
